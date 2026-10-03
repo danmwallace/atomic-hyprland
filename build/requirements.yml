@@ -4,6 +4,6 @@
 collections:
   - name: https://github.com/danmwallace/ansible-collection-fedora.git
     type: git
-    version: v1.1.1
+    version: v1.1.2
   - name: community.general
     version: ">=8.0.0"

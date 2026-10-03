@@ -21,6 +21,8 @@ skopeo
 # on srv01 VMs; harmless elsewhere and disabled by Ansible on bare metal)
 cloud-init
 qemu-guest-agent
+# wallpaper referenced by the rendered hyprland.conf / hyprlock.conf
+desktop-backgrounds-basic
 # used by the dotfile sync and hermes_native later
 rsync
 curl

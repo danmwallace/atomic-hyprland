@@ -28,14 +28,25 @@ just qcow2          # sudo; output/qcow2/disk.qcow2 for the srv01 VM
 ```bash
 just build && just test && just push && just qcow2
 cd ~/Code/Infrastructure/tofu-homelab-cfg/libvirt-srv01
-tofu taint 'libvirt_volume.atomic_hyprland_base[0]'   # only to re-upload a new qcow2
 tofu plan -out tfplan && tofu apply tfplan
 virt-viewer -c qemu+ssh://dwallace@10.10.99.4/system hypr-test
 ```
 
-Re-uploading the base volume replaces the backing file of hypr-test; destroy and
-recreate the VM in the same apply (`tofu taint 'module.vm["hypr-test"].libvirt_domain.this'`)
-rather than booting a clone whose backing changed underneath it.
+To re-upload a new qcow2, replace the base volume **and** the VM's root disk and
+domain in one apply. Replacing only the base leaves the copy-on-write overlay
+"updated in-place" on top of a different backing file (verified with
+`tofu plan -replace`), which corrupts the guest:
+
+```bash
+tofu plan -out tfplan \
+  -replace='libvirt_volume.atomic_hyprland_base[0]' \
+  -replace='module.vm["hypr-test"].libvirt_volume.root' \
+  -replace='module.vm["hypr-test"].libvirt_domain.this'
+tofu apply tfplan
+```
+
+Day-to-day updates do not need this: push a new image and run `sudo bootc upgrade`
+in the VM instead.
 
 The VM's `~/.config/hypr/local.conf` carries the virtual-monitor and software
 rendering settings; it is never managed by the image. First graphical login needs

@@ -3,7 +3,7 @@ set dotenv-load := false
 
 image   := "ghcr.io/danmwallace/atomic-hyprland"
 tag     := "44"
-version := `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD`
+version := `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD` + `test -z "$(git status --porcelain)" || echo -dirty`
 
 # Build the image locally (rootless podman). THEME: nord | tokyo-night | monochrome
 build theme="nord" nvidia="0":
@@ -27,11 +27,14 @@ lint:
 check-kernel:
     build/check-kernel-match.sh
 
-# Push both tags to ghcr.io (needs: gh auth token | podman login ghcr.io -u danmwallace --password-stdin)
+# Push :44 and a :44-<version> tag taken from the image's own version label,
+# so the dated tag always names the build it points at.
+# (needs: gh auth token | podman login ghcr.io -u danmwallace --password-stdin)
 push:
-    podman tag {{image}}:{{tag}} {{image}}:{{tag}}-{{version}}
-    podman push {{image}}:{{tag}}
-    podman push {{image}}:{{tag}}-{{version}}
+    v="$(podman inspect -f '{{{{index .Config.Labels "org.opencontainers.image.version"}}' {{image}}:{{tag}})" && \
+        podman tag {{image}}:{{tag}} {{image}}:{{tag}}-"$v" && \
+        podman push {{image}}:{{tag}} && \
+        podman push {{image}}:{{tag}}-"$v"
 
 # bootc-image-builder needs root podman (loop devices) and reads the image from
 # root's container store, hence the sudo podman pull first.

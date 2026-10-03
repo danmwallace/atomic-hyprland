@@ -36,7 +36,17 @@ expect "new stamp recorded" 'grep -qx newer-build "$HOME/.config/atomic-hyprland
 # 4. script mode preserved for executables
 expect "sleep.sh stays executable" 'test -x "$HOME/.config/hypr/scripts/sleep.sh"'
 
-# 5. unit is enabled for every user
+# 5. a home that predates the image (no local.conf, e.g. after bootc switch)
+#    gets local.conf exactly once; it is never rewritten afterwards
+export HOME="$(mktemp -d)"
+"${sync}"
+expect "local.conf created for a pre-existing home" 'test -f "$HOME/.config/hypr/local.conf"'
+printf 'env = SENTINEL,1\n' > "$HOME/.config/hypr/local.conf"
+echo "newest-build" > "${share}/stamp"
+"${sync}"
+expect "existing local.conf untouched on resync" 'grep -q SENTINEL "$HOME/.config/hypr/local.conf"'
+
+# 6. unit is enabled for every user
 expect "user unit enabled globally" 'test -L /etc/systemd/user/default.target.wants/atomic-hyprland-dotfiles.service'
 
 exit "$fail"

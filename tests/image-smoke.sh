@@ -22,6 +22,14 @@ check test -f /etc/skel/.config/hypr/hyprland.conf
 check test -f /etc/skel/.config/hypr/local.conf
 check grep -q '^source = ~/.config/hypr/local.conf' /etc/skel/.config/hypr/hyprland.conf
 check test -f /usr/share/wayland-sessions/hyprland.desktop
+# Wallpaper: the config must point at a file that exists on a fresh install.
+check test -f /usr/share/backgrounds/images/earth_from_space.jpg
+check grep -q '^exec-once = swaybg -m fill -i /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprland.conf
+check grep -q 'path = /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprlock.conf
+# The rendered config must parse cleanly on the Hyprland the image ships
+# (upstream removes options between releases). Runs as root in this test
+# container, hence the explicit root override flag.
+check bash -c 'export HOME=/tmp/hv XDG_RUNTIME_DIR=/tmp/hv/run; mkdir -p "$HOME/.config" "$XDG_RUNTIME_DIR" && cp -r /etc/skel/.config/hypr "$HOME/.config/" && Hyprland --verify-config --i-am-really-stupid --config "$HOME/.config/hypr/hyprland.conf"'
 check test -L /etc/systemd/system/display-manager.service
 check test "$(readlink -f /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
 check grep -q '^/usr/bin/elvish$' /etc/shells
