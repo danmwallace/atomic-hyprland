@@ -1,0 +1,13 @@
+---
+- name: Render the Hyprland desktop into the image
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  roles:
+    - role: danmwallace.fedora.hyprland
+      vars:
+        # $USER is unset inside podman build; the role's default would fail.
+        hyprland_user: root
+        hyprland_home_dir: /etc/skel
+        hyprland_manage_copr: false
+        hyprland_manage_services: false

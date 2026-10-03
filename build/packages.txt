@@ -1,0 +1,26 @@
+# dev shell
+elvish
+starship
+fzf
+lazygit
+ripgrep
+fd-find
+bat
+git
+gh
+jq
+yq
+make
+nodejs
+npm
+python3
+python3-pip
+uv
+skopeo
+# VM / first-boot support (cloud-init creates the user and sets the static IP
+# on srv01 VMs; harmless elsewhere and disabled by Ansible on bare metal)
+cloud-init
+qemu-guest-agent
+# used by the dotfile sync and hermes_native later
+rsync
+curl

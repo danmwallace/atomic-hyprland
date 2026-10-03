@@ -1,0 +1,9 @@
+---
+# Pinned to the git tag rather than Galaxy so the build does not wait on a
+# Galaxy publish and so a rebuild months later gets the same role.
+collections:
+  - name: https://github.com/danmwallace/ansible-collection-fedora.git
+    type: git
+    version: v1.1.1
+  - name: community.general
+    version: ">=8.0.0"

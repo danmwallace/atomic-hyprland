@@ -2,3 +2,5 @@
 *.iso
 output/
 .ansible/
+.superpowers/
+*.log
