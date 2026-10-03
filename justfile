@@ -29,9 +29,20 @@ check-kernel:
 
 # Push both tags to ghcr.io (needs: gh auth token | podman login ghcr.io -u danmwallace --password-stdin)
 push:
+    podman tag {{image}}:{{tag}} {{image}}:{{tag}}-{{version}}
     podman push {{image}}:{{tag}}
     podman push {{image}}:{{tag}}-{{version}}
 
-# Build a qcow2 with bootc-image-builder. Needs sudo (root podman). See Task 6.
+# bootc-image-builder needs root podman (loop devices) and reads the image from
+# root's container store, hence the sudo podman pull first.
+
+# Build output/qcow2/disk.qcow2 from the pushed image (sudo)
 qcow2:
-    @echo "filled in by Task 6"
+    mkdir -p output
+    sudo podman pull {{image}}:{{tag}}
+    sudo podman run --rm -it --privileged --security-opt label=type:unconfined_t \
+        -v ./output:/output \
+        -v /var/lib/containers/storage:/var/lib/containers/storage \
+        quay.io/centos-bootc/bootc-image-builder:latest \
+        build --type qcow2 --rootfs btrfs --chown "$(id -u):$(id -g)" {{image}}:{{tag}}
+    ls -lh output/qcow2/disk.qcow2
