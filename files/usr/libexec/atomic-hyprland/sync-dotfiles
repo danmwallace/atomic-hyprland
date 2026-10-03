@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+# Copy image-managed dotfiles into $HOME when the image's stamp changed.
+# Never touches ~/.config/hypr/local.conf (not in managed-files.txt).
+set -euo pipefail
+
+share="${ATOMIC_HYPRLAND_SHARE:-/usr/share/atomic-hyprland}"
+home="${HOME:?HOME is not set}"
+stamp_src="${share}/stamp"
+stamp_dst="${home}/.config/atomic-hyprland/stamp"
+manifest="${share}/managed-files.txt"
+
+if [[ -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
+    echo "atomic-hyprland dotfiles: up to date ($(cat "${stamp_src}"))"
+    exit 0
+fi
+
+while IFS= read -r rel; do
+    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
+    src="${share}/skel/${rel}"
+    [[ -f "${src}" ]] || continue
+    install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
+done < "${manifest}"
+
+install -D -m 0644 "${stamp_src}" "${stamp_dst}"
+echo "atomic-hyprland dotfiles: synced to $(cat "${stamp_src}")"

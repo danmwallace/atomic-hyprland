@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync image-managed Hyprland dotfiles into the home directory
+ConditionPathExists=/usr/share/atomic-hyprland/stamp
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/atomic-hyprland/sync-dotfiles
+
+[Install]
+WantedBy=default.target

@@ -13,3 +13,9 @@ grep -qx /usr/bin/elvish /etc/shells || echo /usr/bin/elvish >> /etc/shells
 install -d /usr/share/atomic-hyprland
 cp -a /etc/skel /usr/share/atomic-hyprland/skel
 printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
+
+# Files the login-time sync may overwrite. local.conf is deliberately excluded.
+( cd /etc/skel && find .config -type f ! -path '.config/hypr/local.conf' | sort ) \
+    > /usr/share/atomic-hyprland/managed-files.txt
+
+systemctl --global enable atomic-hyprland-dotfiles.service
