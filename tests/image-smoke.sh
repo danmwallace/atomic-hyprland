@@ -13,6 +13,8 @@ check() {
 }
 
 check rpm -q hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland
+# Transitional: the .conf-to-Lua port targets 0.56; a COPR bump must fail the build, not ship.
+check bash -c 'rpm -q --qf "%{VERSION}\n" hyprland | grep -q "^0\.56\."'
 check rpm -q sddm sddm-x11 waybar wofi alacritty swaybg cliphist
 check rpm -q elvish starship lazygit fzf ripgrep fd-find bat git gh jq yq uv distrobox
 check rpm -q cloud-init qemu-guest-agent
