@@ -32,6 +32,12 @@ The image ships `ollama.service` (starts on first boot, models under
 Claude Code is in the image for every user. Firefox, LibreOffice and
 Thunderbird are Flatpaks installed by the same playbook.
 
+Verified on hypr-test 2026-10-04: Ollama (CPU) with the two small models,
+LiteLLM answering a completion through the local model, Hermes agent and
+dashboard active under SELinux enforcing, five Flatpaks, playbook idempotent.
+First boot pulls the two container images with `ai-images-pull.service`
+(podman caps pulls started inside a container unit at five minutes).
+
 ## VM runbook
 
 ```bash
