@@ -1,0 +1,17 @@
+[Unit]
+Description=Pull the AI service container images (no in-systemd pull cap)
+After=network-online.target
+Wants=network-online.target
+Before=ollama.service litellm.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# podman caps pulls started from inside a container unit at 5 minutes; a
+# plain oneshot has no such cap, so a slow first boot still succeeds.
+TimeoutStartSec=0
+ExecStart=/usr/bin/podman pull docker.io/ollama/ollama:0.35.1
+ExecStart=/usr/bin/podman pull ghcr.io/berriai/litellm:v1.83.14-stable
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@ set -euo pipefail
 version="${1:?image version}"
 
 systemctl enable sddm.service
+systemctl enable ai-images-pull.service
 systemctl set-default graphical.target
 
 # The elvish RPM does not register itself; chsh and cloud-init need it listed.

@@ -1,7 +1,7 @@
 [Unit]
 Description=Ollama local model server
-After=network-online.target
-Wants=network-online.target
+After=network-online.target ai-images-pull.service
+Wants=network-online.target ai-images-pull.service
 
 [Container]
 Image=docker.io/ollama/ollama:0.35.1

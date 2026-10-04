@@ -1,7 +1,7 @@
 [Unit]
 Description=LiteLLM gateway (Anthropic + local Ollama)
-After=network-online.target ollama.service
-Wants=network-online.target
+After=network-online.target ollama.service ai-images-pull.service
+Wants=network-online.target ai-images-pull.service
 # Inert until the post-install playbook renders the config and env file.
 ConditionPathExists=/etc/litellm/config.yaml
 ConditionPathExists=/etc/litellm/env

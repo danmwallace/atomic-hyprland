@@ -16,6 +16,8 @@ check rpm -q hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland
 check rpm -q sddm sddm-x11 waybar wofi alacritty swaybg cliphist
 check rpm -q elvish starship lazygit fzf ripgrep fd-find bat git gh jq yq uv distrobox
 check rpm -q cloud-init qemu-guest-agent
+# Ansible become_user to an unprivileged user (hermes) needs setfacl on the target.
+check rpm -q acl
 check bash -c '! rpm -q fish'
 check bash -c '! rpm -q ansible-core'
 check test -f /etc/skel/.config/hypr/hyprland.lua
@@ -93,6 +95,14 @@ expect_out "quadlet generator renders ollama.service" present 'ollama.service'
 expect_out "quadlet generator renders litellm.service" present 'litellm.service'
 expect_out "quadlet generator renders ai-network.service" present 'ai-network.service'
 expect_out "quadlet generator reports no errors" absent '[Ee]rror'
+# First boot: images are pulled by a oneshot without podman's 5-minute in-systemd cap.
+check test -f /usr/lib/systemd/system/ai-images-pull.service
+check test -L /etc/systemd/system/multi-user.target.wants/ai-images-pull.service
+check grep -q 'TimeoutStartSec=0' /usr/lib/systemd/system/ai-images-pull.service
+check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/ollama.container
+check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/litellm.container
+# podman does not create a missing bind-mount source; tmpfiles makes /var/lib/ollama at boot.
+check grep -qE '^d /var/lib/ollama ' /usr/lib/tmpfiles.d/atomic-hyprland.conf
 check bash -c 'claude --version | grep -q "^2\.1\.289"'
 check bash -c '! rpm -q firefox'
 check bash -c '! rpm -q libreoffice-core'
