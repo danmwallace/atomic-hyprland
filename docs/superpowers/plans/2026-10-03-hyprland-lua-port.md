@@ -1153,7 +1153,7 @@ Expected: new version; `synced to <version>`; `hyprland.lua`, `local.lua`, old `
 
 - [ ] **Step 3: Dan's graphical acceptance**
 
-Ask Dan to log in at `virt-viewer -c qemu+ssh://dwallace@10.10.99.4/system hypr-test` and confirm: no notification banners, Waybar icons render, Super+T, Super+Space, Super+C, Super+arrows, Super+1..5, Super+L work. Record the outcome in the vault task "Confirm Graphical Login on hypr-test" (mark Done) and add a note to `Projects/Atomic Hyprland/Project Overview.md` Current Focus.
+Ask Dan to log in at `virt-viewer -c qemu+ssh://dwallace@10.10.99.4/system hypr-test` and confirm: no notification banners, Waybar icons render, Super+T, Super+Space, Super+C, Super+arrows, Super+1..5, Super+L work, and the two mouse binds (Super+left-drag moves a window, Super+right-drag resizes it; their `mouse` flag is the one thing `--verify-config` cannot see). Record the outcome in the vault task "Confirm Graphical Login on hypr-test" (mark Done) and add a note to `Projects/Atomic Hyprland/Project Overview.md` Current Focus.
 
 - [ ] **Step 4: Finish the branch**
 

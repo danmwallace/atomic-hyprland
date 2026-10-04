@@ -30,11 +30,21 @@ check test -f /usr/share/backgrounds/images/earth_from_space.jpg
 check grep -q 'swaybg -m fill -i /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/conf/autostart.lua
 check grep -q 'path = /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprlock.conf
 # Hyprland's own parser on the skel tree, without --config so its file selection picks hyprland.lua.
+# verify_hypr [binds-line] [look-line]: copies the skel tree, optionally appends
+# a line to conf/binds.lua and/or conf/look.lua, wraps hl.config with a probe
+# (tests/hypr-probe-pre.lua) that records every dotted config key and checks
+# each with hl.get_config at the end (tests/hypr-probe-post.lua), because
+# --verify-config alone ignores unknown keys silently.
 verify_hypr() {
     export HOME=/tmp/hv XDG_RUNTIME_DIR=/tmp/hv/run
     rm -rf /tmp/hv; mkdir -p "$HOME/.config" "$XDG_RUNTIME_DIR"
     cp -r /etc/skel/.config/hypr "$HOME/.config/"
     [ -n "${1:-}" ] && echo "$1" >> "$HOME/.config/hypr/conf/binds.lua"
+    [ -n "${2:-}" ] && echo "$2" >> "$HOME/.config/hypr/conf/look.lua"
+    cp /tests/hypr-probe-pre.lua "$HOME/.config/hypr/probe_pre.lua"
+    cp /tests/hypr-probe-post.lua "$HOME/.config/hypr/probe_post.lua"
+    sed -i '1i require("probe_pre")' "$HOME/.config/hypr/hyprland.lua"
+    echo 'require("probe_post")' >> "$HOME/.config/hypr/hyprland.lua"
     Hyprland --verify-config --i-am-really-stupid 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
 }
 # expect_out <label> <present|absent> <regex>  (matches against $out)
@@ -50,6 +60,11 @@ out="$(verify_hypr)"
 expect_out "hyprland verify-config reports config ok" present 'config ok'
 expect_out "hyprland verify-config has no Lua or config errors" absent 'attempt to|stack traceback|Config error'
 expect_out "hyprland picked the Lua config" present 'Using lua config'
+expect_out "every hl.config key is known to this Hyprland" present 'PROBE config keys ok'
+expect_out "no unknown config keys in the shipped config" absent 'PROBE unknown config key'
+# Test of the test: an unknown key must be caught, since --verify-config alone accepts it.
+out="$(verify_hypr '' 'hl.config({ general = { bogus_key_for_probe = 1 } })')"
+expect_out "an unknown hl.config key is detected by the probe" present 'PROBE unknown config key: general.bogus_key_for_probe'
 # Error isolation: a broken binds.lua must be reported by name while the entry file still loads.
 out="$(verify_hypr 'hl.bind("SUPER + Z", hl.dsp.nonexistent())')"
 expect_out "broken binds.lua is reported by name" present 'binds.lua'
