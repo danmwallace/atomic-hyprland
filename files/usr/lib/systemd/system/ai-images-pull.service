@@ -10,8 +10,10 @@ RemainAfterExit=yes
 # podman caps pulls started from inside a container unit at 5 minutes; a
 # plain oneshot has no such cap, so a slow first boot still succeeds.
 TimeoutStartSec=0
-ExecStart=/usr/bin/podman pull docker.io/ollama/ollama:0.35.1
-ExecStart=/usr/bin/podman pull ghcr.io/berriai/litellm:v1.83.14-stable
+# Only the first boot (or a tag change) touches the registry; an offline boot
+# with the images present must not fail this unit or delay graphical.target.
+ExecStart=/bin/sh -c 'podman image exists docker.io/ollama/ollama:0.35.1 || podman pull docker.io/ollama/ollama:0.35.1'
+ExecStart=/bin/sh -c 'podman image exists ghcr.io/berriai/litellm:v1.83.14-stable || podman pull ghcr.io/berriai/litellm:v1.83.14-stable'
 
 [Install]
 WantedBy=multi-user.target

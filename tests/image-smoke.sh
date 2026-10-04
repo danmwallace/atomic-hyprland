@@ -99,6 +99,8 @@ expect_out "quadlet generator reports no errors" absent '[Ee]rror'
 check test -f /usr/lib/systemd/system/ai-images-pull.service
 check test -L /etc/systemd/system/multi-user.target.wants/ai-images-pull.service
 check grep -q 'TimeoutStartSec=0' /usr/lib/systemd/system/ai-images-pull.service
+# Later boots must not touch the registry (offline boot must not fail the unit).
+check bash -c 'grep -c "podman image exists" /usr/lib/systemd/system/ai-images-pull.service | grep -qx 2'
 check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/ollama.container
 check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/litellm.container
 # podman does not create a missing bind-mount source; tmpfiles makes /var/lib/ollama at boot.
