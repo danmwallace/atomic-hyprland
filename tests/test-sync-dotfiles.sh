@@ -14,22 +14,22 @@ expect() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi;
 
 # 1. first run populates managed files and writes the stamp
 "${sync}"
-expect "hyprland.conf synced" 'test -f "$HOME/.config/hypr/hyprland.conf"'
+expect "hyprland.lua synced" 'test -f "$HOME/.config/hypr/hyprland.lua"'
 expect "waybar config synced" 'test -f "$HOME/.config/waybar/config"'
 expect "stamp recorded" 'cmp -s "$share/stamp" "$HOME/.config/atomic-hyprland/stamp"'
 expect "local.lua not in managed list" '! grep -qx ".config/hypr/local.lua" "$share/managed-files.txt"'
 
 # 2. same stamp: no-op, user edits survive
-echo "# user edit" >> "$HOME/.config/hypr/hyprland.conf"
+echo "# user edit" >> "$HOME/.config/hypr/hyprland.lua"
 printf 'hl.monitor({ output = "Virtual-1" })\n' > "$HOME/.config/hypr/local.lua"
 out="$("${sync}")"
 expect "second run reports up to date" '[[ "$out" == *"up to date"* ]]'
-expect "user edit kept when stamp unchanged" 'grep -q "# user edit" "$HOME/.config/hypr/hyprland.conf"'
+expect "user edit kept when stamp unchanged" 'grep -q "# user edit" "$HOME/.config/hypr/hyprland.lua"'
 
 # 3. new stamp: managed files refreshed, local.conf untouched
 echo "newer-build" > "${share}/stamp"
 "${sync}"
-expect "managed file refreshed after stamp change" '! grep -q "# user edit" "$HOME/.config/hypr/hyprland.conf"'
+expect "managed file refreshed after stamp change" '! grep -q "# user edit" "$HOME/.config/hypr/hyprland.lua"'
 expect "local.lua survives resync" 'grep -q "Virtual-1" "$HOME/.config/hypr/local.lua"'
 expect "new stamp recorded" 'grep -qx newer-build "$HOME/.config/atomic-hyprland/stamp"'
 

@@ -48,6 +48,13 @@ tofu apply tfplan
 Day-to-day updates do not need this: push a new image and run `sudo bootc upgrade`
 in the VM instead.
 
-The VM's `~/.config/hypr/local.conf` carries the virtual-monitor and software
-rendering settings; it is never managed by the image. First graphical login needs
-a password: `ssh dwallace@192.168.70.14 sudo passwd dwallace`.
+The VM's `~/.config/hypr/local.lua` carries the virtual-monitor and software
+rendering settings; it is never managed by the image:
+
+```lua
+hl.monitor({ output = "Virtual-1", mode = "preferred", position = "auto", scale = 1 })
+hl.config({ cursor = { no_hardware_cursors = true } })
+hl.env("WLR_RENDERER_ALLOW_SOFTWARE", "1")
+```
+
+First graphical login needs a password: `ssh dwallace@192.168.70.14 sudo passwd dwallace`.

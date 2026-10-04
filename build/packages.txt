@@ -21,8 +21,6 @@ skopeo
 # on srv01 VMs; harmless elsewhere and disabled by Ansible on bare metal)
 cloud-init
 qemu-guest-agent
-# Transitional: hold Hyprland at 0.56 until the role's Lua config lands (removed in the same change).
-hyprland-0.56*
 # wallpaper referenced by the rendered hyprland.conf / hyprlock.conf
 desktop-backgrounds-basic
 # used by the dotfile sync and hermes_native later

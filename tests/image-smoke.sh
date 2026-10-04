@@ -13,8 +13,6 @@ check() {
 }
 
 check rpm -q hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland
-# Transitional: the .conf-to-Lua port targets 0.56; a COPR bump must fail the build, not ship.
-check bash -c 'rpm -q --qf "%{VERSION}\n" hyprland | grep -q "^0\.56\."'
 check rpm -q sddm sddm-x11 waybar wofi alacritty swaybg cliphist
 check rpm -q elvish starship lazygit fzf ripgrep fd-find bat git gh jq yq uv distrobox
 check rpm -q cloud-init qemu-guest-agent
@@ -29,7 +27,7 @@ check grep -q 'pcall(require, "local")' /etc/skel/.config/hypr/hyprland.lua
 check test -f /usr/share/wayland-sessions/hyprland.desktop
 # Wallpaper: the config must point at a file that exists on a fresh install.
 check test -f /usr/share/backgrounds/images/earth_from_space.jpg
-check grep -q '^exec-once = swaybg -m fill -i /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprland.conf
+check grep -q 'swaybg -m fill -i /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/conf/autostart.lua
 check grep -q 'path = /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprlock.conf
 # Hyprland's own parser on the skel tree, without --config so its file selection picks hyprland.lua.
 verify_hypr() {
@@ -67,7 +65,7 @@ check jq -e '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"][0].type =
 # its own _copr_ublue-os-akmods.repo enabled and that is left as-is.
 check bash -c '! grep -ls "^enabled=1" /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:*.repo'
 check test -s /usr/share/atomic-hyprland/stamp
-check test -f /usr/share/atomic-hyprland/skel/.config/hypr/hyprland.conf
+check test -f /usr/share/atomic-hyprland/skel/.config/hypr/hyprland.lua
 check bash -c '! test -e /var/roothome/.ansible'
 check bash -c 'test -z "$(ls -A /var/cache 2>/dev/null)"'
 
