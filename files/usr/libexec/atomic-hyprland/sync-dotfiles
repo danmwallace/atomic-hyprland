@@ -22,8 +22,8 @@ while IFS= read -r rel; do
 done < "${manifest}"
 
 # A home that predates the image (bootc switch keeps /home) never got skel's
-# local.conf, yet hyprland.conf sources it. Create it once; never rewrite it.
-local_conf=.config/hypr/local.conf
+# local.lua, yet hyprland.lua requires it. Create it once; never rewrite it.
+local_conf=.config/hypr/local.lua
 if [[ ! -e "${home}/${local_conf}" && -f "${share}/skel/${local_conf}" ]]; then
     install -D -m 0644 "${share}/skel/${local_conf}" "${home}/${local_conf}"
 fi
