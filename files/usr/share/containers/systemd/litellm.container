@@ -1,0 +1,23 @@
+[Unit]
+Description=LiteLLM gateway (Anthropic + local Ollama)
+After=network-online.target ollama.service
+Wants=network-online.target
+# Inert until the post-install playbook renders the config and env file.
+ConditionPathExists=/etc/litellm/config.yaml
+ConditionPathExists=/etc/litellm/env
+
+[Container]
+Image=ghcr.io/berriai/litellm:v1.83.14-stable
+ContainerName=litellm
+Network=ai.network
+Volume=/etc/litellm/config.yaml:/app/config.yaml:ro,Z
+EnvironmentFile=/etc/litellm/env
+Exec=--config /app/config.yaml --port 4000
+PublishPort=127.0.0.1:4000:4000
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

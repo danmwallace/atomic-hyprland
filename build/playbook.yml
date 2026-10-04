@@ -11,6 +11,9 @@
         hyprland_home_dir: /etc/skel
         hyprland_manage_copr: false
         hyprland_manage_services: false
+        # Firefox, LibreOffice, Thunderbird are Flatpaks on the image (see the
+        # control repo's desktop_flatpaks).
+        hyprland_desktop_apps: []
         # Shipped by desktop-backgrounds-basic; a fresh home has no ~/Pictures.
         hyprland_wallpaper: /usr/share/backgrounds/images/earth_from_space.jpg
         hyprland_lock_wallpaper: /usr/share/backgrounds/images/earth_from_space.jpg

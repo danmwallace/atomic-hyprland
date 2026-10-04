@@ -1,6 +1,9 @@
 #!/usr/bin/bash
 set -euo pipefail
 
+# The ublue base ships Firefox as an RPM; on this image it is a Flatpak
+# (see the control repo's desktop_flatpaks), like Bluefin does.
+dnf -y remove firefox firefox-langpacks
 dnf -y remove ansible-core python3-libdnf5
 dnf -y copr disable atim/starship
 dnf -y copr disable atim/lazygit

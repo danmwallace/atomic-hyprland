@@ -23,6 +23,15 @@ just qcow2          # sudo; output/qcow2/disk.qcow2 for the srv01 VM
   `10-theme.conf` names an SDDM theme that is not installed so SDDM uses its
   default, the default wallpaper file is missing (black background).
 
+## AI services (Phase 2)
+
+The image ships `ollama.service` (starts on first boot, models under
+`/var/lib/ollama`) and `litellm.service`, which stays inactive until
+`playbooks/fedora-hypr-desktop.yml` in ansible-homelab-cfg renders
+`/etc/litellm/config.yaml` and `/etc/litellm/env`. Both bind to loopback only.
+Claude Code is in the image for every user. Firefox, LibreOffice and
+Thunderbird are Flatpaks installed by the same playbook.
+
 ## VM runbook
 
 ```bash

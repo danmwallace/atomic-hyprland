@@ -5,10 +5,11 @@ FROM ${BASE_IMAGE}
 ARG THEME=nord
 ARG NVIDIA=0
 ARG IMAGE_VERSION=dev
+ARG CLAUDE_CODE_VERSION=2.1.289
 
 COPY build/ /tmp/build/
 
-RUN /tmp/build/10-packages.sh
+RUN /tmp/build/10-packages.sh "${CLAUDE_CODE_VERSION}"
 RUN /tmp/build/20-hyprland-role.sh "${THEME}"
 RUN if [ "${NVIDIA}" = "1" ]; then echo "NVIDIA layer arrives in Phase 4; build with NVIDIA=0" >&2; exit 1; fi
 

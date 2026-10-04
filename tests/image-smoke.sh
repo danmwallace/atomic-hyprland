@@ -84,4 +84,18 @@ check test -f /usr/share/atomic-hyprland/skel/.config/hypr/hyprland.lua
 check bash -c '! test -e /var/roothome/.ansible'
 check bash -c 'test -z "$(ls -A /var/cache 2>/dev/null)"'
 
+# Phase 2: AI service Quadlets, Claude Code, GUI apps as Flatpaks
+check test -f /usr/share/containers/systemd/ai.network
+check test -f /usr/share/containers/systemd/ollama.container
+check test -f /usr/share/containers/systemd/litellm.container
+out="$(/usr/lib/systemd/system-generators/podman-system-generator --dryrun 2>&1)"
+expect_out "quadlet generator renders ollama.service" present 'ollama.service'
+expect_out "quadlet generator renders litellm.service" present 'litellm.service'
+expect_out "quadlet generator renders ai-network.service" present 'ai-network.service'
+expect_out "quadlet generator reports no errors" absent '[Ee]rror'
+check bash -c 'claude --version | grep -q "^2\.1\.289"'
+check bash -c '! rpm -q firefox'
+check bash -c '! rpm -q libreoffice-core'
+check bash -c '! rpm -q thunderbird'
+
 exit "$fail"
