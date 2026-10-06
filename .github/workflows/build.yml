@@ -1,0 +1,99 @@
+# Builds, tests and (off pull requests) publishes and signs the image.
+# Every step calls a just recipe so a CI failure reproduces locally.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# A newer push to the same branch cancels the running build; nightlies are
+# never cancelled.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+env:
+  IMAGE: ghcr.io/danmwallace/atomic-hyprland
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ~20 GB free by default; the image is 8 GB on a 6 GB base and buildah
+      # keeps both. Drop toolchains this job never uses.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: "1.57.0"
+
+      - name: Lint CI files
+        run: just lint-ci
+
+      - name: Version
+        run: echo "IMAGE_VERSION=$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Kernel match
+        run: just check-kernel
+
+      - name: Build
+        run: just build
+
+      - name: Test
+        run: just test
+
+      - name: Tags
+        id: tags
+        if: github.event_name != 'pull_request'
+        run: echo "tags=$(build/ci-tags.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$IMAGE_VERSION" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Login to ghcr
+        if: github.event_name != 'pull_request'
+        run: echo "${{ github.token }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # The retry loop alone would swallow a final failure (a failed push
+      # inside `if` does not trip set -e), so the inspect afterwards is what
+      # fails the step.
+      - name: Push
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          for t in $TAGS; do
+            podman tag "$IMAGE:44" "$IMAGE:$t"
+            for i in 1 2 3; do
+              if podman push "$IMAGE:$t"; then break; fi
+              sleep $((10 * i))
+            done
+            skopeo inspect "docker://$IMAGE:$t" --format '{{.Digest}}'
+          done
+
+      # Pinned: bootc, podman and rpm-ostree cannot read cosign 3's new bundle
+      # format yet; the sign recipe uses the legacy flags.
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Sign
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: just sign "${TAGS%% *}"

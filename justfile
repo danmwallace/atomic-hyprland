@@ -55,3 +55,7 @@ qcow2:
         quay.io/centos-bootc/bootc-image-builder:latest \
         build --type qcow2 --rootfs btrfs --chown "$(id -u):$(id -g)" {{image}}:{{tag}}
     ls -lh output/qcow2/disk.qcow2
+
+# Lint the workflow (actionlint) via podman; nothing installed locally
+lint-ci:
+    podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:latest -color
