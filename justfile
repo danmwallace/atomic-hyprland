@@ -19,6 +19,8 @@ build theme="nord" nvidia="0":
 # Host-side CI helper tests, then the in-image smoke + dotfile sync tests
 test:
     bash tests/test-ci-tags.sh
+    bash tests/test-ci-push.sh
+    bash tests/test-workflow.sh
     bash tests/test-justfile.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh

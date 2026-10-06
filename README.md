@@ -47,9 +47,14 @@ First boot pulls the two container images with `ai-images-pull.service`
 
 `.github/workflows/build.yml` runs on push to `main`, nightly at 03:00 UTC,
 on pull requests (build and test only) and on manual dispatch. It calls the
-same `just` recipes as the local loop, pushes the tags from
-`build/ci-tags.sh`, then signs the image by digest with cosign 3.1.3 using the
-legacy simple-signing format, the only one bootc, podman and skopeo verify.
+same `just` recipes as the local loop, then publishes in a fixed order: push
+the unique `44-<date>-<sha>` (or `dev-<branch>`) tag via `build/ci-push.sh`,
+sign that digest with cosign 3.1.3 in the legacy simple-signing format (the
+only one bootc, podman and skopeo verify), and only then re-point `44` and
+`latest` at the same digest. No release tag ever names an unsigned image. Runs
+on `main` are never cancelled mid-publish. The ghcr package must grant the
+repository Write access under "Manage Actions access" for the job token to
+push (one-time setting).
 
 The image trusts only signed copies of itself: `/etc/containers/policy.json`
 has a `sigstoreSigned` entry for `ghcr.io/danmwallace/atomic-hyprland` keyed

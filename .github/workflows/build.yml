@@ -14,11 +14,12 @@ permissions:
   contents: read
   packages: write
 
-# A newer push to the same branch cancels the running build; nightlies are
-# never cancelled.
+# A newer push to a branch or PR cancels its running build. Runs on main
+# (pushes and nightlies) are never cancelled: a cancel between push and sign
+# would leave an unsigned tag behind.
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   IMAGE: ghcr.io/danmwallace/atomic-hyprland
@@ -57,31 +58,34 @@ jobs:
       - name: Test
         run: just test
 
+      # first = the unique tag (44-<version> or dev-<branch>), rest = 44 latest
+      # on main, empty elsewhere.
       - name: Tags
         id: tags
         if: github.event_name != 'pull_request'
-        run: echo "tags=$(build/ci-tags.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$IMAGE_VERSION" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+        run: |
+          mapfile -t tags < <(build/ci-tags.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$IMAGE_VERSION")
+          echo "first=${tags[0]}" >> "$GITHUB_OUTPUT"
+          echo "rest=${tags[*]:1}" >> "$GITHUB_OUTPUT"
 
+      # podman writes its credentials under $XDG_RUNTIME_DIR, which cosign
+      # does not read; docker login writes ~/.docker/config.json, which podman,
+      # skopeo and cosign all read. Both, as ublue does.
       - name: Login to ghcr
         if: github.event_name != 'pull_request'
-        run: echo "${{ github.token }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: |
+          echo "${{ github.token }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      # The retry loop alone would swallow a final failure (a failed push
-      # inside `if` does not trip set -e), so the inspect afterwards is what
-      # fails the step.
-      - name: Push
+      # Push the unique tag first and sign it; 44 and latest are re-pointed
+      # only after the signature exists, so no release tag ever names an
+      # unsigned digest. Re-tagging the same manifest keeps the digest, so the
+      # one signature covers all three.
+      - name: Push version tag
         if: github.event_name != 'pull_request'
         env:
-          TAGS: ${{ steps.tags.outputs.tags }}
-        run: |
-          for t in $TAGS; do
-            podman tag "$IMAGE:44" "$IMAGE:$t"
-            for i in 1 2 3; do
-              if podman push "$IMAGE:$t"; then break; fi
-              sleep $((10 * i))
-            done
-            skopeo inspect "docker://$IMAGE:$t" --format '{{.Digest}}'
-          done
+          FIRST: ${{ steps.tags.outputs.first }}
+        run: build/ci-push.sh "$IMAGE" "$FIRST"
 
       # Pinned: bootc, podman and rpm-ostree cannot read cosign 3's new bundle
       # format yet; the sign recipe uses the legacy flags.
@@ -95,5 +99,13 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          TAGS: ${{ steps.tags.outputs.tags }}
-        run: just sign "${TAGS%% *}"
+          FIRST: ${{ steps.tags.outputs.first }}
+        run: just sign "$FIRST"
+
+      - name: Push release tags
+        if: github.event_name != 'pull_request' && steps.tags.outputs.rest != ''
+        env:
+          REST: ${{ steps.tags.outputs.rest }}
+        run: |
+          # shellcheck disable=SC2086  # REST is a space-separated list of tags
+          build/ci-push.sh "$IMAGE" $REST

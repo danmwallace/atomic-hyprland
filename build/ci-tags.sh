@@ -9,7 +9,8 @@ event="${1:?event}"; ref="${2:?ref}"; version="${3:?version}"
 [ "$event" = pull_request ] && exit 0
 
 if [ "$ref" = refs/heads/main ]; then
-    printf '%s\n' 44 "44-${version}" latest
+    # Unique tag first: CI pushes and signs it before re-pointing 44/latest.
+    printf '%s\n' "44-${version}" 44 latest
 else
     branch="${ref#refs/heads/}"
     printf 'dev-%s\n' "${branch//\//-}"

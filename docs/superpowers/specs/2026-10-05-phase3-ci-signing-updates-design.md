@@ -62,8 +62,10 @@ nightly); `pull_request`; `workflow_dispatch`.
 **Permissions.** `contents: read`, `packages: write`.
 
 **Concurrency.** Group `build-${{ github.ref }}`,
-`cancel-in-progress: ${{ github.event_name != 'schedule' }}`. A second push to a
-branch cancels the in-flight build of that branch; a nightly is never cancelled.
+`cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`. A second push to
+a branch or PR cancels its in-flight build; runs on `main` (pushes and
+nightlies) are never cancelled, because a cancel between push and sign would
+leave an unsigned tag behind.
 
 **Steps.**
 
@@ -83,21 +85,28 @@ branch cancels the in-flight build of that branch; a nightly is never cancelled.
    `build/90-cleanup.sh`.
 8. **Test.** `just test`. The smoke tests and the dotfile sync tests. Red
    blocks the push.
-9. **Login to ghcr** (`podman login ghcr.io -u ${{ github.actor }}
-   --password-stdin` with `${{ github.token }}`). Skipped on `pull_request`.
-10. **Push.** Skipped on `pull_request`.
-    - On `push` to `main` and on `schedule`: push `44`, `44-<version>`,
-      `latest`.
-    - On `workflow_dispatch` from `main`: same as above.
-    - On `workflow_dispatch` from any other branch: push only
-      `dev-<branch>` (slashes in the branch name replaced by `-`).
-    A nightly whose inputs are unchanged still pushes: the dated tag records
-    that the build ran, and `44` then points at a byte-identical image, which
-    bootc treats as no update.
+9. **Login to ghcr.** Both `podman login` and `docker login` with
+   `${{ github.token }}`. podman writes its credentials under
+   `$XDG_RUNTIME_DIR/containers/auth.json`, which cosign does not read;
+   `docker login` writes `~/.docker/config.json`, which podman, skopeo and
+   cosign all read. Skipped on `pull_request`.
+10. **Push version tag.** `build/ci-push.sh "$IMAGE" "$FIRST"` where `FIRST`
+    is the first tag from `ci-tags.sh`: `44-<version>` on `main`, nightly and
+    dispatch-from-main, `dev-<branch>` (slashes → `-`) on dispatch from any
+    other branch. The script retries the push three times, then compares the
+    registry's digest with the digest podman reported, so a failed push or a
+    stale pre-existing tag fails the step. Skipped on `pull_request`.
 11. **Install cosign** (`sigstore/cosign-installer`, pinned by sha,
     `cosign-release: v3.1.3`). Skipped on `pull_request`.
-12. **Sign.** `just sign <tag>` with `COSIGN_PRIVATE_KEY` from the secret of
-    the same name. Signs by digest and verifies. Skipped on `pull_request`.
+12. **Sign.** `just sign "$FIRST"` with `COSIGN_PRIVATE_KEY` from the secret
+    of the same name. Signs by digest and verifies. Skipped on `pull_request`.
+13. **Push release tags.** `build/ci-push.sh "$IMAGE" 44 latest`, only on
+    `main`/nightly/dispatch-from-main. Re-tagging the same manifest keeps the
+    digest, so the signature from step 12 already covers both. No release tag
+    ever names an unsigned digest. A nightly whose inputs are unchanged still
+    publishes: the date is in the version label and the stamp, and a fresh
+    runner has no layer cache, so every nightly is a new digest that machines
+    download and stage.
 
 The workflow calls `just` recipes and never re-implements them, so a CI
 failure reproduces locally with the same command.
@@ -345,7 +354,13 @@ fix on a follow-up branch before the VM runbook starts.
 
 1. Dan: generate the keypair, set the GitHub secret, commit `cosign.pub`,
    store the vault backup, delete the local private key, install the Renovate
-   app.
+   app. **Link the ghcr package to the repository**: the package
+   `atomic-hyprland` was first pushed from the laptop and has no repository
+   link (`gh api /users/danmwallace/packages/container/atomic-hyprland` shows
+   `"repository": null`), so the workflow's `GITHUB_TOKEN` cannot push to it.
+   On github.com: Packages → atomic-hyprland → Package settings → Manage
+   Actions access → Add repository `danmwallace/atomic-hyprland` with role
+   Write. One-time.
 2. Branch `dw/phase3`: all repo changes; `just lint-ci`, `just build`,
    `just test` green locally.
 3. Fresh-context review; fix pass; merge to `main` locally and push.
@@ -357,8 +372,10 @@ fix on a follow-up branch before the VM runbook starts.
 
 ## Rollback
 
-- A broken workflow publishes nothing: the push step runs only after build
-  and tests pass, and the sign step verifies before the job succeeds.
+- A broken workflow never moves `44` or `latest`: they are re-pointed only
+  after the version tag is pushed and its signature verified. A sign failure
+  leaves at most an unsigned `44-<version>` or `dev-<branch>` tag that no
+  machine follows.
 - A machine that refuses the new image because of a policy mistake keeps
   running the booted deployment; `bootc rollback` is not even needed. The fix
   is a corrected build. If a signed but broken image is booted, `bootc
