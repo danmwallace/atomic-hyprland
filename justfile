@@ -14,8 +14,9 @@ build theme="nord" nvidia="0":
         --build-arg IMAGE_VERSION={{version}} \
         -t {{image}}:{{tag}} -t {{image}}:{{tag}}-{{version}} .
 
-# Run the in-image smoke tests
+# Host-side CI helper tests, then the in-image smoke + dotfile sync tests
 test:
+    bash tests/test-ci-tags.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
 
