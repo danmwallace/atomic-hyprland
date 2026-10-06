@@ -3,7 +3,9 @@ set dotenv-load := false
 
 image   := "ghcr.io/danmwallace/atomic-hyprland"
 tag     := "44"
-version := `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD` + `test -z "$(git status --porcelain)" || echo -dirty`
+# CI passes IMAGE_VERSION so the label, the tag and the stamp agree; locally it
+# is computed, with -dirty when the tree has uncommitted changes.
+version := env("IMAGE_VERSION", `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD` + `test -z "$(git status --porcelain)" || echo -dirty`)
 
 # Build the image locally (rootless podman). THEME: nord | tokyo-night | monochrome
 build theme="nord" nvidia="0":
@@ -17,6 +19,7 @@ build theme="nord" nvidia="0":
 # Host-side CI helper tests, then the in-image smoke + dotfile sync tests
 test:
     bash tests/test-ci-tags.sh
+    bash tests/test-justfile.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
 
@@ -28,14 +31,16 @@ lint:
 check-kernel:
     build/check-kernel-match.sh
 
-# Push :44 and a :44-<version> tag taken from the image's own version label,
-# so the dated tag always names the build it points at.
-# (needs: gh auth token | podman login ghcr.io -u danmwallace --password-stdin)
-push:
-    v="$(podman inspect -f '{{{{index .Config.Labels "org.opencontainers.image.version"}}' {{image}}:{{tag}})" && \
-        podman tag {{image}}:{{tag}} {{image}}:{{tag}}-"$v" && \
-        podman push {{image}}:{{tag}} && \
-        podman push {{image}}:{{tag}}-"$v"
+# Sign the pushed image by digest and verify the signature. Signing by digest
+# covers every tag pointing at it. The two =false flags produce the legacy
+# simple-signing payload, the only format bootc/podman/skopeo verify today.
+# Needs cosign 3.1.3 and COSIGN_PRIVATE_KEY in the environment (CI secret).
+sign tag=tag:
+    test -n "${COSIGN_PRIVATE_KEY:-}" || { echo "COSIGN_PRIVATE_KEY is not set" >&2; exit 1; }
+    digest="$(skopeo inspect docker://{{image}}:{{tag}} --format '{{{{.Digest}}')" && \
+        cosign sign -y --new-bundle-format=false --use-signing-config=false \
+            --key env://COSIGN_PRIVATE_KEY "{{image}}@${digest}" && \
+        cosign verify --new-bundle-format=false --key cosign.pub "{{image}}@${digest}"
 
 # bootc-image-builder needs root podman (loop devices) and reads the image from
 # root's container store, hence the sudo podman pull first.
