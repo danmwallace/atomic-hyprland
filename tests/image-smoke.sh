@@ -110,4 +110,17 @@ check bash -c '! rpm -q firefox'
 check bash -c '! rpm -q libreoffice-core'
 check bash -c '! rpm -q thunderbird'
 
+# Phase 3: stage-only updates. One updater (bootc), staged, never auto-rebooted.
+check test "$(systemctl is-enabled bootc-fetch-apply-updates.timer 2>/dev/null)" = enabled
+check test "$(systemctl is-enabled rpm-ostreed-automatic.timer 2>/dev/null)" = disabled
+dropin=/usr/lib/systemd/system/bootc-fetch-apply-updates.service.d/stage-only.conf
+check test -f "$dropin"
+check test "$(stat -c %a "$dropin" 2>/dev/null)" = 644
+# The drop-in must reset ExecStart and set the stage-only command.
+check grep -qx 'ExecStart=' "$dropin"
+check grep -qx 'ExecStart=/usr/bin/bootc upgrade --quiet' "$dropin"
+check bash -c '! grep -E "^ExecStart=" '"$dropin"' | grep -q -- --apply'
+# systemctl cat lists the drop-in only if the directory name matches the unit.
+check bash -c 'systemctl cat bootc-fetch-apply-updates.service | grep -q stage-only.conf'
+
 exit "$fail"

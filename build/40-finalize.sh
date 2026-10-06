@@ -6,6 +6,11 @@ systemctl enable sddm.service
 systemctl enable ai-images-pull.service
 systemctl set-default graphical.target
 
+# bootc stages updates (drop-in makes it stage-only); rpm-ostree's updater
+# would race it for the same deployment slot, so only one is enabled.
+systemctl enable bootc-fetch-apply-updates.timer
+systemctl disable rpm-ostreed-automatic.timer
+
 # The elvish RPM does not register itself; chsh and cloud-init need it listed.
 grep -qx /usr/bin/elvish /etc/shells || echo /usr/bin/elvish >> /etc/shells
 
