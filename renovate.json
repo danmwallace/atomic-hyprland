@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":dependencyDashboard"
+  ],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Digest-pinned build inputs (NAME=image:tag@sha256:...)",
+      "managerFilePatterns": ["/^build/images\\.env$/"],
+      "matchStrings": [
+        "(?<depName>[A-Z_]+)=(?<packageName>[^:@\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Claude Code version baked into the image",
+      "managerFilePatterns": ["/^Containerfile$/"],
+      "matchStrings": ["ARG CLAUDE_CODE_VERSION=(?<currentValue>\\S+)"],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "@anthropic-ai/claude-code"
+    },
+    {
+      "customType": "regex",
+      "description": "Quadlet container images",
+      "managerFilePatterns": ["/^files/usr/share/containers/systemd/.+\\.container$/"],
+      "matchStrings": ["Image=(?<depName>[^:\\s]+):(?<currentValue>\\S+)"],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Base and akmods move together; one PR, one kernel-match verdict",
+      "matchFileNames": ["build/images.env"],
+      "groupName": "ublue base and akmods",
+      "pinDigests": true
+    },
+    {
+      "description": "Fedora version bumps (44 -> 45) are a human decision, not a bot's",
+      "matchFileNames": ["build/images.env"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "enabled": false
+    },
+    {
+      "description": "LiteLLM publishes nightlies to the same repository",
+      "matchPackageNames": ["ghcr.io/berriai/litellm"],
+      "allowedVersions": "/-stable$/"
+    }
+  ]
+}

@@ -59,3 +59,5 @@ qcow2:
 # Lint the workflow (actionlint) via podman; nothing installed locally
 lint-ci:
     podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:latest -color
+    podman run --rm -v ./renovate.json:/usr/src/app/renovate.json:ro,Z \
+        docker.io/renovate/renovate:latest renovate-config-validator --strict
