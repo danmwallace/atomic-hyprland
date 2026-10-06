@@ -77,7 +77,26 @@ check bash -c '! grep -q "custom/updates" /etc/skel/.config/waybar/config'
 check test -L /etc/systemd/system/display-manager.service
 check test "$(readlink -f /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
 check grep -q '^/usr/bin/elvish$' /etc/shells
-check jq -e '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"][0].type == "insecureAcceptAnything"' /etc/containers/policy.json
+# Phase 3: trust policy. Our scope demands a cosign signature; the base's
+# catch-all "" docker scope must survive, it is what lets Ollama and LiteLLM pull.
+policy=/etc/containers/policy.json
+scope='.transports.docker["ghcr.io/danmwallace/atomic-hyprland"]'
+check jq -e "${scope} | length == 1" "$policy"
+check jq -e "${scope}[0].type == \"sigstoreSigned\"" "$policy"
+check jq -e "${scope}[0].keyPaths | type == \"array\" and length >= 1" "$policy"
+check jq -e "${scope}[0].signedIdentity.type == \"matchRepository\"" "$policy"
+check jq -e '.transports.docker[""][0].type == "insecureAcceptAnything"' "$policy"
+for key in $(jq -r "${scope}[0].keyPaths[]? // empty" "$policy"); do
+    check test -f "$key"
+    check test "$(stat -c %a "$key")" = 644
+    check openssl pkey -pubin -in "$key" -noout
+done
+# The key in the image must be the key in the repo; just test passes the sha.
+check test "$(sha256sum /etc/pki/containers/atomic-hyprland.pub 2>/dev/null | cut -d' ' -f1)" = "${PUBKEY_SHA256:?set by just test}"
+reg=/etc/containers/registries.d/atomic-hyprland.yaml
+check test -f "$reg"
+check bash -c "yq -e '.docker[\"ghcr.io/danmwallace/atomic-hyprland\"][\"use-sigstore-attachments\"] == true' $reg"
+check bash -c "test \"\$(yq '.docker | keys | length' $reg)\" = 1"
 # Only the COPRs this build enables (new-style file names); the ublue base ships
 # its own _copr_ublue-os-akmods.repo enabled and that is left as-is.
 check bash -c '! grep -ls "^enabled=1" /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:*.repo'

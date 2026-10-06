@@ -4,3 +4,4 @@ output/
 .ansible/
 .superpowers/
 *.log
+cosign.key

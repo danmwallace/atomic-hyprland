@@ -16,6 +16,7 @@ RUN if [ "${NVIDIA}" = "1" ]; then echo "NVIDIA layer arrives in Phase 4; build 
 # Static files land after the expensive layers so editing them does not
 # invalidate the package and role cache.
 COPY files/ /
+COPY --chmod=0644 cosign.pub /etc/pki/containers/atomic-hyprland.pub
 RUN /tmp/build/30-policy.sh && /tmp/build/40-finalize.sh "${IMAGE_VERSION}"
 RUN /tmp/build/90-cleanup.sh
 

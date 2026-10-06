@@ -1,0 +1,6 @@
+# Fetch cosign signatures stored as OCI attachments for our image. Without
+# this, every pull fails with "no signatures found" once policy.json
+# requires sigstoreSigned.
+docker:
+  ghcr.io/danmwallace/atomic-hyprland:
+    use-sigstore-attachments: true
