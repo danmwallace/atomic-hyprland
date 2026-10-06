@@ -89,7 +89,7 @@ expect "dispatch from main"            $'44\n44-20261005-abc1234\nlatest' "$s" w
 expect "dispatch branch with slash"    "dev-dw-phase3"                     "$s" workflow_dispatch refs/heads/dw/phase3 "$v"
 expect "dispatch plain branch"         "dev-fix-waybar"                    "$s" workflow_dispatch refs/heads/fix-waybar "$v"
 expect "pull request prints nothing"   ""                                  "$s" pull_request     refs/pull/12/merge   "$v"
-expect "missing version is an error"   "build/ci-tags.sh: line 6: 3: version" "$s" push refs/heads/main
+expect "missing version is an error"   "build/ci-tags.sh: line 7: 3: version" "$s" push refs/heads/main
 
 exit "$fail"
 ```
@@ -127,7 +127,7 @@ Then `chmod +x build/ci-tags.sh`.
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `bash tests/test-ci-tags.sh`
-Expected: seven `ok` lines, exit 0. If "missing version is an error" fails only on the line number in the message, fix the expected string to the actual line number of the `version=` assignment (bash reports the line of the `${3:?}` expansion).
+Expected: seven `ok` lines, exit 0. (Bash reports the line of the `${3:?version}` expansion, line 7 of the script as written above; keep the script's comment block at four lines or update the expected string.)
 
 - [ ] **Step 5: Wire it into `just test`**
 
@@ -209,7 +209,7 @@ check bash -c "test \"\$(yq '.docker | keys | length' $reg)\" = 1"
 - [ ] **Step 3: Run the smoke test against the current image to verify the new checks fail**
 
 Run: `podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" -v ./tests:/tests:ro,Z ghcr.io/danmwallace/atomic-hyprland:44 bash /tests/image-smoke.sh | grep -E "FAIL|^ok.*(policy|registries|pki)" `
-Expected: `FAIL` for `length == 1`? No: the current entry has length 1, so that passes; `FAIL` for `sigstoreSigned`, `keyPaths`, `matchRepository`, the sha256 comparison, `test -f $reg` and both `yq` checks. The `""` catch-all check passes. Exit status of the whole script is 1.
+Expected: `ok` for `length == 1` (the Phase 1 entry is also a single requirement) and for the `""` catch-all; `FAIL` for `sigstoreSigned`, `keyPaths`, `matchRepository`, the sha256 comparison, `test -f $reg` and both `yq` checks. The `for key` loop runs zero times because the old entry has no `keyPaths`. Exit status of the whole script is 1.
 
 - [ ] **Step 4: Write the registries.d file**
 
