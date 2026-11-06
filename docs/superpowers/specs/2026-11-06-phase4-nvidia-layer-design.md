@@ -75,8 +75,10 @@ Builder's calls:
 
 ### Containerfile
 
-- `ARG AKMODS_IMAGE` declared before the first `FROM`; a second stage
-  `FROM ${AKMODS_IMAGE} AS akmods`.
+- `ARG AKMODS_IMAGE` (no default; `just build` supplies it) declared before
+  the first `FROM`. The akmods stage comes **first**,
+  `FROM ${AKMODS_IMAGE} AS akmods`, and `FROM ${BASE_IMAGE}` stays the last
+  `FROM`, because the last stage is the image.
 - A new step between the role and `COPY files/ /`, so editing static files
   does not re-run it:
   `RUN --mount=type=bind,from=akmods,src=/rpms,dst=/tmp/akmods-rpms /tmp/build/25-nvidia.sh`
@@ -89,10 +91,19 @@ Builder's calls:
    differs from `rpm -q kernel-core` in the image. `check-kernel` compares
    image labels before the build; this compares what is actually installed.
 2. `IMAGE_NAME=base AKMODNV_PATH=/tmp/akmods-rpms MULTILIB=0 /tmp/akmods-rpms/ublue-os/nvidia-install.sh`
-3. As Aurora does: remove `/usr/share/vulkan/icd.d/nouveau_icd.*.json`;
+3. Put repo state back. The installer runs `dnf5 copr enable ublue-os/staging`
+   and then only overrides it off, leaving the repo file `enabled=1`, which
+   the existing "no enabled COPRs" smoke check rejects: run
+   `dnf -y copr disable ublue-os/staging`. It also disables
+   `fedora-cisco-openh264` and never restores it: record whether that repo was
+   enabled before the installer and restore that state after.
+4. As Aurora does: remove `/usr/share/vulkan/icd.d/nouveau_icd.*.json`;
    `ln -sf libnvidia-ml.so.1 /usr/lib64/libnvidia-ml.so`.
-4. Regenerate the initramfs exactly as ublue's `initramfs.sh` does, because
-   the installer changed the dracut config.
+5. Regenerate the initramfs exactly as ublue's `initramfs.sh` does, because
+   the installer changed the dracut config. (Trial run in a rootless
+   container: exit 0, same module list as the shipped initramfs. dracut 108
+   implements `force_drivers` as `rd.driver.pre=`, so on a GPU-less machine it
+   is a logged modprobe failure, not a failed unit.)
 
 ### `files/usr/lib/bootc/kargs.d/00-nvidia.toml`
 
@@ -108,12 +119,28 @@ two-card ordering problem, it is added then.
 ### Machines without an NVIDIA GPU
 
 Requirement: on `hypr-test` this layer leaves no unit in the `failed` state
-and the desktop, Ollama, LiteLLM and Hermes behave as before. Where a unit the
-installer enabled fails without hardware, the image ships a drop-in for it
-with `ConditionPathExists=/proc/driver/nvidia/version`. Which units need one
-is determined by booting the build on `hypr-test` before merge is considered
-final; candidates are `nvidia-persistenced.service` and
-`nvidia-cdi-refresh.service`.
+and the desktop, Ollama, LiteLLM and Hermes behave as before.
+
+Both units the installer enables fail without hardware:
+`nvidia-persistenced.service` has `Restart=always` and no condition;
+`nvidia-cdi-refresh.service` passes its `ExecCondition` (the kmod is in
+`modules.dep`), then `nvidia-smi -L` fails and its restart limit takes it to
+`failed`. The image ships a drop-in for each:
+
+```ini
+# files/usr/lib/systemd/system/<unit>.d/10-require-gpu.conf
+# Skip cleanly on machines without an NVIDIA GPU (the image runs on both).
+[Unit]
+ConditionPathExists=/proc/driver/nvidia/version
+```
+
+A plain `ConditionPathExists=` (AND), not the `|` form the base unit uses.
+`nvidia-cdi-refresh.path` only watches `PathChanged=` and needs nothing.
+
+The layer also adds `/usr/share/glvnd/egl_vendor.d/10_nvidia.json`, which
+sorts ahead of `50_mesa.json`, an Xorg `OutputClass` snippet and an NVIDIA GBM
+backend. glvnd is expected to fall through to Mesa without the hardware; the
+hypr-test gate below is what proves it.
 
 ### justfile
 
@@ -138,9 +165,16 @@ and "Known gaps" line are updated.
 
   [Container]
   AddDevice=nvidia.com/gpu=all
+  SecurityLabelType=nvidia_container_t
   ```
 
-  then daemon-reload and restart `ollama.service`.
+  then daemon-reload and restart `ollama.service` (a new `Restart ollama`
+  handler; the playbook only has `Restart litellm` today). The label
+  **(my call)** is what the installer's `nvidia-container.pp` module exists
+  for: under enforcing, plain `container_t` cannot open `/dev/nvidia*`
+  (`container_use_devices` is off in this image) and Ollama would silently
+  fall back to CPU. It renders as `--security-opt label=type:nvidia_container_t`
+  (generator dry-run). Untestable until there is a GPU; the runbook checks it.
 - When false: ensure the file is absent (same handler), so turning it off
   works.
 - The Alienware gets `hypr_desktop_ollama_gpu: true` in its `host_vars` when
@@ -162,9 +196,12 @@ and "Known gaps" line are updated.
   `tomllib`), and lists the three arguments.
 - `nvidia-ctk --version` runs.
 - `nvidia-cdi-refresh.path` and `nvidia-persistenced.service` are enabled.
-- The NVIDIA repos and every COPR are disabled after the build (the existing
-  COPR check already covers `ublue-os/staging`; add `dnf repolist --enabled`
-  does not list `nvidia`).
+- The NVIDIA repos and every COPR are disabled after the build: the existing
+  COPR file check now also has to pass for `ublue-os/staging`, and
+  `dnf repolist --enabled` lists nothing matching `nvidia`; the
+  `fedora-cisco-openh264` repo is in the state the base shipped it in.
+- Both `10-require-gpu.conf` drop-ins exist and `systemctl cat` of each unit
+  shows the condition.
 - `/usr/share/vulkan/icd.d/nouveau_icd.*.json` is absent.
 - The shipped `ollama.container` still has **no** `AddDevice` line (GPU is
   per host).
@@ -174,20 +211,32 @@ and "Known gaps" line are updated.
 - `tests/test-justfile.sh`: `build` has no `nvidia` parameter and passes
   `AKMODS_IMAGE`.
 
-### On hypr-test (no GPU)
+### On hypr-test (no GPU): the merge gate
 
 Reached with a signed `dev-dw-phase4` tag from a manual workflow dispatch, so
-`44` is not touched until this passes:
+`44` is not touched until this passes. Before switching: `df -h /boot` and
+`/sysroot` (the initramfs grows with the GSP firmware; the image by about
+1.4 GiB).
 
-1. `bootc switch` to the dev tag, reboot. It boots, SDDM is active, the user's
-   Hyprland config still verifies.
-2. `systemctl --failed` lists nothing.
+1. `bootc switch` to the dev tag, reboot. It boots.
+2. `systemctl --failed` lists nothing; both NVIDIA units show as skipped by
+   their condition.
 3. `/proc/cmdline` carries the three arguments; `lsmod` shows no `nvidia`.
-4. `curl 127.0.0.1:11434/api/tags` answers; LiteLLM and Hermes are active.
-5. The playbook runs with `hypr_desktop_ollama_gpu` false: no drop-in,
+4. **Something renders.** SSH cannot show this, so the display is captured
+   with `virsh -c qemu+ssh://dwallace@10.10.99.4/system screenshot hypr-test`:
+   first the SDDM greeter, then a Hyprland session started through a temporary
+   SDDM autologin drop-in on the VM (`/etc/sddm.conf.d/99-autologin-test.conf`,
+   removed afterwards). Both screenshots must show a drawn screen, and the Xorg
+   and SDDM logs must have no fatal error.
+5. `curl 127.0.0.1:11434/api/tags` answers; LiteLLM and Hermes are active.
+6. The playbook runs with `hypr_desktop_ollama_gpu` false: no drop-in,
    `changed=0`.
 
-After merge and publish: `bootc switch` back to `:44`, reboot, same checks.
+If any of 1 to 5 fails, nothing is merged: the VM goes back to `:44`, the PR
+stays open, and the finding is reported **(my call)**. If all pass, the
+builder merges, lets CI publish `44`, switches the VM back to `:44` and
+repeats 1 to 5 **(my call, under Dan's "go for it")**. Only hypr-test follows
+`:44`, and it stages without rebooting.
 
 ### Not testable in this phase
 
@@ -195,22 +244,37 @@ Anything that needs the GPU: module load, `nvidia-smi`, a Hyprland session on
 NVIDIA, Ollama on CUDA, the CDI spec. These are the Alienware runbook's
 verification steps.
 
-## Alienware runbook (written to README, not executed)
+## Alienware runbook (written to README, not executed; Dan reviews it)
 
-1. Record the current state: `bootc status`, `rpm-ostree status`,
-   `flatpak list`, a copy of `/etc` customisations of note.
-2. Dan confirms. `sudo bootc switch ghcr.io/danmwallace/atomic-hyprland:44`.
-   Bazzite's policy must accept our image: if the pull is refused for want of
-   a policy entry, the README gives the one-off `--enforce-container-sigpolicy`
-   free form and the reason.
-3. Reboot. Verify: `bootc status` (ours booted, Bazzite as rollback),
-   `nvidia-smi`, SDDM, a Hyprland session.
+0. Pre-flight on Bazzite, read-only: `rpm-ostree status` (layered packages or
+   overrides must be removed with `rpm-ostree reset` first, or the switch is
+   refused); `lspci | grep -Ei "vga|3d"` (is an integrated GPU active too?);
+   `systemctl is-enabled sshd` (the playbook needs it); `bootc status`;
+   `flatpak list`; note `/etc` customisations.
+1. Make the first pull verified **(my call)**. Bazzite most likely carries
+   ublue's catch-all accept rule, so an unprepared switch would pull our image
+   unverified. Before switching, copy onto Bazzite: `cosign.pub` to
+   `/etc/pki/containers/atomic-hyprland.pub`, the `sigstoreSigned` entry into
+   `/etc/containers/policy.json`, and
+   `/etc/containers/registries.d/atomic-hyprland.yaml`. There is no flag that
+   loosens a policy refusal; `--enforce-container-sigpolicy` only tightens.
+2. Dan confirms. `sudo bootc switch ghcr.io/danmwallace/atomic-hyprland:44`,
+   reboot. Bazzite's bootc applies our `kargs.d`.
+3. Verify: `bootc status` (ours booted, Bazzite as rollback); `nvidia-smi`;
+   `systemctl --failed` empty; SDDM; a Hyprland session;
+   `jq '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"]'
+   /etc/containers/policy.json` is ours after the `/etc` merge;
+   `semodule -l | grep nvidia_container`.
 4. Create `~/.config/hypr/local.lua` with the NVIDIA environment
    (`LIBVA_DRIVER_NAME=nvidia`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`,
-   `NVD_BACKEND=direct`, `cursor.no_hardware_cursors`).
+   `NVD_BACKEND=direct`, `cursor.no_hardware_cursors`). If two cards fight
+   over ordering, add `AQ_DRM_DEVICES` here, or the simpledrm kernel argument
+   to the image.
 5. Add `alienware` (10.10.70.27) to `hypr_desktops` with
    `hypr_desktop_ollama_gpu: true`; run the playbook (`--skip-tags hermes` on
-   the first check run). Verify `podman logs ollama` reports CUDA.
+   the first check run). Verify `podman logs ollama` reports CUDA and
+   `podman exec ollama nvidia-smi` works. If it reports CPU only, check the
+   container label before anything else.
 6. Way back: `sudo bootc rollback` returns to Bazzite; `/var` and `/home` are
    kept in both directions.
 
@@ -218,7 +282,11 @@ verification steps.
 
 - A build that fails the kernel or version assertions publishes nothing.
 - `hypr-test` is tested on a `dev-` tag first; `bootc switch` back to `:44`
-  undoes it. After publish, `bootc rollback` returns to `20261106-45ce3f2`.
+  undoes it. After the gate and publish, the VM's rollback deployment is the
+  dev build, not the pre-NVIDIA one: the way back to that is
+  `bootc switch ghcr.io/danmwallace/atomic-hyprland:44-20261106-45ce3f2`.
+- The build needs three live third-party repos (negativo17, NVIDIA's toolkit
+  repo, the ublue staging COPR). An outage fails a nightly; nothing publishes.
 
 ## Out of scope
 
