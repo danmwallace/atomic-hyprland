@@ -23,10 +23,9 @@ branch (`gh workflow run build.yml --ref <branch>`) to publish a signed
   `ghcr.io/danmwallace/atomic-hyprland:44`, cloud-init created `dwallace` with
   `/usr/bin/elvish`, the dotfile sync unit ran, SDDM greeter is up on Xorg.
   Verified over SSH 2026-10-03. Graphical login: see the VM runbook.
-- Known gaps (deliberate, later phases): no NVIDIA, no Ollama/LiteLLM, image
-  unsigned (policy allows our registry unsigned until Phase 3), the role's
-  `10-theme.conf` names an SDDM theme that is not installed so SDDM uses its
-  default, the default wallpaper file is missing (black background).
+- Still open from this phase: the role's `10-theme.conf` names an SDDM theme
+  that is not installed, so SDDM uses its default. Ollama and LiteLLM arrived
+  in Phase 2, signing in Phase 3, the NVIDIA driver in Phase 4.
 
 ## AI services (Phase 2)
 
@@ -77,6 +76,40 @@ image becomes the default at the next reboot. `bootc status` shows it as
 Renovate (`renovate.json`) opens Monday PRs for the digests in
 `build/images.env` (base and akmods grouped, Fedora version bumps disabled),
 the pinned action shas, the Claude Code version and the Quadlet image tags.
+
+## NVIDIA (Phase 4)
+
+One image for every machine, always with the NVIDIA driver. It is inert
+without the hardware: `hypr-test` has no GPU and runs the same image.
+
+- **Where it comes from.** A first build stage brings in Universal Blue's
+  prebuilt `akmods-nvidia-open` image, pinned by digest next to the base in
+  `build/images.env`. `build/25-nvidia.sh` bind-mounts its RPMs and runs
+  ublue's own `nvidia-install.sh`: kernel module, userspace driver,
+  `nvidia-container-toolkit`, `egl-wayland`, `libva-nvidia-driver` and the
+  SELinux module for GPU containers. No 32-bit libraries. Three third-party
+  repos are enabled only for that step (negativo17 `fedora-nvidia`, NVIDIA's
+  toolkit repo, the `ublue-os/staging` COPR).
+- **Kernel match.** The module is built for one exact kernel. `just
+  check-kernel` compares the two images' labels; the build compares the
+  module's kernel with the installed `kernel-core` and stops with `kernel
+  mismatch: akmods built for X, image has Y`. Either failure means the two
+  digests in `build/images.env` must be bumped together.
+- **Kernel arguments** (`/usr/lib/bootc/kargs.d/00-nvidia.toml`):
+  `rd.driver.blacklist=nouveau modprobe.blacklist=nouveau nvidia-drm.modeset=1`.
+  bootc applies them on install, switch and upgrade.
+- **No GPU, no failures.** `nvidia-persistenced` and `nvidia-cdi-refresh` carry
+  `ConditionPathExists=/proc/driver/nvidia/version`, so they are skipped on
+  machines without the card instead of failing.
+- **Ollama on the GPU is per host.** The image's `ollama.container` has no GPU
+  device, because podman will not start a container whose CDI device is
+  missing. Set `hypr_desktop_ollama_gpu: true` for the host in
+  ansible-homelab-cfg; the playbook writes
+  `/etc/containers/systemd/ollama.container.d/10-nvidia.conf`.
+- **Hyprland's NVIDIA environment is per machine** too: it goes in
+  `~/.config/hypr/local.lua` (see the Alienware runbook), never in the image.
+- `podman build` on its own fails: `AKMODS_IMAGE` has no default. Use
+  `just build`, which passes the pinned pair.
 
 ## VM runbook
 
@@ -139,3 +172,84 @@ First graphical login needs a password: `ssh dwallace@192.168.70.14 sudo passwd 
    run. After a newer CI build: `systemctl start
    bootc-fetch-apply-updates.service`, then `bootc status` shows a staged
    deployment and `uptime` shows no reboot.
+
+### Alienware rebase (from Bazzite; not yet run)
+
+The Alienware (10.10.70.27, RTX 2070) runs base Bazzite with NVIDIA drivers,
+itself a bootc image, so no reinstall is needed. `/var` and `/home` are kept in
+both directions. Do this at the machine, not remotely.
+
+0. Pre-flight on Bazzite, read-only:
+
+   ```bash
+   rpm-ostree status          # layered packages or overrides? remove with: rpm-ostree reset
+   sudo bootc status
+   lspci | grep -Ei "vga|3d"  # is an integrated GPU active as well?
+   systemctl is-enabled sshd  # the playbook needs it
+   flatpak list
+   ```
+
+1. Make the first pull verified. Bazzite most likely accepts any image from
+   an unlisted registry, so without this the switch pulls ours unchecked. From
+   a checkout of this repo, on the Alienware:
+
+   ```bash
+   sudo install -m 0644 cosign.pub /etc/pki/containers/atomic-hyprland.pub
+   sudo install -m 0644 files/etc/containers/registries.d/atomic-hyprland.yaml /etc/containers/registries.d/
+   sudo cp /etc/containers/policy.json /etc/containers/policy.json.bazzite
+   sudo jq '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"] = [{"type":"sigstoreSigned","keyPaths":["/etc/pki/containers/atomic-hyprland.pub"],"signedIdentity":{"type":"matchRepository"}}]' \
+       /etc/containers/policy.json.bazzite | sudo tee /etc/containers/policy.json >/dev/null
+   ```
+
+   No flag loosens a policy refusal; `--enforce-container-sigpolicy` only
+   tightens.
+
+2. Switch and reboot:
+
+   ```bash
+   sudo bootc switch ghcr.io/danmwallace/atomic-hyprland:44
+   sudo systemctl reboot
+   ```
+
+3. Verify:
+
+   ```bash
+   sudo bootc status                 # ours booted, Bazzite as rollback
+   nvidia-smi                        # lists the RTX 2070
+   systemctl --failed                # empty
+   cat /proc/cmdline                 # has nvidia-drm.modeset=1
+   jq '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"]' /etc/containers/policy.json
+   sudo semodule -l | grep nvidia_container
+   ```
+
+   Then log in through SDDM to a Hyprland session.
+
+4. Create `~/.config/hypr/local.lua` (never managed by the image):
+
+   ```lua
+   hl.env("LIBVA_DRIVER_NAME", "nvidia")
+   hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+   hl.env("NVD_BACKEND", "direct")
+   hl.config({ cursor = { no_hardware_cursors = true } })
+   ```
+
+   If the integrated and NVIDIA cards fight over ordering (black screen or the
+   wrong output), add `hl.env("AQ_DRM_DEVICES", "/dev/dri/cardN")` for the
+   NVIDIA card here.
+
+5. In ansible-homelab-cfg: add `alienware` (10.10.70.27) to `hypr_desktops`,
+   create `host_vars/alienware/ollama.yml` with `hypr_desktop_ollama_gpu: true`,
+   and run `playbooks/fedora-hypr-desktop.yml --limit alienware` (use `--check
+   --skip-tags hermes` for the first dry run). Then:
+
+   ```bash
+   sudo podman exec ollama nvidia-smi   # the GPU inside the container
+   sudo podman logs ollama | grep -i -E "cuda|gpu"
+   ```
+
+   If Ollama reports CPU only, check the container's SELinux label first:
+   `sudo podman inspect ollama --format '{{.ProcessLabel}}'` should contain
+   `nvidia_container_t`.
+
+6. Way back: `sudo bootc rollback && sudo systemctl reboot` returns to
+   Bazzite. Restore `/etc/containers/policy.json.bazzite` if you stay there.
