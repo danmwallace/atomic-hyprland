@@ -175,4 +175,18 @@ check test "$(systemctl is-enabled nvidia-persistenced.service 2>/dev/null)" = e
 check bash -c '! dnf5 repolist --enabled 2>/dev/null | grep -qi nvidia'
 check bash -c '! ls /usr/share/vulkan/icd.d/nouveau_icd.*.json 2>/dev/null | grep -q .'
 
+kargs=/usr/lib/bootc/kargs.d/00-nvidia.toml
+check test -f "$kargs"
+check python3 -c "import tomllib,sys; k=tomllib.load(open('$kargs','rb'))['kargs']; sys.exit(0 if k==['rd.driver.blacklist=nouveau','modprobe.blacklist=nouveau','nvidia-drm.modeset=1'] else 1)"
+# Both units the installer enables fail without the hardware; a condition makes
+# them skip cleanly, since this one image also boots on GPU-less machines.
+for u in nvidia-persistenced nvidia-cdi-refresh; do
+    d="/usr/lib/systemd/system/${u}.service.d/10-require-gpu.conf"
+    check test -f "$d"
+    check grep -qx 'ConditionPathExists=/proc/driver/nvidia/version' "$d"
+    check bash -c "systemctl cat ${u}.service | grep -q 10-require-gpu.conf"
+done
+# GPU for Ollama is switched on per host by the playbook, never in the image.
+check bash -c '! grep -rq "AddDevice" /usr/share/containers/systemd/'
+
 exit "$fail"

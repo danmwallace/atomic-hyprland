@@ -1,0 +1,4 @@
+# Keep nouveau off the GPU and let the NVIDIA driver own modesetting. Harmless
+# on machines without an NVIDIA card. simpledrm is deliberately not
+# blacklisted: on GPU-less machines it is the only early console.
+kargs = ["rd.driver.blacklist=nouveau", "modprobe.blacklist=nouveau", "nvidia-drm.modeset=1"]
