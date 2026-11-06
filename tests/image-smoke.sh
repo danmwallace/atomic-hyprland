@@ -47,7 +47,15 @@ verify_hypr() {
     cp /tests/hypr-probe-post.lua "$HOME/.config/hypr/probe_post.lua"
     sed -i '1i require("probe_pre")' "$HOME/.config/hypr/hyprland.lua"
     echo 'require("probe_post")' >> "$HOME/.config/hypr/hyprland.lua"
-    Hyprland --verify-config --i-am-really-stupid 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
+    # Run as an unprivileged user, like a real session. Hyprland 0.57 in
+    # verify mode has no instance directory and binds its event socket at
+    # /.socket2.sock; as root that bind succeeds and it segfaults (exit 139)
+    # before printing a verdict, as a user the bind is refused and it carries
+    # on. VERIFY_EXIT makes a crash show up as a crash, not a missing string.
+    chown -R nobody:nobody "$HOME"; chmod 700 "$XDG_RUNTIME_DIR"
+    setpriv --reuid=nobody --regid=nobody --clear-groups Hyprland --verify-config 2>&1 \
+        | sed 's/\x1b\[[0-9;]*m//g'
+    echo "VERIFY_EXIT=${PIPESTATUS[0]}"
 }
 # expect_out <label> <present|absent> <regex>  (matches against $out)
 expect_out() {
@@ -59,9 +67,11 @@ expect_out() {
     fi
 }
 out="$(verify_hypr)"
+expect_out "hyprland verify-config exits 0 (no crash)" present '^VERIFY_EXIT=0$'
 expect_out "hyprland verify-config reports config ok" present 'config ok'
 expect_out "hyprland verify-config has no Lua or config errors" absent 'attempt to|stack traceback|Config error'
-expect_out "hyprland picked the Lua config" present 'Using lua config'
+# 0.56 printed "Using lua config"; 0.57 prints "Regular config at <path>/hyprland.lua".
+expect_out "hyprland picked the Lua config" present 'Using lua config|Regular config at .*/hyprland\.lua'
 expect_out "every hl.config key is known to this Hyprland" present 'PROBE config keys ok'
 expect_out "no unknown config keys in the shipped config" absent 'PROBE unknown config key'
 # Test of the test: an unknown key must be caught, since --verify-config alone accepts it.
