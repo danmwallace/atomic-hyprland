@@ -159,4 +159,20 @@ check bash -c '! grep -E "^ExecStart=" '"$dropin"' | grep -q -- --apply'
 # systemctl cat lists the drop-in only if the directory name matches the unit.
 check bash -c 'systemctl cat bootc-fetch-apply-updates.service | grep -q stage-only.conf'
 
+# Phase 4: NVIDIA layer (present on every machine; inert without the hardware)
+check rpm -q kmod-nvidia nvidia-driver nvidia-driver-cuda nvidia-container-toolkit egl-wayland libva-nvidia-driver ublue-os-nvidia-addons
+check test "$(rpm -q --qf '%{VERSION}' kmod-nvidia)" = "$(rpm -q --qf '%{VERSION}' nvidia-driver)"
+kver="$(rpm -q --qf '%{evr}.%{arch}' kernel-core)"
+check test "$(ls /usr/lib/modules | wc -l)" = 1
+check bash -c "find /usr/lib/modules/${kver} -name 'nvidia.ko*' | grep -q ."
+# The kmod package installs under the image's own kernel directory.
+check bash -c "rpm -ql kmod-nvidia | grep -q \"/${kver}/\""
+check bash -c '! rpm -qa | grep -E "nvidia.*\.i686"'
+check bash -c "lsinitrd /usr/lib/modules/${kver}/initramfs.img | grep -q 'nvidia.ko'"
+check bash -c 'nvidia-ctk --version | grep -qi "version"'
+check test "$(systemctl is-enabled nvidia-cdi-refresh.path 2>/dev/null)" = enabled
+check test "$(systemctl is-enabled nvidia-persistenced.service 2>/dev/null)" = enabled
+check bash -c '! dnf5 repolist --enabled 2>/dev/null | grep -qi nvidia'
+check bash -c '! ls /usr/share/vulkan/icd.d/nouveau_icd.*.json 2>/dev/null | grep -q .'
+
 exit "$fail"

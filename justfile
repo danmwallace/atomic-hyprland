@@ -8,11 +8,11 @@ tag     := "44"
 version := env("IMAGE_VERSION", `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD` + `test -z "$(git status --porcelain)" || echo -dirty`)
 
 # Build the image locally (rootless podman). THEME: nord | tokyo-night | monochrome
-build theme="nord" nvidia="0":
+build theme="nord":
     source build/images.env && podman build \
         --build-arg BASE_IMAGE="$BASE_IMAGE" \
+        --build-arg AKMODS_IMAGE="$AKMODS_IMAGE" \
         --build-arg THEME={{theme}} \
-        --build-arg NVIDIA={{nvidia}} \
         --build-arg IMAGE_VERSION={{version}} \
         -t {{image}}:{{tag}} -t {{image}}:{{tag}}-{{version}} .
 
@@ -20,6 +20,7 @@ build theme="nord" nvidia="0":
 test:
     bash tests/test-ci-tags.sh
     bash tests/test-build-pins.sh
+    bash tests/test-nvidia-build.sh
     bash tests/test-ci-push.sh
     bash tests/test-workflow.sh
     bash tests/test-justfile.sh
