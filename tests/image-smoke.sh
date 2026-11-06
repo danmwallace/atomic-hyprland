@@ -82,6 +82,13 @@ out="$(verify_hypr 'hl.bind("SUPER + Z", hl.dsp.nonexistent())')"
 expect_out "broken binds.lua is reported by name" present 'binds.lua'
 expect_out "broken binds.lua does not fail hyprland.lua" absent 'hyprland.lua:'
 check rpm -q hyprland-guiutils
+# Extra terminals: Ghostty from the scottames/ghostty COPR; tuios is not
+# packaged for Fedora, so it is upstream's release binary under /usr/bin.
+check rpm -q ghostty
+check bash -c 'ghostty +version | grep -qi "^ghostty "'
+check test -x /usr/bin/tuios
+check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
+check test -f /usr/share/licenses/tuios/LICENSE
 check bash -c "fc-match -f '%{family}' RobotoMonoNerdFontPropo | grep -q 'Nerd Font Propo'"
 check bash -c '! grep -q "custom/updates" /etc/skel/.config/waybar/config'
 check test -L /etc/systemd/system/display-manager.service

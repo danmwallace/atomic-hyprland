@@ -8,6 +8,7 @@ dnf -y remove ansible-core python3-libdnf5
 dnf -y copr disable atim/starship
 dnf -y copr disable atim/lazygit
 dnf -y copr disable lionheartp/Hyprland
+dnf -y copr disable scottames/ghostty
 dnf clean all
 
 rm -rf /tmp/build /tmp/* /var/cache/* /var/log/* /var/roothome/.ansible /var/roothome/.cache

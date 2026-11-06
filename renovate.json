@@ -27,6 +27,15 @@
     },
     {
       "customType": "regex",
+      "description": "tuios release binary baked into the image",
+      "managerFilePatterns": ["/^Containerfile$/"],
+      "matchStrings": ["ARG TUIOS_VERSION=(?<currentValue>\\S+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "Gaurav-Gosain/tuios",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
       "description": "Quadlet container images",
       "managerFilePatterns": ["/^files/usr/share/containers/systemd/.+\\.container$/"],
       "matchStrings": ["Image=(?<depName>[^:\\s]+):(?<currentValue>\\S+)"],
