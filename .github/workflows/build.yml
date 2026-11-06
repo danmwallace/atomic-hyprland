@@ -28,8 +28,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # ~20 GB free by default; the image is 8 GB on a 6 GB base and buildah
-      # keeps both. Drop toolchains this job never uses.
+      # Measured on ubuntu-latest: 145 GB disk, about 107 GB free after this
+      # cleanup. The image is about 10 GB on a 6 GB base and buildah keeps
+      # both; the cleanup is cheap insurance and df makes a full disk
+      # diagnosable.
       - name: Free disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup

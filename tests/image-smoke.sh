@@ -159,4 +159,34 @@ check bash -c '! grep -E "^ExecStart=" '"$dropin"' | grep -q -- --apply'
 # systemctl cat lists the drop-in only if the directory name matches the unit.
 check bash -c 'systemctl cat bootc-fetch-apply-updates.service | grep -q stage-only.conf'
 
+# Phase 4: NVIDIA layer (present on every machine; inert without the hardware)
+check rpm -q kmod-nvidia nvidia-driver nvidia-driver-cuda nvidia-container-toolkit egl-wayland libva-nvidia-driver ublue-os-nvidia-addons
+check test "$(rpm -q --qf '%{VERSION}' kmod-nvidia)" = "$(rpm -q --qf '%{VERSION}' nvidia-driver)"
+kver="$(rpm -q --qf '%{evr}.%{arch}' kernel-core)"
+check test "$(ls /usr/lib/modules | wc -l)" = 1
+check bash -c "find /usr/lib/modules/${kver} -name 'nvidia.ko*' | grep -q ."
+# The kmod package installs under the image's own kernel directory.
+check bash -c "rpm -ql kmod-nvidia | grep -q \"/${kver}/\""
+check bash -c '! rpm -qa | grep -E "nvidia.*\.i686"'
+check bash -c "lsinitrd /usr/lib/modules/${kver}/initramfs.img | grep -q 'nvidia.ko'"
+check bash -c 'nvidia-ctk --version | grep -qi "version"'
+check test "$(systemctl is-enabled nvidia-cdi-refresh.path 2>/dev/null)" = enabled
+check test "$(systemctl is-enabled nvidia-persistenced.service 2>/dev/null)" = enabled
+check bash -c '! dnf5 repolist --enabled 2>/dev/null | grep -qi nvidia'
+check bash -c '! ls /usr/share/vulkan/icd.d/nouveau_icd.*.json 2>/dev/null | grep -q .'
+
+kargs=/usr/lib/bootc/kargs.d/00-nvidia.toml
+check test -f "$kargs"
+check python3 -c "import tomllib,sys; k=tomllib.load(open('$kargs','rb'))['kargs']; sys.exit(0 if k==['rd.driver.blacklist=nouveau','modprobe.blacklist=nouveau','nvidia-drm.modeset=1'] else 1)"
+# Both units the installer enables fail without the hardware; a condition makes
+# them skip cleanly, since this one image also boots on GPU-less machines.
+for u in nvidia-persistenced nvidia-cdi-refresh; do
+    d="/usr/lib/systemd/system/${u}.service.d/10-require-gpu.conf"
+    check test -f "$d"
+    check grep -qx 'ConditionPathExists=/proc/driver/nvidia/version' "$d"
+    check bash -c "systemctl cat ${u}.service | grep -q 10-require-gpu.conf"
+done
+# GPU for Ollama is switched on per host by the playbook, never in the image.
+check bash -c '! grep -rq "AddDevice" /usr/share/containers/systemd/'
+
 exit "$fail"

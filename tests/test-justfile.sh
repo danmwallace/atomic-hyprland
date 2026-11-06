@@ -28,4 +28,9 @@ check bash -c 'just -n sign 2>&1 | grep -q "env://COSIGN_PRIVATE_KEY"'
 check bash -c 'just -n sign 2>&1 | grep -q "cosign verify --new-bundle-format=false --key cosign.pub"'
 check bash -c 'just -n sign dev-x 2>&1 | grep -q "docker://ghcr.io/danmwallace/atomic-hyprland:dev-x"'
 
+# Phase 4: one image, always with the NVIDIA layer; just supplies the akmods ref.
+check bash -c 'just -n build 2>&1 | grep -q -- "--build-arg AKMODS_IMAGE="'
+check bash -c '! just -n build 2>&1 | grep -q "NVIDIA="'
+check bash -c '! just --show build | head -3 | grep -q nvidia='
+
 exit "$fail"
