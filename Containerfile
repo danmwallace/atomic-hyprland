@@ -7,10 +7,13 @@ ARG NVIDIA=0
 ARG IMAGE_VERSION=dev
 ARG CLAUDE_CODE_VERSION=2.1.289
 ARG TUIOS_VERSION=0.12.1
+# sha256 of tuios_${TUIOS_VERSION}_Linux_x86_64.tar.gz. Bump it by hand with
+# the version: take the line for that file from the release's checksums.txt.
+ARG TUIOS_SHA256=4f68bac6e05d826b8c59b671b565c61b859dacedcb5d889160ba6d8624589b50
 
 COPY build/ /tmp/build/
 
-RUN /tmp/build/10-packages.sh "${CLAUDE_CODE_VERSION}" "${TUIOS_VERSION}"
+RUN /tmp/build/10-packages.sh "${CLAUDE_CODE_VERSION}" "${TUIOS_VERSION}" "${TUIOS_SHA256}"
 RUN /tmp/build/20-hyprland-role.sh "${THEME}"
 RUN if [ "${NVIDIA}" = "1" ]; then echo "NVIDIA layer arrives in Phase 4; build with NVIDIA=0" >&2; exit 1; fi
 
