@@ -28,4 +28,19 @@ check bash -c '! run >/dev/null'
 check bash -c 'run | grep -q "kernel mismatch: akmods built for 0.0.0-1.fc44.x86_64, image has "'
 check bash -c '! run | grep -q INSTALLER-RAN'
 
+# ublue's installer only enables the staging COPR while something is staged;
+# the disable must not fail the build when the repo file was never created.
+# A matching kernel and a stub installer take the script past the assertion.
+kver="$(podman run --rm "$img" rpm -q --qf '%{evr}.%{arch}' kernel-core)"
+printf 'KERNEL_VERSION=%s\nNVIDIA_AKMOD_VERSION=1-1\n' "$kver" > "$fake/kmods/nvidia-vars"
+run_no_staging() {
+    podman run --rm -v ./build:/b:ro,Z -v "$fake":/tmp/akmods-rpms:ro,Z "$img" \
+        bash -c 'rm -f /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:ublue-os:staging.repo; bash /b/25-nvidia.sh' 2>&1
+}
+export -f run_no_staging
+out="$(run_no_staging)"; rc=$?
+check test "$rc" = 0
+check bash -c 'grep -q INSTALLER-RAN <<< "$1"' _ "$out"
+check bash -c '! grep -q "not found on this system" <<< "$1"' _ "$out"
+
 exit "$fail"

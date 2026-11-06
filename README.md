@@ -183,11 +183,20 @@ both directions. Do this at the machine, not remotely.
 
    ```bash
    rpm-ostree status          # layered packages or overrides? remove with: rpm-ostree reset
-   sudo bootc status
+   sudo bootc status          # note the transport: ostree-image-signed or ostree-unverified-registry
+   df -h /boot                # our kernel+initramfs set is ~350 MB; two sets must fit
    lspci | grep -Ei "vga|3d"  # is an integrated GPU active as well?
    systemctl is-enabled sshd  # the playbook needs it
    flatpak list
+   mokutil --sb-state         # Secure Boot?
    ```
+
+   If Secure Boot is enabled, the NVIDIA module (signed with ublue's akmods
+   key) loads only if that key is enrolled: `mokutil --test-key
+   /etc/pki/akmods/certs/akmods-ublue.der` must say it is already enrolled
+   (it is, if Bazzite's own NVIDIA driver works). Otherwise enrol it first, or
+   expect a desktop on software rendering and no `nvidia-smi`, with **no
+   failed unit** to point at it: the two NVIDIA services simply skip.
 
 1. Make the first pull verified. Bazzite most likely accepts any image from
    an unlisted registry, so without this the switch pulls ours unchecked. From
@@ -204,25 +213,41 @@ both directions. Do this at the machine, not remotely.
    No flag loosens a policy refusal; `--enforce-container-sigpolicy` only
    tightens.
 
-2. Switch and reboot:
+2. Switch and reboot. `bootc switch` inherits the current deployment's
+   transport, and policy.json is only consulted on the signed transport, so
+   force it:
 
    ```bash
-   sudo bootc switch ghcr.io/danmwallace/atomic-hyprland:44
+   sudo bootc switch --enforce-container-sigpolicy ghcr.io/danmwallace/atomic-hyprland:44
    sudo systemctl reboot
    ```
+
+   A refusal here ("A signature was required, but no signature exists", or a
+   key mismatch) is the policy working: check step 1 before anything else.
 
 3. Verify:
 
    ```bash
-   sudo bootc status                 # ours booted, Bazzite as rollback
+   sudo bootc status                 # ours booted, transport ostree-image-signed, Bazzite as rollback
    nvidia-smi                        # lists the RTX 2070
    systemctl --failed                # empty
-   cat /proc/cmdline                 # has nvidia-drm.modeset=1
-   jq '.transports.docker["ghcr.io/danmwallace/atomic-hyprland"]' /etc/containers/policy.json
+   cat /proc/cmdline                 # has our three arguments; Bazzite's own kargs carry over too, duplicates are harmless
    sudo semodule -l | grep nvidia_container
    ```
 
    Then log in through SDDM to a Hyprland session.
+
+   Then let the image own the trust files again. ostree keeps any `/etc`
+   file that differs from the image, so the three files pre-seeded in step 1
+   would otherwise shadow every future image change (a key rotation would
+   strand this machine):
+
+   ```bash
+   sudo cp /usr/etc/containers/policy.json /etc/containers/policy.json
+   sudo cp /usr/etc/pki/containers/atomic-hyprland.pub /etc/pki/containers/
+   sudo cp /usr/etc/containers/registries.d/atomic-hyprland.yaml /etc/containers/registries.d/
+   sudo ostree admin config-diff | grep -E "policy.json|atomic-hyprland"   # prints nothing
+   ```
 
 4. Create `~/.config/hypr/local.lua` (never managed by the image):
 
