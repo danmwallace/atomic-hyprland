@@ -80,3 +80,14 @@ mako
 libnotify
 # system monitor (themed through hypr-theme)
 btop
+
+# Look: icons, cursor, GTK/Qt theming plumbing, fonts, Flatpak overrides
+papirus-icon-theme
+breeze-cursor-theme
+kvantum
+kvantum-qt5
+gsettings-desktop-schemas
+dconf
+rsms-inter-fonts
+google-noto-emoji-color-fonts
+flatpak

@@ -69,6 +69,19 @@ check test -f /etc/skel/.config/alacritty/alacritty.toml
 check test -L /etc/skel/.config/btop/themes/current.theme
 check grep -q 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' /etc/skel/.config/hypr/hyprlock.conf
 check bash -c '! grep -rq earth_from_space /etc/skel /usr/share/atomic-hyprland'
+# GTK, Qt, Flatpak, icons, cursor, fonts
+check rpm -q papirus-icon-theme breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-emoji-color-fonts flatpak
+check bash -c 'fc-match "JetBrainsMono Nerd Font" | grep -q JetBrainsMono'
+check bash -c 'fc-match monospace | grep -q JetBrainsMono'
+check bash -c '! fc-list | grep -q RobotoMono'
+check test -d /usr/share/icons/Papirus-Dark
+check test -d /usr/share/icons/breeze_cursors
+check test -d /usr/share/Kvantum/KvGnomeDark
+check test "$(readlink /etc/skel/.config/gtk-4.0/gtk.css)" = ../atomic-hyprland/current/theme/gtk.css
+check grep -q 'QT_STYLE_OVERRIDE", "kvantum"' /usr/share/atomic-hyprland/hypr/env.lua
+check bash -c '! grep -q qt6ct /usr/share/atomic-hyprland/hypr/env.lua'
+check grep -q JetBrainsMono /etc/fonts/local.conf
+check bash -c 'gsettings list-schemas | grep -qx org.gnome.desktop.interface'
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
 check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so
@@ -124,7 +137,7 @@ out="$(verify_hypr)"
 check grep -q "@define-color accent #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/waybar.css
 check grep -q "^border-color=#39ff14" /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini
 check test -L /tmp/hv/.config/atomic-hyprland/current/background
-for f in wofi.css hyprlock.conf ghostty.conf alacritty.toml btop.theme hyprland.lua; do
+for f in wofi.css hyprlock.conf ghostty.conf alacritty.toml btop.theme hyprland.lua gtk.css; do
     check test -s /tmp/hv/.config/atomic-hyprland/current/theme/$f
 done
 # 0.56 printed "Using lua config"; 0.57 prints "Regular config at <path>/hyprland.lua".

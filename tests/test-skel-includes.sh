@@ -80,4 +80,23 @@ for t in monochrome-blue tokyo-night nord dracula; do
 done
 check grep -qx btop build/packages.txt
 
+# GTK, Qt, fonts
+check grep -qx 'gtk-theme-name=Adwaita-dark' $skel/gtk-3.0/settings.ini
+check grep -qx 'gtk-icon-theme-name=Papirus-Dark' $skel/gtk-3.0/settings.ini
+check grep -qx 'gtk-cursor-theme-name=breeze_cursors' $skel/gtk-3.0/settings.ini
+check grep -qx 'gtk-application-prefer-dark-theme=1' $skel/gtk-3.0/settings.ini
+check test "$(readlink $skel/gtk-3.0/gtk.css)" = ../atomic-hyprland/current/theme/gtk.css
+check test "$(readlink $skel/gtk-4.0/gtk.css)" = ../atomic-hyprland/current/theme/gtk.css
+check grep -q '@define-color accent_bg_color #39ff14;' $s/current/theme/gtk.css
+check grep -q '@define-color accent_fg_color #0a0a0a;' $s/current/theme/gtk.css
+check grep -qx 'theme=KvGnomeDark' $skel/Kvantum/kvantum.kvconfig
+check grep -q 'hl.env("QT_STYLE_OVERRIDE", "kvantum")' $share/hypr/env.lua
+check bash -c '! grep -q qt6ct '"$share"'/hypr/env.lua'
+check grep -q 'XCURSOR_THEME", palette.cursor_theme' $share/hypr/env.lua
+check grep -q 'JetBrainsMono Nerd Font' files/etc/fonts/local.conf
+check grep -q 'Inter' files/etc/fonts/local.conf
+check bash -c 'xmllint --noout files/etc/fonts/local.conf 2>/dev/null || python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(\"files/etc/fonts/local.conf\")"'
+check bash -c 'for p in papirus-icon-theme breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-emoji-color-fonts flatpak; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
+check jq -e '.customManagers[] | select(.matchStrings[0] | test("NERD_FONT_VERSION")) | .depNameTemplate == "ryanoasis/nerd-fonts" and .datasourceTemplate == "github-releases"' renovate.json
+
 exit "$fail"
