@@ -129,3 +129,7 @@ ShellCheck
 direnv
 glow
 age
+# backups: danmwallace.linux.restic_backup (the role cannot dnf-install on a
+# bootc host) and its btrfs snapshots of /home
+restic
+btrfs-progs
