@@ -1,6 +1,13 @@
 #!/usr/bin/bash
-# Copy image-managed dotfiles into $HOME when the image's stamp changed.
-# Never touches ~/.config/hypr/local.conf (not in managed-files.txt).
+# Lay the image-managed dotfiles into $HOME when the image's stamp changed.
+#
+# Three lists under /usr/share/atomic-hyprland decide what the image may touch:
+#   managed-files.txt  overwritten on every image update (generated at build)
+#   skel.local         created from skel/ once if absent, never rewritten
+#                      (local.lua, waybar/local.jsonc, ...): these are the user's
+#   skel.retired       paths an earlier image wrote and this one no longer
+#                      ships; removed (a trailing / means a whole directory)
+# Nothing else in $HOME is ever written or removed.
 set -euo pipefail
 
 share="${ATOMIC_HYPRLAND_SHARE:-/usr/share/atomic-hyprland}"
@@ -14,19 +21,33 @@ if [[ -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
     exit 0
 fi
 
+# read_list FILE: lines of a list file, minus blanks and comments; missing file is empty.
+read_list() { [[ -f "$1" ]] && grep -vE '^\s*(#|$)' "$1" || true; }
+
+# Retire first, so a retired path never shadows a managed one of the same name.
 while IFS= read -r rel; do
-    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
+    target="${home}/${rel}"
+    if [[ "${rel}" == */ ]]; then
+        [[ -d "${target}" ]] && rm -rf "${target}"
+    else
+        [[ -f "${target}" ]] && rm -f "${target}"
+    fi
+done < <(read_list "${share}/skel.retired")
+
+while IFS= read -r rel; do
     src="${share}/skel/${rel}"
     [[ -f "${src}" ]] || continue
     install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
-done < "${manifest}"
+done < <(read_list "${manifest}")
 
-# A home that predates the image (bootc switch keeps /home) never got skel's
-# local.lua, yet hyprland.lua requires it. Create it once; never rewrite it.
-local_conf=.config/hypr/local.lua
-if [[ ! -e "${home}/${local_conf}" && -f "${share}/skel/${local_conf}" ]]; then
-    install -D -m 0644 "${share}/skel/${local_conf}" "${home}/${local_conf}"
-fi
+# The user's files: created once from skel (a home that predates the image
+# never got them), never rewritten afterwards.
+while IFS= read -r rel; do
+    src="${share}/skel/${rel}"
+    if [[ ! -e "${home}/${rel}" && -f "${src}" ]]; then
+        install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
+    fi
+done < <(read_list "${share}/skel.local")
 
 install -D -m 0644 "${stamp_src}" "${stamp_dst}"
 echo "atomic-hyprland dotfiles: synced to $(cat "${stamp_src}")"

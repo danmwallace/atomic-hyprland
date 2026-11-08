@@ -1,23 +1,40 @@
 #!/usr/bin/bash
-# Runs INSIDE the built image. Exercises /usr/libexec/atomic-hyprland/sync-dotfiles
+# Runs INSIDE the built image (just test). Exercises the login-time scripts
 # against a throwaway HOME and a throwaway copy of /usr/share/atomic-hyprland.
+#
+# Host variant (before an image exists):
+#   SYNC_HOST=1 PATH="$PWD/files/usr/bin:$PATH" bash tests/test-sync-dotfiles.sh
+# uses the scripts from files/ and the fixture share; the unit-file checks are
+# skipped there and proven at the next image build.
 set -euo pipefail
 
-sync=/usr/libexec/atomic-hyprland/sync-dotfiles
+if [[ -n "${SYNC_HOST:-}" ]]; then
+    sync="$PWD/files/usr/libexec/atomic-hyprland/sync-dotfiles"
+    ensure="$PWD/files/usr/libexec/atomic-hyprland/ensure-theme"
+    src_share="$PWD/tests/fixtures/sync/share"
+else
+    sync=/usr/libexec/atomic-hyprland/sync-dotfiles
+    ensure=/usr/libexec/atomic-hyprland/ensure-theme
+    src_share=/usr/share/atomic-hyprland
+fi
 share="$(mktemp -d)"
 export HOME="$(mktemp -d)"
 export ATOMIC_HYPRLAND_SHARE="${share}"
-cp -a /usr/share/atomic-hyprland/. "${share}/"
+cp -a "${src_share}/." "${share}/"
+# A managed executable to prove modes are preserved (the image's skel has none we rely on).
+install -D -m 0755 /dev/stdin "${share}/skel/.config/test-exec.sh" <<< '#!/bin/sh'
+echo '.config/test-exec.sh' >> "${share}/managed-files.txt"
 
 fail=0
 expect() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
+unit_expect() { if [[ -n "${SYNC_HOST:-}" ]]; then echo "skip  $1 (host run)"; else expect "$1" "$2"; fi; }
 
 # 1. first run populates managed files and writes the stamp
 "${sync}"
 expect "hyprland.lua synced" 'test -f "$HOME/.config/hypr/hyprland.lua"'
-expect "waybar config synced" 'test -f "$HOME/.config/waybar/config"'
 expect "stamp recorded" 'cmp -s "$share/stamp" "$HOME/.config/atomic-hyprland/stamp"'
 expect "local.lua not in managed list" '! grep -qx ".config/hypr/local.lua" "$share/managed-files.txt"'
+expect "local.lua listed in skel.local" 'grep -qx ".config/hypr/local.lua" "$share/skel.local"'
 
 # 2. same stamp: no-op, user edits survive
 echo "# user edit" >> "$HOME/.config/hypr/hyprland.lua"
@@ -26,18 +43,18 @@ out="$("${sync}")"
 expect "second run reports up to date" '[[ "$out" == *"up to date"* ]]'
 expect "user edit kept when stamp unchanged" 'grep -q "# user edit" "$HOME/.config/hypr/hyprland.lua"'
 
-# 3. new stamp: managed files refreshed, local.conf untouched
+# 3. new stamp: managed files refreshed, local.lua untouched
 echo "newer-build" > "${share}/stamp"
 "${sync}"
 expect "managed file refreshed after stamp change" '! grep -q "# user edit" "$HOME/.config/hypr/hyprland.lua"'
 expect "local.lua survives resync" 'grep -q "Virtual-1" "$HOME/.config/hypr/local.lua"'
 expect "new stamp recorded" 'grep -qx newer-build "$HOME/.config/atomic-hyprland/stamp"'
 
-# 4. script mode preserved for executables
-expect "sleep.sh stays executable" 'test -x "$HOME/.config/hypr/scripts/sleep.sh"'
+# 4. mode preserved for executables
+expect "managed executable stays executable" 'test -x "$HOME/.config/test-exec.sh"'
 
-# 5. a home that predates the image (no local.conf, e.g. after bootc switch)
-#    gets local.conf exactly once; it is never rewritten afterwards
+# 5. a home that predates the image (no local.lua, e.g. after bootc switch)
+#    gets local.lua exactly once; it is never rewritten afterwards
 export HOME="$(mktemp -d)"
 "${sync}"
 expect "local.lua created for a pre-existing home" 'test -f "$HOME/.config/hypr/local.lua"'
@@ -46,7 +63,7 @@ echo "newest-build" > "${share}/stamp"
 "${sync}"
 expect "existing local.lua untouched on resync" 'grep -q SENTINEL "$HOME/.config/hypr/local.lua"'
 
-# 5b. a home still holding the old .conf files: untouched, local.lua still created
+# 5b. a home still holding the pre-Lua .conf files: untouched, local.lua still created
 export HOME="$(mktemp -d)"
 mkdir -p "$HOME/.config/hypr"
 echo "# old" > "$HOME/.config/hypr/hyprland.conf"
@@ -55,9 +72,51 @@ echo "# old" > "$HOME/.config/hypr/local.conf"
 expect "old hyprland.conf left in place" 'grep -q "^# old" "$HOME/.config/hypr/hyprland.conf"'
 expect "old local.conf left in place" 'grep -q "^# old" "$HOME/.config/hypr/local.conf"'
 expect "local.lua created beside the old files" 'test -f "$HOME/.config/hypr/local.lua"'
-expect "hyprland.lua synced" 'test -f "$HOME/.config/hypr/hyprland.lua"'
 
-# 6. unit is enabled for every user
-expect "user unit enabled globally" 'test -L /etc/systemd/user/default.target.wants/atomic-hyprland-dotfiles.service'
+# 6. units enabled for every user
+unit_expect "dotfiles unit enabled globally" 'test -L /etc/systemd/user/default.target.wants/atomic-hyprland-dotfiles.service'
+
+# 7. local files are created once and never rewritten
+printf '.config/hypr/local.lua\n.config/waybar/local.jsonc\n.config/ghostty/local\n' > "${share}/skel.local"
+mkdir -p "${share}/skel/.config/waybar" "${share}/skel/.config/ghostty"
+echo '{}' > "${share}/skel/.config/waybar/local.jsonc"; : > "${share}/skel/.config/ghostty/local"
+export HOME="$(mktemp -d)"; "${sync}"
+expect "local.jsonc created" 'test "$(cat "$HOME/.config/waybar/local.jsonc")" = "{}"'
+expect "empty ghostty local created" 'test -f "$HOME/.config/ghostty/local"'
+echo '{"custom/x":{}}' > "$HOME/.config/waybar/local.jsonc"; echo newer2 > "${share}/stamp"; "${sync}"
+expect "local.jsonc never rewritten" 'grep -q custom/x "$HOME/.config/waybar/local.jsonc"'
+expect "local files not in managed list" '! grep -q "local.jsonc" "$share/managed-files.txt"'
+
+# 8. retired paths are removed; user files beside them survive (Review Focus 4)
+printf '# written by earlier images\n.config/waybar/config\n.config/hypr/conf/\n.config/nwg-drawer/\n' > "${share}/skel.retired"
+export HOME="$(mktemp -d)"; mkdir -p "$HOME/.config/waybar" "$HOME/.config/hypr/conf" "$HOME/.config/nwg-drawer"
+echo old > "$HOME/.config/waybar/config"; echo old > "$HOME/.config/hypr/conf/look.lua"; echo old > "$HOME/.config/nwg-drawer/drawer.css"
+echo mine > "$HOME/.config/waybar/local.jsonc"
+"${sync}"
+expect "old waybar/config removed" '! test -e "$HOME/.config/waybar/config"'
+expect "old conf dir removed" '! test -e "$HOME/.config/hypr/conf"'
+expect "old nwg-drawer removed" '! test -e "$HOME/.config/nwg-drawer"'
+expect "user local.jsonc untouched by retirement" 'test "$(cat "$HOME/.config/waybar/local.jsonc")" = mine'
+expect "a retired file entry never removes a directory" 'printf ".config/waybar\n" > "$share/skel.retired"; mkdir -p "$HOME/.config/waybar"; echo x > "$share/stamp"; "$sync"; test -d "$HOME/.config/waybar"'
+
+# 9. theme unit ordered before the compositor and enabled for every user
+unit_expect "theme unit enabled globally" 'test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service'
+unit_expect "theme unit runs after dotfiles" 'grep -q "^After=atomic-hyprland-dotfiles.service" /usr/lib/systemd/user/atomic-hyprland-theme.service'
+unit_expect "theme unit runs before the session" 'grep -q "^Before=wayland-session-pre@Hyprland.target" /usr/lib/systemd/user/atomic-hyprland-theme.service'
+
+# 10. ensure-theme renders on first login and is a no-op afterwards
+export HOME="$(mktemp -d)" HYPR_THEME_SHARE="${share}" HYPR_THEME_NO_APPLY=1
+mkdir -p "${share}/themes/t/backgrounds" "${share}/themed"
+printf 'background = "#000000"\n' > "${share}/themes/t/colors.toml"; : > "${share}/themes/t/backgrounds/a.png"
+echo 'x={{ background }}' > "${share}/themed/x.tpl"
+HYPR_THEME_DEFAULT=t "${ensure}"
+expect "ensure-theme rendered the default theme" 'test -f "$HOME/.config/atomic-hyprland/current/theme/x"'
+expect "ensure-theme recorded the stamp" 'cmp -s "$share/stamp" "$HOME/.config/atomic-hyprland/current/.stamp"'
+out="$(HYPR_THEME_DEFAULT=t "${ensure}")"
+expect "ensure-theme no-op on same stamp" '[[ "$out" == *"up to date"* ]]'
+echo other > "${share}/stamp"; echo 'y={{ background }}' > "${share}/themed/y.tpl"
+HYPR_THEME_DEFAULT=t "${ensure}"
+expect "ensure-theme re-renders when the image stamp changes" 'test -f "$HOME/.config/atomic-hyprland/current/theme/y"'
+expect "ensure-theme keeps the chosen theme name" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = t'
 
 exit "$fail"
