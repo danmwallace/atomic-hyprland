@@ -1,0 +1,72 @@
+#!/usr/bin/python3 -I
+"""waybar custom/claude: Claude plan usage from claude-statusline's cache.
+
+Text: glyph, 5-hour % and weekly % ("󰚩 23% · 41%"); a dash for a window that
+is missing or has reset since the numbers were cached. Class from the higher
+window (warning at 75, critical at 90), plus "stale" when the cache is over
+15 minutes old: the numbers only move while Claude Code runs on this machine.
+No cache (or an unreadable one) prints empty text, which hides the module.
+"""
+import json
+import math
+import os
+import time
+
+STALE_AFTER = 15 * 60
+WINDOWS = (("five_hour", "5-hour"), ("seven_day", "weekly"))
+
+
+def main():
+    now = int(os.environ.get("CLAUDE_USAGE_NOW") or time.time())
+    path = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+                        "atomic-hyprland", "claude-usage.json")
+    try:
+        with open(path) as f:
+            cache = json.load(f)
+        if not isinstance(cache, dict):
+            raise ValueError
+    except (OSError, ValueError):
+        print(json.dumps({"text": ""}))
+        return
+
+    def current(key):
+        w = cache.get(key)
+        if isinstance(w, dict) and w.get("resets_at", 0) > now:
+            return math.floor(w.get("used_percentage", 0) + 0.5)
+        return None
+
+    def when(epoch):
+        fmt = "%H:%M" if epoch - now < 86400 else "%a %H:%M"
+        return time.strftime(fmt, time.localtime(epoch))
+
+    values = {key: current(key) for key, _ in WINDOWS}
+    shown = [f"{v}%" if v is not None else "–" for v in values.values()]
+    top = max([v for v in values.values() if v is not None], default=0)
+    level = "critical" if top >= 90 else "warning" if top >= 75 else "normal"
+    age = max(0, now - int(cache.get("updated_at", now)))
+    classes = [level] + (["stale"] if age > STALE_AFTER else [])
+
+    lines = [f"Claude · {cache['model']}" if cache.get("model") else "Claude"]
+    for key, label in WINDOWS:
+        v = values[key]
+        if v is not None:
+            lines.append(f"{label}  {v}%  resets {when(cache[key]['resets_at'])}")
+        elif isinstance(cache.get(key), dict):
+            lines.append(f"{label}  reset since")
+        else:
+            lines.append(f"{label}  –")
+    if age < 60:
+        lines.append("updated just now")
+    elif age < 3600:
+        lines.append(f"updated {age // 60} min ago")
+    else:
+        lines.append(f"updated {age // 3600} h ago")
+    if "stale" in classes:
+        lines.append("numbers update while Claude Code runs here")
+
+    print(json.dumps({"text": "󰚩 " + " · ".join(shown), "tooltip": "\n".join(lines),
+                      "class": classes, "percentage": top}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

@@ -81,6 +81,18 @@ it off with `: > ~/.config/atomic-hyprland/hooks/theme-set.d/50-openrgb`.
 An OpenRGB autostart entry that loads a saved profile at login would
 overwrite the colour; remove it.
 
+**Claude usage in the bar.** `󰚩 23% · 41%` is your Claude plan's 5-hour and
+weekly usage; the tooltip has reset times. It turns the warning colour at 75%
+and critical at 90% (the higher of the two counts), and dims when the numbers
+are over 15 minutes old. The source is Claude Code's own status line (the
+documented `rate_limits` fields, Pro/Max only), so the numbers move only while
+Claude Code runs on this machine and has replied at least once; in between the
+bar shows the last known values. At first login the image adds
+`"statusLine": {"type": "command", "command": "/usr/libexec/atomic-hyprland/claude-statusline"}`
+to `~/.claude/settings.json` if it has no status line, once: remove or replace
+it and it stays your way. The same script prints `model · 5h % · wk %` at the
+bottom of Claude Code. Cache: `~/.cache/atomic-hyprland/claude-usage.json`.
+
 **Who owns which file in your home.** Three lists under
 `/usr/share/atomic-hyprland` decide, and `sync-dotfiles` (login) follows them:
 

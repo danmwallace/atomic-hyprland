@@ -47,7 +47,7 @@
   color: @foreground_dim;
 }
 
-#clock, #bluetooth, #network, #pulseaudio, #cpu, #memory, #custom-gpu,
+#clock, #bluetooth, #network, #pulseaudio, #cpu, #memory, #custom-gpu, #custom-claude,
 #battery, #idle_inhibitor, #custom-notifications, #custom-tray-toggle, #tray {
   padding: 0 9px;
   color: @foreground_dim;
@@ -60,11 +60,16 @@
 #battery.charging, #battery.plugged, #idle_inhibitor.activated, #custom-notifications.dnd, #bluetooth.connected {
   color: @accent;
 }
-#battery.warning:not(.charging) {
+#battery.warning:not(.charging), #custom-claude.warning {
   color: @warning;
 }
-#battery.critical:not(.charging), #custom-gpu.critical, #pulseaudio.muted, #network.disconnected {
+#battery.critical:not(.charging), #custom-gpu.critical, #custom-claude.critical, #pulseaudio.muted, #network.disconnected {
   color: @critical;
+}
+
+/* Claude usage numbers older than 15 min: last known, not live */
+#custom-claude.stale {
+  opacity: 0.5;
 }
 
 #custom-power {

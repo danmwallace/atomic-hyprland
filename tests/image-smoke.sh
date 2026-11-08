@@ -59,6 +59,10 @@ check test "$(readlink /etc/skel/.config/mako/config)" = ../atomic-hyprland/curr
 check test -x /usr/libexec/atomic-hyprland/waybar/gpu
 check bash -c '/usr/libexec/atomic-hyprland/waybar/gpu | jq -e .text'
 check bash -c '/usr/libexec/atomic-hyprland/waybar/notifications | jq -e .text'
+# Claude usage widget: hides with no cache, renders one, and the status line that feeds it is offered at login
+check bash -c 'XDG_CACHE_HOME=$(mktemp -d) /usr/libexec/atomic-hyprland/waybar/claude | jq -e ".text == \"\""'
+check bash -c 'c=$(mktemp -d); echo "{\"model\":{\"display_name\":\"Opus\"},\"rate_limits\":{\"five_hour\":{\"used_percentage\":10,\"resets_at\":4102444800}}}" | XDG_CACHE_HOME=$c /usr/libexec/atomic-hyprland/claude-statusline | grep -qx "Opus · 5h 10%" && XDG_CACHE_HOME=$c /usr/libexec/atomic-hyprland/waybar/claude | jq -e ".text == \"󰚩 10% · –\""'
+check test -L /etc/systemd/user/default.target.wants/atomic-hyprland-claude-statusline.service
 check grep -qx .config/waybar/local.jsonc /usr/share/atomic-hyprland/skel.local
 check bash -c '! grep -q local.jsonc /usr/share/atomic-hyprland/managed-files.txt'
 check grep -qx .config/waybar/config /usr/share/atomic-hyprland/skel.retired
