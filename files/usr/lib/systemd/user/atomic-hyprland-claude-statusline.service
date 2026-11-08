@@ -1,0 +1,9 @@
+[Unit]
+Description=Offer the Claude Code status line that feeds the bar's usage widget (once per user)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/atomic-hyprland/claude-statusline-setup
+
+[Install]
+WantedBy=default.target

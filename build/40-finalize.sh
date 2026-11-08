@@ -32,6 +32,8 @@ printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
     > /usr/share/atomic-hyprland/managed-files.txt
 
 systemctl --global enable atomic-hyprland-dotfiles.service
+# Adds the Claude Code status line that feeds the bar's usage widget, once per user.
+systemctl --global enable atomic-hyprland-claude-statusline.service
 systemctl --global enable atomic-hyprland-theme@.service
 # Session services: uwsm starts graphical-session.target, which pulls these in.
 systemctl --global enable waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer

@@ -22,6 +22,7 @@
     "cpu",
     "memory",
     "custom/gpu",
+    "custom/claude",
     "battery",
     "idle_inhibitor",
     "custom/notifications",
@@ -139,6 +140,14 @@
     "exec": "/usr/libexec/atomic-hyprland/waybar/gpu",
     "return-type": "json",
     "interval": 5,
+    "format": "{}",
+    "tooltip": true
+  },
+  "custom/claude": {
+    "exec": "/usr/libexec/atomic-hyprland/waybar/claude",
+    "return-type": "json",
+    "interval": 60,
+    "signal": 9,
     "format": "{}",
     "tooltip": true
   },
