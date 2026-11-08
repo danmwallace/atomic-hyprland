@@ -37,4 +37,15 @@ check bash -c '! just --show build | head -3 | grep -q nvidia='
 check bash -c '! just --show build | grep -q THEME'
 check bash -c '! grep -q THEME Containerfile'
 
+# Installer ISO for bare metal: an interactive Anaconda install (the user picks the disk,
+# sets the LUKS passphrase and creates the user). BIB is unattended (zerombr/clearpart/
+# autopart, wipes the first disk) only when a config asks for it; nothing here may.
+check bash -c 'just --show iso | grep -q -- "--type anaconda-iso"'
+check bash -c 'just --show iso | grep -q -- "--rootfs btrfs"'
+check bash -c 'just --show iso | grep -q "output/bootiso/install.iso"'
+check bash -c '! just --show iso | grep -qi unattended'
+check bash -c 'just --show iso | grep -q -- "-v ./build/iso.toml:/config.toml:ro"'
+check bash -c 'just --show iso | grep -q "bash tests/test-iso.sh output/bootiso/install.iso"'
+check bash -c '! cat build/*.toml | grep -vE "^\s*#" | grep -qiE "unattended|clearpart|zerombr|autopart"'
+
 exit "$fail"
