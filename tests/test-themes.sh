@@ -13,9 +13,12 @@ check() {
     fi
 }
 
-themes="monochrome-green monochrome-blue tokyo-night nord dracula"
-required="background background_glow background_alt surface foreground foreground_dim accent accent_dim warning critical selection_background selection_foreground cursor_theme $(seq -f 'color%g' 0 15 | tr '\n' ' ')"
 share=files/usr/share/atomic-hyprland
+expected="catppuccin-mocha dracula everforest gruvbox-dark kanagawa monochrome-amber monochrome-blue monochrome-cyan monochrome-green monochrome-magenta monochrome-orange monochrome-red monochrome-violet neon-night nord rose-pine tokyo-night"
+# Every theme directory is checked, and the shipped set is exactly the expected one.
+themes="$(find "$share/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tr '\n' ' ')"
+check test "$themes" = "$expected "
+required="background background_glow background_alt surface foreground foreground_dim accent accent_dim led warning critical selection_background selection_foreground cursor_theme $(seq -f 'color%g' 0 15 | tr '\n' ' ')"
 export HOME="$(mktemp -d)"
 
 for t in $themes; do
@@ -24,7 +27,7 @@ for t in $themes; do
     check test -s "$share/themes/$t/icons.theme"
     for k in $required; do check grep -qE "^$k = \"" "$f"; done
     # every colour is 6-digit lower-case hex; cursor_theme is a plain word
-    check bash -c "! grep -E '^(color[0-9]+|background.*|surface|foreground.*|accent.*|warning|critical|selection_.*) = ' '$f' | grep -vqE '= \"#[0-9a-f]{6}\"$'"
+    check bash -c "! grep -E '^(color[0-9]+|background.*|surface|foreground.*|accent.*|led|warning|critical|selection_.*) = ' '$f' | grep -vqE '= \"#[0-9a-f]{6}\"$'"
     # no extra keys beyond the set, so no template can depend on a key another theme lacks
     check bash -c "diff <(grep -oE '^[a-z0-9_]+' '$f' | sort) <(tr ' ' '\n' <<< '$required' | grep . | sort)"
 done
@@ -32,6 +35,16 @@ check test "$(grep -E '^accent = ' $share/themes/monochrome-green/colors.toml)" 
 check test "$(grep -E '^accent = ' $share/themes/monochrome-blue/colors.toml)" = 'accent = "#3d9bff"'
 check test "$(grep -E '^background = ' $share/themes/monochrome-green/colors.toml)" = 'background = "#0a0a0a"'
 check test "$(grep -E '^cursor_theme = ' $share/themes/monochrome-green/colors.toml)" = 'cursor_theme = "breeze_cursors"'
+# led is what keyboard/case lighting shows (hooks/theme-set.d/50-openrgb). LEDs wash out
+# pale colours to white, so every led needs a dominant channel: max - min >= 0x80.
+for t in $themes; do
+    led="$(sed -nE 's/^led = "#([0-9a-f]{6})"$/\1/p' "$share/themes/$t/colors.toml")"
+    check bash -c "r=\$((16#${led:0:2})) g=\$((16#${led:2:2})) b=\$((16#${led:4:2})); mx=\$(printf '%s\\n' \$r \$g \$b | sort -n | tail -1); mn=\$(printf '%s\\n' \$r \$g \$b | sort -n | head -1); (( mx - mn >= 128 ))  # $t led #$led"
+done
+# saturated accents drive the LEDs as they are
+for t in monochrome-green monochrome-amber monochrome-red gruvbox-dark neon-night; do
+    check test "$(sed -n 's/^led = //p' "$share/themes/$t/colors.toml")" = "$(sed -n 's/^accent = //p' "$share/themes/$t/colors.toml")"
+done
 # every shipped template renders against every theme with no unresolved placeholder (Review Focus 2)
 for t in $themes; do
     check env HYPR_THEME_SHARE="$share" HYPR_THEME_STATE="$(mktemp -d)" HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set "$t"

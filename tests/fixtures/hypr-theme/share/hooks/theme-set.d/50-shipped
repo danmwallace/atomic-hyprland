@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fixture: a hook shipped in the image.
+echo "shipped $1" > "$HYPR_THEME_STATE/shipped.out"

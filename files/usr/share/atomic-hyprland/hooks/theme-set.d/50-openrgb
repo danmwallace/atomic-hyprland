@@ -1,0 +1,40 @@
+#!/usr/bin/bash
+# hypr-theme hook: set RGB lighting (keyboard, case, logo) to the theme's led
+# colour with OpenRGB, on every theme switch and at login. $1 is the theme name.
+#
+# Uses `openrgb` from PATH, else the first executable OpenRGB AppImage in
+# ~/AppImages; with neither (most machines) it does nothing. Turn it off with
+# an empty, non-executable ~/.config/atomic-hyprland/hooks/theme-set.d/50-openrgb.
+#
+# OpenRGB's device scan takes seconds, so it runs as a transient user unit:
+# login and theme switches never wait for it, and the unit outlives the
+# short-lived service that calls hypr-theme at login.
+set -euo pipefail
+
+state="${HYPR_THEME_STATE:-${HOME:?HOME is not set}/.config/atomic-hyprland}"
+colors="${state}/current/theme/colors.toml"
+unit=atomic-hyprland-leds
+
+value_of() { sed -nE "s/^$1 *= *\"#([0-9a-fA-F]{6})\" *$/\\1/p" "${colors}" | head -1; }
+
+[[ -f "${colors}" ]] || exit 0
+hex="$(value_of led)"
+[[ -n "${hex}" ]] || hex="$(value_of accent)"   # a user theme without led
+[[ -n "${hex}" ]] || exit 0
+hex="${hex^^}"
+
+bin="$(command -v openrgb 2>/dev/null || true)"
+if [[ -z "${bin}" && -d "${HOME}/AppImages" ]]; then
+    bin="$(find "${HOME}/AppImages" -maxdepth 1 -type f -iname '*openrgb*' -executable -print 2>/dev/null | sort | head -1)"
+fi
+[[ -n "${bin}" ]] || exit 0
+
+args=(--noautoconnect --mode static --color "${hex}")
+if command -v systemd-run >/dev/null 2>&1; then
+    # A newer switch replaces one still scanning; the stop is a no-op otherwise.
+    systemctl --user stop "${unit}.service" >/dev/null 2>&1 || true
+    systemd-run --user --quiet --collect --unit="${unit}" \
+        -p RuntimeMaxSec=90 -- "${bin}" "${args[@]}" >/dev/null 2>&1 || true
+else
+    setsid -f timeout 90 "${bin}" "${args[@]}" >/dev/null 2>&1 < /dev/null || true
+fi

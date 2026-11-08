@@ -88,7 +88,7 @@ check grep -q "@import \"$HOME/.config/wofi/local.css\";" $s/current/theme/wofi.
 check grep -qF 'theme[main_bg]="#0a0a0a"' $s/current/theme/btop.theme
 check grep -qF 'theme[hi_fg]="#39ff14"' $s/current/theme/btop.theme
 check bash -c 'ls '"$s"'/current/theme/ | grep -qx chromium.theme || true'
-for t in monochrome-blue tokyo-night nord dracula; do
+for t in $(ls $share/themes | grep -vx monochrome-green); do
     check env HYPR_THEME_SHARE=$share HYPR_THEME_STATE=$(mktemp -d) HYPR_THEME_NO_APPLY=1 hypr-theme set "$t"
 done
 check grep -qx btop build/packages.txt

@@ -48,7 +48,7 @@ portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
 build from the default palette (Linux Chromium reads only system-wide policy).
 
 ```bash
-hypr-theme list                 # monochrome-green monochrome-blue tokyo-night nord dracula (+ yours)
+hypr-theme list                 # 17 shipped (below) + yours
 hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland, restarts bar/mako/swaybg, pushes gsettings
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
@@ -59,7 +59,27 @@ Your own theme: copy a shipped one to `~/.config/atomic-hyprland/themes/<name>/`
 and edit `colors.toml`; a directory with the same name as a shipped theme
 overlays it. Your own template: `~/.config/atomic-hyprland/themed/<app>.tpl`.
 Hooks in `~/.config/atomic-hyprland/hooks/theme-set.d/` run after a switch
-with the theme name as `$1`.
+with the theme name as `$1`, after the image's own hooks in
+`/usr/share/atomic-hyprland/hooks/theme-set.d/`. A user hook with the same
+name as an image hook replaces it; an empty, non-executable one disables it.
+
+Shipped themes: `monochrome-green` (default), `monochrome-blue`, `-amber`,
+`-magenta`, `-cyan`, `-red`, `-violet`, `-orange` (neon accents on the same
+black base), `tokyo-night`, `nord`, `dracula`, `catppuccin-mocha`,
+`gruvbox-dark`, `rose-pine`, `kanagawa`, `everforest`, and `neon-night` (an
+original: synthwave purple with pink and cyan).
+
+**RGB lighting follows the theme.** Every theme has an `led` colour: the
+accent when it is saturated, otherwise a saturated stand-in, because LEDs
+wash pale colours out to white. The image's `50-openrgb` hook sets all
+OpenRGB devices to it (static) on every switch and at login, using `openrgb`
+from `PATH` or an OpenRGB AppImage in `~/AppImages`; on machines with
+neither it does nothing. It runs as the transient user unit
+`atomic-hyprland-leds` (OpenRGB's device scan takes a few seconds), so check
+`journalctl --user -u atomic-hyprland-leds` if the lights don't change. Turn
+it off with `: > ~/.config/atomic-hyprland/hooks/theme-set.d/50-openrgb`.
+An OpenRGB autostart entry that loads a saved profile at login would
+overwrite the colour; remove it.
 
 **Who owns which file in your home.** Three lists under
 `/usr/share/atomic-hyprland` decide, and `sync-dotfiles` (login) follows them:
