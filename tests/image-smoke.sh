@@ -118,7 +118,7 @@ check grep -qx .config/btop/themes/current.theme /usr/share/atomic-hyprland/mana
 verify_hypr() {
     export HOME=/tmp/hv XDG_RUNTIME_DIR=/tmp/hv/run
     rm -rf /tmp/hv; mkdir -p "$HOME/.config" "$XDG_RUNTIME_DIR"
-    cp -r /etc/skel/.config/hypr "$HOME/.config/"
+    cp -a /etc/skel/.config/. "$HOME/.config/"   # the whole skel, as a first login gets it
     if [ -z "${HV_NO_THEME:-}" ]; then
         HYPR_THEME_SHARE=/usr/share/atomic-hyprland HYPR_THEME_STATE="$HOME/.config/atomic-hyprland" \
             HYPR_THEME_NO_APPLY=1 hypr-theme set "${3:-monochrome-green}" >/dev/null
