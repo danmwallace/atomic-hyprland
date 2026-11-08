@@ -82,6 +82,20 @@ check grep -q 'QT_STYLE_OVERRIDE", "kvantum"' /usr/share/atomic-hyprland/hypr/en
 check bash -c '! grep -q qt6ct /usr/share/atomic-hyprland/hypr/env.lua'
 check grep -q JetBrainsMono /etc/fonts/local.conf
 check bash -c 'gsettings list-schemas | grep -qx org.gnome.desktop.interface'
+# SDDM greeter: our theme, coloured from the default palette at build, no virtual keyboard
+check test -f /usr/share/sddm/themes/atomic-hyprland/Main.qml
+check test -f /usr/share/sddm/themes/atomic-hyprland/metadata.desktop
+check test -f /usr/share/sddm/themes/atomic-hyprland/theme.conf
+check grep -qx 'background=/usr/share/atomic-hyprland/themes/monochrome-green/backgrounds/00-plain.png' /usr/share/sddm/themes/atomic-hyprland/theme.conf
+check grep -qx 'accent=#39ff14' /usr/share/sddm/themes/atomic-hyprland/theme.conf
+check bash -c '! grep -q "{{" /usr/share/sddm/themes/atomic-hyprland/theme.conf'
+check grep -qx 'Current=atomic-hyprland' /etc/sddm.conf.d/10-atomic-hyprland.conf
+check grep -qx 'InputMethod=' /etc/sddm.conf.d/10-atomic-hyprland.conf
+check grep -qx 'DefaultSession=hyprland-uwsm.desktop' /etc/sddm.conf.d/10-atomic-hyprland.conf
+check bash -c '! grep -rq abstractdark /etc/sddm.conf.d /usr/share/atomic-hyprland'
+check bash -c '! grep -q VirtualKeyboard /usr/share/sddm/themes/atomic-hyprland/Main.qml'
+check bash -c '! test -e /etc/sddm.conf.d/10-theme.conf'
+check test -f /usr/share/wayland-sessions/hyprland-uwsm.desktop
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
 check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so

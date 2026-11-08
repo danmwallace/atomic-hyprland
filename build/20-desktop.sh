@@ -23,3 +23,9 @@ chmod 0644 /usr/share/fonts/jetbrains-mono-nerd/*.ttf
 fc-cache -f
 
 /tmp/build/render-wallpapers.sh
+
+# SDDM runs as root before any theme is chosen, so its colours are rendered
+# once here from the default theme.
+sddm_theme=/usr/share/sddm/themes/atomic-hyprland
+hypr-theme render "${sddm_theme}/theme.conf.tpl" /usr/share/atomic-hyprland/themes/monochrome-green/colors.toml > "${sddm_theme}/theme.conf"
+rm -f "${sddm_theme}/theme.conf.tpl"

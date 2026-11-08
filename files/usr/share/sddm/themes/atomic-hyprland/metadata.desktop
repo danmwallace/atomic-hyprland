@@ -1,0 +1,10 @@
+[SddmGreeterTheme]
+Name=atomic-hyprland
+Description=Minimal dark greeter coloured from the image's default theme
+Author=atomic-hyprland
+Type=sddm-theme
+Version=1
+Theme-Id=atomic-hyprland
+MainScript=Main.qml
+ConfigFile=theme.conf
+QtVersion=6

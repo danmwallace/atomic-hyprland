@@ -97,6 +97,22 @@ check grep -q 'JetBrainsMono Nerd Font' files/etc/fonts/local.conf
 check grep -q 'Inter' files/etc/fonts/local.conf
 check bash -c 'xmllint --noout files/etc/fonts/local.conf 2>/dev/null || python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(\"files/etc/fonts/local.conf\")"'
 check bash -c 'for p in papirus-icon-theme breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-emoji-color-fonts flatpak; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
+# SDDM theme sources and their build-time render
+sddm=files/usr/share/sddm/themes/atomic-hyprland
+check test -f $sddm/Main.qml
+check grep -q 'MainScript=Main.qml' $sddm/metadata.desktop
+check grep -q 'ConfigFile=theme.conf' $sddm/metadata.desktop
+check bash -c '! grep -q VirtualKeyboard '"$sddm"'/Main.qml'
+check grep -q 'sddm.login(' $sddm/Main.qml
+check grep -q 'sddm.powerOff()' $sddm/Main.qml
+check grep -q 'config.accent' $sddm/Main.qml
+check bash -c 'hypr-theme render '"$sddm"'/theme.conf.tpl '"$share"'/themes/monochrome-green/colors.toml | grep -qx "accent=#39ff14"'
+check bash -c 'hypr-theme render '"$sddm"'/theme.conf.tpl '"$share"'/themes/monochrome-green/colors.toml | grep -qx "background=/usr/share/atomic-hyprland/themes/monochrome-green/backgrounds/00-plain.png"'
+check grep -q 'theme.conf.tpl' build/20-desktop.sh
+check grep -qx 'Current=atomic-hyprland' files/etc/sddm.conf.d/10-atomic-hyprland.conf
+check grep -qx 'InputMethod=' files/etc/sddm.conf.d/10-atomic-hyprland.conf
+check grep -qx 'DefaultSession=hyprland-uwsm.desktop' files/etc/sddm.conf.d/10-atomic-hyprland.conf
+check python3 -c "import configparser; c=configparser.ConfigParser(); c.read('files/etc/sddm.conf.d/10-atomic-hyprland.conf'); assert c['General']['InputMethod']=='' and c['Theme']['Current']=='atomic-hyprland'"
 check jq -e '.customManagers[] | select(.matchStrings[0] | test("NERD_FONT_VERSION")) | .depNameTemplate == "ryanoasis/nerd-fonts" and .datasourceTemplate == "github-releases"' renovate.json
 
 exit "$fail"
