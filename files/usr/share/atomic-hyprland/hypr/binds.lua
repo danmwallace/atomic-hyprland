@@ -7,12 +7,14 @@ local browser = "chromium-browser"
 local lock = "hyprlock"
 local power = "hypr-power"
 
--- Programs
-hl.bind(mod .. " + T",         hl.dsp.exec_cmd(terminal))
-hl.bind(mod .. " + RETURN",    hl.dsp.exec_cmd(terminal))
-hl.bind(mod .. " + B",         hl.dsp.exec_cmd(browser))
-hl.bind(mod .. " + E",         hl.dsp.exec_cmd(fileManager))
-hl.bind(mod .. " + SPACE",     hl.dsp.exec_cmd(menu))
+-- Programs start through uwsm-app: each gets its own systemd scope under the
+-- session, so it is tracked, cleaned up and logged like everything else.
+local function app(cmd) return hl.dsp.exec_cmd("uwsm-app -- " .. cmd) end
+hl.bind(mod .. " + T",         app(terminal))
+hl.bind(mod .. " + RETURN",    app(terminal))
+hl.bind(mod .. " + B",         app(browser))
+hl.bind(mod .. " + E",         app(fileManager))
+hl.bind(mod .. " + SPACE",     app(menu))
 hl.bind(mod .. " + SHIFT + V", hl.dsp.exec_cmd("cliphist list | wofi --show dmenu --lines 12 | cliphist decode | wl-copy"))
 hl.bind(mod .. " + SHIFT + T", hl.dsp.exec_cmd("hypr-theme bg next"))
 

@@ -44,4 +44,7 @@ check bash -c 'grep -qE "^TOTAL [5-9][0-9]$" <<< "$1"' _ "$combos"
 for k in XF86AudioRaiseVolume XF86AudioLowerVolume XF86AudioMute XF86AudioMicMute XF86MonBrightnessUp XF86MonBrightnessDown "switch:on:Lid Switch"; do
     check grep -q "\"$k\"" "$binds"
 done
+# programs start through uwsm-app so they get their own systemd scope (and survive a compositor crash cleanly)
+check grep -q 'uwsm-app -- ' "$binds"
+check bash -c '! grep -E "exec_cmd\((terminal|browser|fileManager|menu)\)" '"$binds"
 exit "$fail"

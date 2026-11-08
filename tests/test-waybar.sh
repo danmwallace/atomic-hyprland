@@ -28,6 +28,9 @@ check bash -c 'jq -e ".layer == \"top\" and .position == \"top\" and .height == 
 # names the local file before the shipped config
 check jq -e . "$thin"
 check bash -c 'jq -e ".include == [\"~/.config/waybar/local.jsonc\", \"/usr/share/atomic-hyprland/waybar/config.jsonc\"] and (keys | length) == 1" '"$thin"
+# waybar formats dates with fmt's chrono, which has no glibc %-d flag (it rejects the whole format)
+check bash -c '! jq -r ".clock.format" '"$cfg"' | grep -q "%-"'
+check bash -c 'jq -r ".clock.format" '"$cfg"' | grep -q "%H:%M"'
 check bash -c '! jq -e ".include" '"$cfg"' >/dev/null'
 # glyph-only default formats: no numbers in the right-hand modules' default format
 check bash -c 'for m in cpu memory battery network pulseaudio bluetooth; do jq -er ".\"$m\".format" '"$cfg"' | grep -qE "\{(capacity|usage|percentage|volume|essid|ipaddr|signalStrength)" && exit 1; done; exit 0'
