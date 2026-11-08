@@ -192,11 +192,13 @@ check bash -c '! grep -q "custom/updates" /usr/share/atomic-hyprland/waybar/conf
 check grep -qx 'Hidden=true' /etc/xdg/autostart/nvidia-settings-load.desktop
 check rpm -q fuse-libs
 # Dan's tool list
-check rpm -q mosh wireshark nmap arp-scan tcpdump mtr iperf3 nmap-ncat socat bind-utils tio minicom pandoc-cli flameshot azure-cli awscli2 opentofu ansible cava helix git-delta ShellCheck direnv glow age virt-viewer tailscale orca-ide
+check rpm -q mosh wireshark nmap arp-scan tcpdump mtr iperf3 nmap-ncat socat bind-utils tio minicom pandoc-cli flameshot azure-cli awscli2 opentofu ansible cava helix git-delta ShellCheck direnv glow age virt-viewer tailscale orca-ide restic btrfs-progs
 check bash -c 'nc --version 2>&1 | grep -qi ncat'
 check bash -c 'hx --version | grep -q helix'
 check test -x /usr/bin/spotify_player
 check bash -c 'spotify_player --version | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
+# restic >= 0.17: the restic_backup restore uses --exclude-xattr security.selinux
+check bash -c 'restic version | grep -Eq "^restic 0\.(1[7-9]|[2-9][0-9])\.|^restic [1-9]"'
 check test -L /etc/systemd/system/multi-user.target.wants/tailscaled.service
 check bash -c '! dnf5 repolist --enabled 2>/dev/null | grep -qi tailscale'
 # Orca lives in /usr (bootc ships nothing under /opt, which is a link into /var)
