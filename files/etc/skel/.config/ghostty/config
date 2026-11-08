@@ -1,0 +1,11 @@
+# Image-managed. Colours come from the theme file below; your settings go in ~/.config/ghostty/local.
+font-family = JetBrainsMono Nerd Font
+font-size = 11
+window-padding-x = 8
+window-padding-y = 8
+window-decoration = none
+gtk-titlebar = false
+confirm-close-surface = false
+shell-integration = detect
+config-file = ?~/.config/atomic-hyprland/current/theme/ghostty.conf
+config-file = ?~/.config/ghostty/local

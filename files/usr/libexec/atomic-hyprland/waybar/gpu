@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+# waybar custom/gpu: one glyph, the temperature in the tooltip, class critical at 80 °C.
+# NVIDIA's driver exposes no hwmon, so the card is read with nvidia-smi when
+# present; otherwise the CPU package temperature stands in (hypr-test, laptops
+# without a dGPU). Always prints JSON, even with nothing readable.
+set -uo pipefail
+proc="${GPU_PROC_ROOT:-/proc}"
+hwmon_root="${HWMON_ROOT:-/sys/class/hwmon}"
+
+pci_root="${PCI_ROOT:-/sys/bus/pci/devices}"
+
+# A runtime-suspended NVIDIA card (hybrid laptop on the iGPU) must stay asleep:
+# nvidia-smi would wake it every poll. Report the CPU instead until it is up.
+nvidia_asleep() {
+    local d
+    for d in "${pci_root}"/*; do
+        [[ -f "${d}/vendor" && "$(cat "${d}/vendor")" == 0x10de ]] || continue
+        [[ -f "${d}/class" && "$(cat "${d}/class")" == 0x03* ]] || continue
+        [[ -f "${d}/power/runtime_status" && "$(cat "${d}/power/runtime_status")" == suspended ]] && return 0
+    done
+    return 1
+}
+
+temp=""; label=""
+if [[ -e "${proc}/driver/nvidia/version" ]] && command -v nvidia-smi >/dev/null 2>&1 && ! nvidia_asleep; then
+    temp="$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')"
+    label="gpu"
+fi
+if [[ -z "${temp}" ]]; then
+    for d in "${hwmon_root}"/hwmon*; do
+        [[ -f "${d}/name" ]] || continue
+        case "$(cat "${d}/name")" in
+            coretemp|k10temp|zenpower|cpu_thermal)
+                [[ -f "${d}/temp1_input" ]] && temp="$(( $(cat "${d}/temp1_input") / 1000 ))" && label="cpu" && break ;;
+        esac
+    done
+fi
+
+if [[ "${temp}" =~ ^[0-9]+$ ]]; then
+    class=normal; (( temp >= 80 )) && class=critical
+    printf '{"text":"󰢮","tooltip":"%s %s °C","class":"%s","percentage":%s}\n' "${label}" "${temp}" "${class}" "${temp}"
+else
+    printf '{"text":"󰢮","tooltip":"temperature unavailable","class":"unknown","percentage":0}\n'
+fi

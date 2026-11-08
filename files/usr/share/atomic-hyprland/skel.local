@@ -1,0 +1,12 @@
+# The user's files. sync-dotfiles creates each from skel/ once if it is
+# absent and never writes it again. Later tasks append their local files.
+.config/hypr/local.lua
+.config/waybar/local.jsonc
+.config/waybar/local.css
+.config/mako/local
+.config/hypr/hypridle.local.conf
+.config/wofi/local.css
+.config/hypr/hyprlock.local.conf
+.config/ghostty/local
+.config/alacritty/local.toml
+.config/btop/btop.conf

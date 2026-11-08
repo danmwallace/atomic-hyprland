@@ -1,0 +1,57 @@
+@import "../atomic-hyprland/current/theme/wofi.css";
+/* Image-managed. Colours come from the theme import above; your rules go in local.css. */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+}
+
+window {
+  background-color: @background;
+  border: 1px solid @accent;
+  border-radius: 3px;
+}
+
+#input {
+  margin: 8px;
+  padding: 6px 10px;
+  border: 1px solid @surface;
+  border-radius: 3px;
+  background-color: @background;
+  color: @foreground;
+}
+#input:focus {
+  border-color: @accent;
+  outline: none;
+}
+
+#inner-box, #outer-box {
+  margin: 0;
+  padding: 0 8px 8px 8px;
+  background-color: @background;
+}
+
+#scroll {
+  margin: 0;
+}
+
+#img {
+  margin-right: 8px;
+}
+
+#entry {
+  padding: 6px 10px;
+  border-radius: 3px;
+  color: @foreground_dim;
+}
+#entry:selected {
+  background-color: @surface;
+  color: @accent;
+}
+#entry:selected #text {
+  color: @accent;
+}
+#text {
+  color: inherit;
+}
+@import "local.css";

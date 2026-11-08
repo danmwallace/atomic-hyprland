@@ -30,3 +30,67 @@ desktop-backgrounds-basic
 # used by the dotfile sync and hermes_native later
 rsync
 curl
+
+# Desktop (the Hyprland config itself is in files/, rendered by hypr-theme)
+hyprland
+hyprland-guiutils
+hyprland-uwsm
+uwsm
+hyprpicker
+hypridle
+hyprlock
+hyprpolkitagent
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+sddm
+sddm-x11
+waybar
+alacritty
+wofi
+swaybg
+cliphist
+wl-clipboard
+grim
+slurp
+pamixer
+pavucontrol
+brightnessctl
+playerctl
+bluez
+bluez-tools
+tuned
+tuned-ppd
+network-manager-applet
+NetworkManager-wifi
+nm-connection-editor-desktop
+gnome-keyring
+qt5-qtwayland
+qt6-qtwayland
+cups-pk-helper
+nautilus
+simple-scan
+alsa-sof-firmware
+alsa-utils
+gvfs
+gvfs-mtp
+# `file` is used by the smoke test to check the rendered wallpapers
+file
+# notifications
+mako
+libnotify
+# system monitor (themed through hypr-theme)
+btop
+
+# Look: icons, cursor, GTK/Qt theming plumbing, fonts, Flatpak overrides
+papirus-icon-theme
+papirus-icon-theme-dark
+breeze-cursor-theme
+kvantum
+kvantum-qt5
+gsettings-desktop-schemas
+dconf
+rsms-inter-fonts
+google-noto-color-emoji-fonts
+flatpak
+# browser: the Claude extension needs native messaging, which the Flatpak sandbox blocks
+chromium

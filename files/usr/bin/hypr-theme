@@ -1,0 +1,271 @@
+#!/usr/bin/bash
+# hypr-theme: render a theme's templates and apply it to the running desktop.
+#
+#   hypr-theme list
+#   hypr-theme current
+#   hypr-theme set <name> [--keep-background] [--no-apply]
+#   hypr-theme refresh                 re-render the current theme (after an image update)
+#   hypr-theme apply                   push gsettings/Flatpak/Kvantum for the current theme (login)
+#   hypr-theme bg next | bg set <file>
+#   hypr-theme render <tpl> <colors.toml>   render one template to stdout
+#
+# A theme is a directory with colors.toml, backgrounds/ and icons.theme. The
+# shipped ones live in $HYPR_THEME_SHARE/themes; a user may overlay a theme of
+# the same name (files win over the shipped copy) or add a new one under
+# $HYPR_THEME_STATE/themes. Templates ($HYPR_THEME_SHARE/themed/*.tpl, user
+# overrides in $HYPR_THEME_STATE/themed) are rendered into
+# $HYPR_THEME_STATE/current/theme/; every app config includes a file there.
+#
+# Placeholders: {{ key }} -> #rrggbb, {{ key_strip }} -> rrggbb,
+# {{ key_rgb }} -> r,g,b. Non-colour values substitute {{ key }} only. An
+# unresolved placeholder is a render error (exit 2), never silent text.
+#
+# Exit codes: 0 ok, 1 usage / bad name / unknown theme, 2 render error.
+set -euo pipefail
+
+share="${HYPR_THEME_SHARE:-/usr/share/atomic-hyprland}"
+state="${HYPR_THEME_STATE:-${HOME:?HOME is not set}/.config/atomic-hyprland}"
+default_theme="${HYPR_THEME_DEFAULT:-monochrome-green}"
+current="${state}/current"
+
+die() { echo "hypr-theme: $1" >&2; exit "${2:-1}"; }
+usage() { sed -n '2,11p' "$0" >&2; exit 1; }
+
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
+
+# Resolve a theme name to its shipped and overlay directories (either may be empty).
+shipped_dir() { local d="${share}/themes/$1"; [[ -f "${d}/colors.toml" ]] && echo "${d}" || true; }
+overlay_dir() { local d="${state}/themes/$1"; [[ -d "${d}" ]] && echo "${d}" || true; }
+
+theme_exists() {
+    [[ -n "$(shipped_dir "$1")" || -f "${state}/themes/$1/colors.toml" ]]
+}
+
+list_themes() {
+    { [[ -d "${share}/themes" ]] && find "${share}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n';
+      [[ -d "${state}/themes" ]] && find "${state}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'; } \
+        | sort -u | while IFS= read -r t; do theme_exists "${t}" && echo "${t}"; done
+}
+
+# Build the sed script that renders one colors.toml.
+sed_script_for() {
+    local colors="$1" key value r g b
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ "${line}" =~ ^[[:space:]]*([a-z0-9_]+)[[:space:]]*=[[:space:]]*\"?([^\"]*)\"?[[:space:]]*$ ]] || continue
+        key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+        if [[ "${value}" =~ ^#([0-9a-fA-F]{6})$ ]]; then
+            local hex="${BASH_REMATCH[1],,}"
+            r=$((16#${hex:0:2})); g=$((16#${hex:2:2})); b=$((16#${hex:4:2}))
+            printf 's/{{ *%s *}}/#%s/g\n' "${key}" "${hex}"
+            printf 's/{{ *%s_strip *}}/%s/g\n' "${key}" "${hex}"
+            printf 's/{{ *%s_rgb *}}/%s,%s,%s/g\n' "${key}" "${r}" "${g}" "${b}"
+        else
+            # Plain value: escape sed specials in the replacement.
+            printf 's/{{ *%s *}}/%s/g\n' "${key}" "$(printf '%s' "${value}" | sed 's/[\/&]/\\&/g')"
+        fi
+    done < "${colors}"
+}
+
+# render <tpl> <colors.toml> -> stdout; exit 2 on an unresolved placeholder.
+render() {
+    local tpl="$1" colors="$2" out leftover
+    out="$(sed -f <(sed_script_for "${colors}") "${tpl}")"
+    if leftover="$(grep -oE '\{\{ *[a-z0-9_]+ *\}\}' <<< "${out}" | head -1)" && [[ -n "${leftover}" ]]; then
+        die "$(basename "${tpl}"): unresolved placeholder ${leftover}" 2
+    fi
+    printf '%s\n' "${out}"
+}
+
+# Everything the rendered output depends on, hashed, so refresh can be a no-op.
+checksum_for() {
+    local name="$1" d
+    {
+        for d in "$(shipped_dir "${name}")" "$(overlay_dir "${name}")" "${state}/themed" "${share}/themed"; do
+            [[ -n "${d}" && -d "${d}" ]] || continue
+            find "${d}" -type f | sort | while IFS= read -r f; do printf '%s\n' "${f}"; cat "${f}"; done
+        done
+    } | sha256sum | cut -d' ' -f1
+}
+
+# Assemble next-theme/ for a theme: shipped copy, overlay on top, then templates
+# for every file the theme did not ship itself.
+build_next() {
+    local name="$1" next="${current}/next-theme" sdir odir colors tpl out
+    sdir="$(shipped_dir "${name}")"; odir="$(overlay_dir "${name}")"
+    rm -rf "${next}"; mkdir -p "${next}"
+    # A render error exits with 2; never leave a half-built next-theme behind.
+    trap 'rm -rf "${current}/next-theme"' EXIT
+    [[ -n "${sdir}" ]] && cp -a "${sdir}/." "${next}/"
+    [[ -n "${odir}" ]] && cp -a "${odir}/." "${next}/"
+    colors="${next}/colors.toml"
+    [[ -f "${colors}" ]] || die "theme ${name} has no colors.toml" 2
+    for dir in "${state}/themed" "${share}/themed"; do
+        [[ -d "${dir}" ]] || continue
+        for tpl in "${dir}"/*.tpl; do
+            [[ -e "${tpl}" ]] || continue
+            out="${next}/$(basename "${tpl%.tpl}")"
+            [[ -e "${out}" ]] && continue
+            render "${tpl}" "${colors}" > "${out}"
+        done
+    done
+}
+
+swap_in() {
+    local name="$1"
+    rm -rf "${current}/theme"
+    mv "${current}/next-theme" "${current}/theme"
+    printf '%s\n' "${name}" > "${current}/theme.name"
+    checksum_for "${name}" > "${current}/.checksum"
+}
+
+backgrounds() {
+    local dir
+    for dir in "${current}/theme/backgrounds" "${HOME}/Pictures/Wallpapers"; do
+        [[ -d "${dir}" ]] || continue
+        find "${dir}" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print
+    done | sort
+    return 0
+}
+
+# The theme directory is replaced on every set; link to the shipped/overlay
+# source so the symlink survives the swap.
+background_source() {
+    local f="$1" name rel
+    name="$(cat "${current}/theme.name")"
+    case "${f}" in
+        "${current}/theme/backgrounds/"*)
+            rel="${f#"${current}/theme/backgrounds/"}"
+            if [[ -n "$(overlay_dir "${name}")" && -f "${state}/themes/${name}/backgrounds/${rel}" ]]; then
+                echo "${state}/themes/${name}/backgrounds/${rel}"
+            else
+                echo "${share}/themes/${name}/backgrounds/${rel}"
+            fi ;;
+        *) echo "${f}" ;;
+    esac
+}
+
+set_background() { ln -nsf "$(background_source "$1")" "${current}/background"; restart_swaybg; }
+
+bg_first() {
+    local first
+    first="$(backgrounds | head -1)"
+    [[ -n "${first}" ]] || return 0
+    set_background "${first}"
+}
+
+bg_next() {
+    local -a list; local cur i n
+    mapfile -t list < <(backgrounds)
+    n=${#list[@]}; (( n > 0 )) || die "no backgrounds available"
+    cur="$(readlink "${current}/background" 2>/dev/null || true)"
+    for i in "${!list[@]}"; do
+        if [[ "$(background_source "${list[$i]}")" == "${cur}" ]]; then
+            set_background "${list[$(( (i + 1) % n ))]}"; return
+        fi
+    done
+    set_background "${list[0]}"
+}
+
+applying=1
+want_apply() { [[ ${applying} -eq 1 && -z "${HYPR_THEME_NO_APPLY:-}" && -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+restart_swaybg() { want_apply && have systemctl && systemctl --user try-restart swaybg.service >/dev/null 2>&1 || true; }
+
+# apply_settings: the desktop settings that live outside the rendered files
+# (gsettings, the Flatpak override, Kvantum) plus the user's hooks. Run by
+# `set`, `refresh` and, at every login, by `hypr-theme apply` from autostart.
+apply_settings() {
+    local name="$1" cursor icons
+    want_apply || return 0
+    cursor="$(sed -nE 's/^cursor_theme *= *"?([^"]*)"?$/\1/p' "${current}/theme/colors.toml" | head -1)"
+    icons="$(cat "${current}/theme/icons.theme" 2>/dev/null || echo Papirus-Dark)"
+    if have gsettings; then
+        gsettings set org.gnome.desktop.interface color-scheme prefer-dark >/dev/null 2>&1 || true
+        gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark >/dev/null 2>&1 || true
+        gsettings set org.gnome.desktop.interface icon-theme "${icons}" >/dev/null 2>&1 || true
+        [[ -n "${cursor}" ]] && gsettings set org.gnome.desktop.interface cursor-theme "${cursor}" >/dev/null 2>&1 || true
+    fi
+    # gtk.css in the sandbox is a symlink into the theme directory, so expose that too.
+    have flatpak && flatpak override --user --env=GTK_THEME=Adwaita:dark \
+        --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro \
+        --filesystem=xdg-config/atomic-hyprland/current/theme:ro >/dev/null 2>&1 || true
+    if have kvantummanager && [[ -d "${HOME}/.config/Kvantum/atomic-hyprland" ]]; then
+        kvantummanager --set atomic-hyprland >/dev/null 2>&1 || true
+    fi
+    if [[ -d "${state}/hooks/theme-set.d" ]]; then
+        for hook in "${state}/hooks/theme-set.d"/*; do
+            [[ -x "${hook}" ]] && "${hook}" "${name}" || true
+        done
+    fi
+}
+
+# apply: everything a theme switch must poke in a live session.
+apply() {
+    local name="$1"
+    want_apply || return 0
+    have hyprctl && hyprctl reload >/dev/null 2>&1 || true
+    have systemctl && systemctl --user try-restart waybar.service mako.service swaybg.service >/dev/null 2>&1 || true
+    have pkill && pkill -SIGUSR2 -x ghostty >/dev/null 2>&1 || true
+    [[ -f "${HOME}/.config/alacritty/alacritty.toml" ]] && touch "${HOME}/.config/alacritty/alacritty.toml"
+    apply_settings "${name}"
+}
+
+cmd_set() {
+    local name="${1:-}" keep_bg=0
+    shift || true
+    for arg in "$@"; do
+        case "${arg}" in
+            --keep-background) keep_bg=1 ;;
+            --no-apply) applying=0 ;;
+            *) die "unknown option: ${arg}" ;;
+        esac
+    done
+    [[ -n "${name}" ]] || usage
+    valid_name "${name}" || die "bad theme name: '${name}' (lower-case letters, digits and dashes only)"
+    theme_exists "${name}" || die "unknown theme: ${name}"
+    mkdir -p "${current}"
+    build_next "${name}"
+    swap_in "${name}"
+    if (( keep_bg )) && [[ -e "${current}/background" ]]; then :; else bg_first; fi
+    apply "${name}"
+    echo "hypr-theme: ${name}"
+}
+
+cmd_refresh() {
+    local name
+    [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
+    name="$(cat "${current}/theme.name")"
+    if [[ -f "${current}/.checksum" && "$(cat "${current}/.checksum")" == "$(checksum_for "${name}")" ]]; then
+        echo "hypr-theme: ${name} up to date"; return 0
+    fi
+    build_next "${name}"
+    swap_in "${name}"
+    apply "${name}"
+    echo "hypr-theme: ${name} refreshed"
+}
+
+cmd_apply() {
+    [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
+    apply_settings "$(cat "${current}/theme.name")"
+}
+
+cmd_bg() {
+    [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
+    case "${1:-}" in
+        next) bg_next ;;
+        set) [[ -f "${2:-}" ]] || die "bg set: file not found: ${2:-}"; set_background "$(readlink -f "$2")" ;;
+        *) usage ;;
+    esac
+}
+
+case "${1:-}" in
+    list) list_themes ;;
+    current) [[ -f "${current}/theme.name" ]] && cat "${current}/theme.name" || echo "${default_theme}" ;;
+    set) shift; cmd_set "$@" ;;
+    refresh) cmd_refresh ;;
+    apply) cmd_apply ;;
+    bg) shift; cmd_bg "$@" ;;
+    render) [[ -f "${2:-}" && -f "${3:-}" ]] || usage; render "$2" "$3" ;;
+    *) usage ;;
+esac

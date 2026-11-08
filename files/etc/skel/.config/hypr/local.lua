@@ -1,0 +1,3 @@
+-- Per-machine Hyprland overrides, loaded last by hyprland.lua. Never managed.
+-- Examples: hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 1.25 })
+--           hl.env("AQ_DRM_DEVICES", "/dev/dri/card1")

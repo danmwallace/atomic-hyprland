@@ -8,7 +8,7 @@ A bootc-built Fedora Hyprland desktop image. See docs/superpowers/specs/ for the
 just check-kernel   # base and akmods on the same kernel
 just lint-ci        # actionlint + renovate-config-validator via podman
 just build          # rootless podman build, tags :44 and :44-<date>-<sha>
-just test           # host-side CI helper tests, in-image smoke + dotfile sync tests
+just test           # host tests (theme engine, palettes, bar, includes, pins, CI helpers), in-image smoke + dotfile sync
 just qcow2          # sudo; output/qcow2/disk.qcow2 for the srv01 VM
 ```
 
@@ -23,8 +23,74 @@ branch (`gh workflow run build.yml --ref <branch>`) to publish a signed
   `ghcr.io/danmwallace/atomic-hyprland:44`, cloud-init created `dwallace` with
   `/usr/bin/elvish`, the dotfile sync unit ran, SDDM greeter is up on Xorg.
   Verified over SSH 2026-10-03. Graphical login: see the VM runbook.
-- Still open from this phase: the role's `10-theme.conf` names an SDDM theme
-  that is not installed, so SDDM uses its default. Ollama arrived in Phase 2, signing in Phase 3, the NVIDIA driver in Phase 4.
+- Ollama arrived in Phase 2, signing in Phase 3, the NVIDIA driver in Phase 4,
+  the look and theme engine (below) on 2026-11-08; the Hyprland config moved
+  from the `danmwallace.fedora.hyprland` Ansible role into this repo then.
+
+## Look and themes (2026-11-08)
+
+Design: `docs/superpowers/specs/2026-11-07-look-and-theme-engine-design.md`.
+Dark monochrome with one neon accent (`monochrome-green` by default), sharp
+geometry (rounding 3, gaps 4/8, solid 2 px accent border, no blur or shadows),
+a floating bar that is quiet until something needs attention (glyphs only;
+numbers in tooltips; accent for charging / idle-inhibit / do-not-disturb,
+red for a hot GPU, low battery, muted audio, no network). The greeter is a
+small SDDM theme in the same palette with no virtual keyboard.
+
+**One palette, every app.** A theme is a directory with `colors.toml`,
+`backgrounds/` and `icons.theme`. `hypr-theme` renders the templates in
+`/usr/share/atomic-hyprland/themed/*.tpl` into
+`~/.config/atomic-hyprland/current/theme/`; each app's config carries one
+include line pointing there (Hyprland, waybar, mako, wofi, hyprlock, Ghostty,
+Alacritty, btop, GTK's `gtk.css`). GTK gets Adwaita-dark + Papirus-Dark through
+`gsettings`, Qt goes through Kvantum, Flatpaks follow through the settings
+portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
+build from the default palette (Linux Chromium reads only system-wide policy).
+
+```bash
+hypr-theme list                 # monochrome-green monochrome-blue tokyo-night nord dracula (+ yours)
+hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland, restarts bar/mako/swaybg, pushes gsettings
+hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
+hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
+hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
+```
+
+Your own theme: copy a shipped one to `~/.config/atomic-hyprland/themes/<name>/`
+and edit `colors.toml`; a directory with the same name as a shipped theme
+overlays it. Your own template: `~/.config/atomic-hyprland/themed/<app>.tpl`.
+Hooks in `~/.config/atomic-hyprland/hooks/theme-set.d/` run after a switch
+with the theme name as `$1`.
+
+**Who owns which file in your home.** Three lists under
+`/usr/share/atomic-hyprland` decide, and `sync-dotfiles` (login) follows them:
+
+- `managed-files.txt`: overwritten on every image update. Do not edit these;
+  the thin `~/.config/hypr/hyprland.lua` is one of them.
+- `skel.local`: created once if absent, never written again. Yours:
+  `hypr/local.lua`, `waybar/local.jsonc`, `waybar/local.css`, `mako/local`,
+  `wofi/local.css`, `ghostty/local`, `alacritty/local.toml`,
+  `hypr/hyprlock.local.conf`, `hypr/hypridle.local.conf`. Each is included
+  by its image-managed counterpart in the order that makes yours win: waybar
+  and Alacritty read the *first* definition, so their skel files are thin
+  include lists with yours before the shipped defaults; the others include
+  yours last. hyprlock and hypridle blocks add up rather than replace, so a
+  different idle timeout means a user template override, not a local file.
+- `skel.retired`: paths an earlier image wrote and this one no longer ships
+  (the role's `waybar/config`, `hypr/conf/*.lua`, wofi `style-*.css`, nwg
+  directories); removed on the next update so they cannot shadow the new files.
+
+The theme is rendered before the compositor starts (`atomic-hyprland-theme@.service`,
+a template enabled against uwsm's `wayland-session-pre@.target`); `hyprland.lua`
+also carries a built-in fallback palette. Waybar, mako and hypridle run from the
+user units their packages ship; the image adds `swaybg.service` and a two-minute
+battery warning timer, all bound to `graphical-session.target`.
+
+CI renders every shipped theme and runs the result through
+`Hyprland --verify-config` (plus `jq` on the bar's strict-JSON config), so a
+Hyprland or template change that breaks the look fails the nightly, not your
+login. Fonts: JetBrainsMono Nerd Font (pinned upstream release) and Inter.
+Browser: Fedora's `chromium` with the Claude extension force-installed by
+managed policy (`/etc/chromium/policies/managed/`); Firefox left with it.
 
 ## AI services (Phase 2)
 

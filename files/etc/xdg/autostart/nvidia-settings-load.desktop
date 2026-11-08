@@ -1,0 +1,8 @@
+[Desktop Entry]
+# Overrides the nvidia-settings RPM's entry. nvidia-settings is an X11 tool;
+# under Hyprland its autostart failed on every login and showed up as a
+# failed-unit notification. Hidden=true keeps the entry from being generated.
+Type=Application
+Name=NVIDIA X Server Settings
+Exec=sh -c "[ -e /dev/nvidia0 ] && exec /usr/bin/nvidia-settings --load-config-only"
+Hidden=true

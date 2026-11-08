@@ -1,0 +1,28 @@
+#!/usr/bin/bash
+# Render the user's theme before the compositor starts (atomic-hyprland-theme@.service,
+# ordered before uwsm's wayland-session-pre@<entry>.target). Renders when the
+# theme has never been rendered or the image changed (its templates may have);
+# keeps the user's chosen theme and wallpaper. Never applies: there is no
+# session yet, and hypr-theme skips the apply steps without one anyway.
+set -euo pipefail
+
+share="${HYPR_THEME_SHARE:-/usr/share/atomic-hyprland}"
+state="${HYPR_THEME_STATE:-${HOME:?HOME is not set}/.config/atomic-hyprland}"
+stamp_src="${share}/stamp"
+stamp_dst="${state}/current/.stamp"
+
+if [[ -d "${state}/current/theme" && -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
+    echo "atomic-hyprland theme: up to date ($(cat "${stamp_src}"))"
+    exit 0
+fi
+
+default="${HYPR_THEME_DEFAULT:-monochrome-green}"
+name="$(cat "${state}/current/theme.name" 2>/dev/null || echo "${default}")"
+export HYPR_THEME_SHARE="${share}" HYPR_THEME_STATE="${state}"
+if ! hypr-theme list | grep -qx -- "${name}"; then
+    echo "atomic-hyprland theme: '${name}' no longer exists, falling back to ${default}" >&2
+    name="${default}"
+fi
+hypr-theme set "${name}" --keep-background --no-apply
+install -D -m 0644 "${stamp_src}" "${stamp_dst}"
+echo "atomic-hyprland theme: rendered ${name} for $(cat "${stamp_src}")"

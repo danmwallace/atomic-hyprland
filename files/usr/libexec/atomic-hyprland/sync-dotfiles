@@ -1,6 +1,13 @@
 #!/usr/bin/bash
-# Copy image-managed dotfiles into $HOME when the image's stamp changed.
-# Never touches ~/.config/hypr/local.conf (not in managed-files.txt).
+# Lay the image-managed dotfiles into $HOME when the image's stamp changed.
+#
+# Three lists under /usr/share/atomic-hyprland decide what the image may touch:
+#   managed-files.txt  overwritten on every image update (generated at build)
+#   skel.local         created from skel/ once if absent, never rewritten
+#                      (local.lua, waybar/local.jsonc, ...): these are the user's
+#   skel.retired       paths an earlier image wrote and this one no longer
+#                      ships; removed (a trailing / means a whole directory)
+# Nothing else in $HOME is ever written or removed.
 set -euo pipefail
 
 share="${ATOMIC_HYPRLAND_SHARE:-/usr/share/atomic-hyprland}"
@@ -9,24 +16,66 @@ stamp_src="${share}/stamp"
 stamp_dst="${home}/.config/atomic-hyprland/stamp"
 manifest="${share}/managed-files.txt"
 
+# read_list FILE: lines of a list file, minus blanks and comments; missing file is empty.
+read_list() { [[ -f "$1" ]] && grep -vE '^\s*(#|$)' "$1" || true; }
+
+# install_entry REL: copy a skel file, or recreate a skel symlink with the same
+# (relative) target. Symlinks point into the theme directory, which may not
+# exist yet, so they are created blind rather than dereferenced.
+install_entry() {
+    local rel="$1" src="${share}/skel/$1" dst="${home}/$1"
+    if [[ -L "${src}" ]]; then
+        mkdir -p "$(dirname "${dst}")"
+        ln -sfn "$(readlink "${src}")" "${dst}"
+    elif [[ -f "${src}" ]]; then
+        install -D -m "$(stat -c %a "${src}")" "${src}" "${dst}"
+    fi
+}
+
+# The user's files: created once from skel (a home that predates the image
+# never got them, and a deleted one would otherwise break its app), never
+# rewritten. This runs on every login, before the stamp check.
+while IFS= read -r rel; do
+    [[ -e "${home}/${rel}" || -L "${home}/${rel}" ]] && continue
+    install_entry "${rel}"
+done < <(read_list "${share}/skel.local")
+
 if [[ -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
     echo "atomic-hyprland dotfiles: up to date ($(cat "${stamp_src}"))"
     exit 0
 fi
 
+# Retire first, so a retired path never shadows a managed one of the same
+# name. This is the only place the image deletes anything under $HOME, so the
+# list is checked: relative, under .config/<something>, no "..", and a path
+# that is itself a symlink is unlinked, never followed.
+retire_entry() {
+    local rel="${1%/}" target
+    if [[ "${rel}" != .config/?* || "${rel}" == *..* || "${rel}" == */ ]]; then
+        echo "atomic-hyprland dotfiles: refusing retired path '${1}'" >&2
+        return 1
+    fi
+    target="${home}/${rel}"
+    if [[ -L "${target}" ]]; then
+        rm -f "${target}"
+    elif [[ "${1}" == */ && -d "${target}" ]]; then
+        rm -rf "${target}"
+    elif [[ "${1}" != */ && -f "${target}" ]]; then
+        rm -f "${target}"
+    fi
+}
+retire_failed=0
 while IFS= read -r rel; do
-    [[ -z "${rel}" || "${rel}" == \#* ]] && continue
-    src="${share}/skel/${rel}"
-    [[ -f "${src}" ]] || continue
-    install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
-done < "${manifest}"
-
-# A home that predates the image (bootc switch keeps /home) never got skel's
-# local.lua, yet hyprland.lua requires it. Create it once; never rewrite it.
-local_conf=.config/hypr/local.lua
-if [[ ! -e "${home}/${local_conf}" && -f "${share}/skel/${local_conf}" ]]; then
-    install -D -m 0644 "${share}/skel/${local_conf}" "${home}/${local_conf}"
+    retire_entry "${rel}" || retire_failed=1
+done < <(read_list "${share}/skel.retired")
+if (( retire_failed )); then
+    echo "atomic-hyprland dotfiles: skel.retired has bad entries; nothing retired or installed" >&2
+    exit 1
 fi
+
+while IFS= read -r rel; do
+    install_entry "${rel}"
+done < <(read_list "${manifest}")
 
 install -D -m 0644 "${stamp_src}" "${stamp_dst}"
 echo "atomic-hyprland dotfiles: synced to $(cat "${stamp_src}")"

@@ -7,12 +7,11 @@ tag     := "44"
 # is computed, with -dirty when the tree has uncommitted changes.
 version := env("IMAGE_VERSION", `date -u +%Y%m%d` + "-" + `git rev-parse --short HEAD` + `test -z "$(git status --porcelain)" || echo -dirty`)
 
-# Build the image locally (rootless podman). THEME: nord | tokyo-night | monochrome
-build theme="nord":
+# Build the image locally (rootless podman). Every theme ships; hypr-theme picks one at runtime.
+build:
     source build/images.env && podman build \
         --build-arg BASE_IMAGE="$BASE_IMAGE" \
         --build-arg AKMODS_IMAGE="$AKMODS_IMAGE" \
-        --build-arg THEME={{theme}} \
         --build-arg IMAGE_VERSION={{version}} \
         -t {{image}}:{{tag}} -t {{image}}:{{tag}}-{{version}} .
 
@@ -24,6 +23,11 @@ test:
     bash tests/test-ci-push.sh
     bash tests/test-workflow.sh
     bash tests/test-justfile.sh
+    bash tests/test-hypr-theme.sh
+    bash tests/test-themes.sh
+    bash tests/test-waybar.sh
+    bash tests/test-skel-includes.sh
+    bash tests/test-binds.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh

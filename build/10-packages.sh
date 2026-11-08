@@ -13,9 +13,6 @@ dnf -y copr enable scottames/ghostty
 mapfile -t packages < <(grep -vE '^\s*(#|$)' /tmp/build/packages.txt)
 dnf -y install --setopt=install_weak_deps=False "${packages[@]}"
 
-# Build-time only; removed in 90-cleanup.sh.
-dnf -y install --setopt=install_weak_deps=False ansible-core python3-libdnf5
-
 # Claude Code for every user (Dan and the hermes agent). On this image
 # /usr/local and /root point into /var, which does not exist at build time, so
 # install under /usr explicitly and keep npm's cache out of the image.
