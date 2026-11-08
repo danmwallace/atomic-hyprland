@@ -36,8 +36,14 @@ exit 0
 STUB
 cat > "$stubs/skopeo" <<'STUB'
 #!/usr/bin/bash
+# STUB_MODE: stale (always the old digest) | unknown (manifest unknown twice,
+# then ok: ghcr right after a push) | missing (manifest unknown forever)
+echo inspect >> "$STUB_LOG"
+n=$(grep -c inspect "$STUB_LOG")
 case "$STUB_MODE" in
     stale) echo "sha256:old" ;;
+    unknown) [ "$n" -ge 3 ] || { echo "manifest unknown" >&2; exit 1; }; echo "sha256:new" ;;
+    missing) echo "manifest unknown" >&2; exit 1 ;;
     *) echo "sha256:new" ;;
 esac
 STUB
@@ -50,6 +56,7 @@ run() { # run MODE TAG...
         bash build/ci-push.sh ghcr.io/example/img "$@"
 }
 attempts() { grep -c push "$stubs/log"; }
+inspects() { grep -c inspect "$stubs/log"; }
 export -f run
 export stubs
 
@@ -61,6 +68,12 @@ check bash -c 'run flaky 44-x >/dev/null'
 run flaky 44-x >/dev/null 2>&1; check test "$(attempts)" = 3
 check bash -c '! run stale 44-x >/dev/null 2>&1'
 check bash -c 'run stale 44-x 2>&1 | grep -q "digest mismatch"'
+# The registry can 404 a tag for a moment after the push that created it.
+check bash -c 'run unknown 44-x | grep -qx "44-x sha256:new"'
+run unknown 44-x >/dev/null 2>&1; check test "$(inspects)" = 3
+check bash -c '! run missing 44-x >/dev/null 2>&1'
+check bash -c 'run missing 44-x 2>&1 | grep -q "not visible in the registry"'
+run stale 44-x >/dev/null 2>&1; check test "$(inspects)" = 5
 check bash -c 'run ok 44 latest | grep -c sha256:new | grep -qx 2'
 check bash -c '! run ok >/dev/null 2>&1'
 check bash -c 'run ok 2>&1 | grep -q "no tags"'
