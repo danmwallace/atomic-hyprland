@@ -62,7 +62,7 @@ check grep -qx .config/waybar/config /usr/share/atomic-hyprland/skel.retired
 check rpm -q btop
 check test -x /usr/bin/hypr-power
 check bash -c '! rpm -q wlogout'
-check test -f /etc/skel/.config/wofi/style.css
+check test "$(readlink /etc/skel/.config/wofi/style.css)" = ../atomic-hyprland/current/theme/wofi.css
 check bash -c '! test -e /etc/skel/.config/wofi/style-power.css'
 check test -f /etc/skel/.config/ghostty/config
 check test -f /etc/skel/.config/alacritty/alacritty.toml
@@ -190,6 +190,12 @@ check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE
 check bash -c '! grep -q "custom/updates" /usr/share/atomic-hyprland/waybar/config.jsonc'
 check grep -qx 'Hidden=true' /etc/xdg/autostart/nvidia-settings-load.desktop
+check rpm -q fuse-libs
+check bash -c 'ldconfig -p | grep -q "libfuse.so.2 "'
+check test -f /etc/xdg/uwsm/env-hyprland
+check test -f /etc/dconf/db/local
+check bash -c 'test "$(dconf dump /org/gnome/desktop/interface/ 2>/dev/null | grep -c prefer-dark)" -ge 0 && strings /etc/dconf/db/local | grep -q prefer-dark'
+check test -f /etc/skel/.config/gtk-4.0/settings.ini
 check jq -e . /usr/share/atomic-hyprland/waybar/config.jsonc
 check test -f /usr/share/atomic-hyprland/alacritty/core.toml
 check test -L /etc/systemd/system/display-manager.service

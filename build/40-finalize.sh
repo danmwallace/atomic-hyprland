@@ -11,6 +11,9 @@ systemctl set-default graphical.target
 systemctl enable bootc-fetch-apply-updates.timer
 systemctl disable rpm-ostreed-automatic.timer
 
+# Compile the dconf system defaults (/etc/dconf/db/local.d) into /etc/dconf/db/local.
+dconf update
+
 # The elvish RPM does not register itself; chsh and cloud-init need it listed.
 grep -qx /usr/bin/elvish /etc/shells || echo /usr/bin/elvish >> /etc/shells
 

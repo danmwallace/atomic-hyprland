@@ -64,6 +64,9 @@ sed_script_for() {
             printf 's/{{ *%s *}}/%s/g\n' "${key}" "$(printf '%s' "${value}" | sed 's/[\/&]/\\&/g')"
         fi
     done < "${colors}"
+    # Engine-provided: the user's home, for apps that load CSS as a string
+    # and so cannot resolve relative imports (wofi).
+    printf 's/{{ *home *}}/%s/g\n' "$(printf '%s' "${HOME}" | sed 's/[\/&]/\\&/g')"
 }
 
 # render <tpl> <colors.toml> -> stdout; exit 2 on an unresolved placeholder.
@@ -245,9 +248,16 @@ cmd_refresh() {
     echo "hypr-theme: ${name} refreshed"
 }
 
+# `apply` is explicit, so it needs only a session bus (gsettings, Flatpak), not
+# a running Hyprland: ensure-theme calls it before the compositor starts, so
+# nothing launched early (keyring prompt, portals) sees stale settings.
+have_session_bus() {
+    [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || [[ -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]]
+}
 cmd_apply() {
     [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
-    apply_settings "$(cat "${current}/theme.name")"
+    [[ -z "${HYPR_THEME_NO_APPLY:-}" ]] && have_session_bus || return 0
+    HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-apply}" apply_settings "$(cat "${current}/theme.name")"
 }
 
 cmd_bg() {

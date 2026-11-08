@@ -23,7 +23,18 @@ hl.config({
     active_opacity = 1.0,
     inactive_opacity = 1.0,
     fullscreen_opacity = 1.0,
-    blur = { enabled = false },
+    -- Blur only shows behind translucent surfaces: every window is opaque, so
+    -- in practice it is the menus' obsidian glass (see rules.lua) and nothing else.
+    blur = {
+      enabled = true,
+      size = 6,
+      passes = 3,
+      noise = 0.02,
+      contrast = 0.9,
+      brightness = 0.7,
+      vibrancy = 0.0,
+      popups = false,
+    },
     shadow = { enabled = false },
     dim_inactive = false,
   },

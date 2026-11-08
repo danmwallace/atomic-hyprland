@@ -1,4 +1,5 @@
-# Image-managed. Launcher (wofi --show drun) and the power menu share style.css.
+# Image-managed. Launcher (wofi --show drun) and the power menu share style.css,
+# which links to the stylesheet hypr-theme renders for the current theme.
 width=600
 height=360
 location=center

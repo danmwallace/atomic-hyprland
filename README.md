@@ -85,6 +85,18 @@ also carries a built-in fallback palette. Waybar, mako and hypridle run from the
 user units their packages ship; the image adds `swaybg.service` and a two-minute
 battery warning timer, all bound to `graphical-session.target`.
 
+Session environment (Qt/Kvantum, cursor, `$TERMINAL`, `$BROWSER`) lives in
+`/etc/xdg/uwsm/env-hyprland`, so it reaches everything uwsm starts, D-Bus
+services such as the keyring prompt included; add your own in
+`~/.config/uwsm/env-hyprland`. dconf system defaults make a new home dark
+before the first `hypr-theme apply`, and `apply` also runs before the
+compositor. The launcher and power menu (wofi) are obsidian glass: a
+translucent dark fill over Hyprland blur, which is enabled but only visible
+there because every window is opaque. wofi reads its stylesheet as a string,
+so `~/.config/wofi/style.css` links to a fully rendered file with absolute
+imports; your overrides go in `~/.config/wofi/local.css` as before. AppImages
+work (`fuse-libs`).
+
 CI renders every shipped theme and runs the result through
 `Hyprland --verify-config` (plus `jq` on the bar's strict-JSON config), so a
 Hyprland or template change that breaks the look fails the nightly, not your

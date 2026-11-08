@@ -2,8 +2,8 @@
 # Render the user's theme before the compositor starts (atomic-hyprland-theme@.service,
 # ordered before uwsm's wayland-session-pre@<entry>.target). Renders when the
 # theme has never been rendered or the image changed (its templates may have);
-# keeps the user's chosen theme and wallpaper. Never applies: there is no
-# session yet, and hypr-theme skips the apply steps without one anyway.
+# keeps the user's chosen theme and wallpaper, then pushes the desktop settings
+# (`hypr-theme apply`) so apps started before Hyprland's autostart are already dark.
 set -euo pipefail
 
 share="${HYPR_THEME_SHARE:-/usr/share/atomic-hyprland}"
@@ -24,5 +24,7 @@ if ! hypr-theme list | grep -qx -- "${name}"; then
     name="${default}"
 fi
 hypr-theme set "${name}" --keep-background --no-apply
+# Desktop settings (gsettings, Flatpak override) need only the session bus.
+hypr-theme apply || echo "atomic-hyprland theme: apply failed (settings stay as they were)" >&2
 install -D -m 0644 "${stamp_src}" "${stamp_dst}"
 echo "atomic-hyprland theme: rendered ${name} for $(cat "${stamp_src}")"
