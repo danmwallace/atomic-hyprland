@@ -34,12 +34,16 @@ check bash -c '! test -e /etc/skel/.config/hypr/hyprland.conf'
 check grep -q 'package.path = "/usr/share/atomic-hyprland/hypr/?.lua;"' /etc/skel/.config/hypr/hyprland.lua
 check grep -q 'pcall(require, "local")' /etc/skel/.config/hypr/hyprland.lua
 check test -f /usr/share/wayland-sessions/hyprland.desktop
-for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
+# 17 shipped themes (tests/test-themes.sh pins the names); every one is checked below.
+check test "$(ls /usr/share/atomic-hyprland/themes | wc -l)" = 17
+for t in $(ls /usr/share/atomic-hyprland/themes); do
     check test -f /usr/share/atomic-hyprland/themes/$t/colors.toml
     check test -f /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png
     check bash -c "file /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png | grep -q '3840 x 2160'"
 done
 check test -x /usr/bin/hypr-theme
+# RGB lighting follows the theme's led colour where OpenRGB exists (Alienware)
+check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/50-openrgb
 # The quiet bar, notifications, wallpaper and idle daemon as session units.
 check rpm -q mako libnotify
 for u in waybar mako swaybg hypridle; do
@@ -148,7 +152,7 @@ expect_out() {
         echo "FAIL  $1"; fail=1
     fi
 }
-for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
+for t in $(ls /usr/share/atomic-hyprland/themes); do
     out="$(verify_hypr '' '' "$t")"
     expect_out "hyprland verify-config exits 0 for $t" present '^VERIFY_EXIT=0$'
     expect_out "hyprland reports config ok for $t" present 'config ok'

@@ -196,6 +196,20 @@ apply_settings() {
     if have kvantummanager && [[ -d "${HOME}/.config/Kvantum/atomic-hyprland" ]]; then
         kvantummanager --set atomic-hyprland >/dev/null 2>&1 || true
     fi
+    run_hooks "${name}"
+}
+
+# Hooks shipped in the image run first, then the user's. A user hook with the
+# same name replaces the shipped one; a non-executable file of that name just
+# disables it.
+run_hooks() {
+    local name="$1" hook
+    if [[ -d "${share}/hooks/theme-set.d" ]]; then
+        for hook in "${share}/hooks/theme-set.d"/*; do
+            [[ -e "${state}/hooks/theme-set.d/$(basename "${hook}")" ]] && continue
+            [[ -x "${hook}" ]] && "${hook}" "${name}" || true
+        done
+    fi
     if [[ -d "${state}/hooks/theme-set.d" ]]; then
         for hook in "${state}/hooks/theme-set.d"/*; do
             [[ -x "${hook}" ]] && "${hook}" "${name}" || true
