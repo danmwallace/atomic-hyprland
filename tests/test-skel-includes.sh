@@ -134,6 +134,9 @@ check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
 # AppImages need the FUSE 2 library (OpenRGB on the Alienware is one)
 check grep -qx fuse-libs build/packages.txt
+# Dan's tool list (2026-11-08): Fedora packages in the image
+check bash -c 'for p in mosh wireshark nmap arp-scan tcpdump mtr iperf3 nmap-ncat socat bind-utils tio minicom pandoc-cli flameshot azure-cli awscli2 opentofu ansible cava helix git-delta ShellCheck direnv glow age virt-viewer; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
+check bash -c '! grep -qxE "wtype|ydotool|netcat" build/packages.txt'   # declined / nmap-ncat provides nc
 # session env for everything uwsm starts (D-Bus services, uwsm-app launches), not just Hyprland's children
 uenv=files/etc/xdg/uwsm/env-hyprland
 check sh -n $uenv

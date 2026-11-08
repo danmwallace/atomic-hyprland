@@ -4,6 +4,8 @@ version="${1:?image version}"
 
 systemctl enable sddm.service
 systemctl enable ai-images-pull.service
+# Tailscale: the daemon runs everywhere; joining the tailnet (`tailscale up`) is per machine.
+systemctl enable tailscaled.service
 systemctl set-default graphical.target
 
 # bootc stages updates (drop-in makes it stage-only); rpm-ostree's updater

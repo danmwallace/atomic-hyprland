@@ -96,3 +96,36 @@ flatpak
 chromium
 # AppImages (OpenRGB and friends) need the FUSE 2 library
 fuse-libs
+
+# Dan's tool list, 2026-11-08 (all Fedora). nmap-ncat provides nc.
+# network
+mosh
+wireshark
+nmap
+arp-scan
+tcpdump
+mtr
+iperf3
+nmap-ncat
+socat
+bind-utils
+# serial consoles
+tio
+minicom
+# documents, screenshots, audio visualiser
+pandoc-cli
+flameshot
+cava
+# cloud and infrastructure
+azure-cli
+awscli2
+opentofu
+ansible
+virt-viewer
+# editor and everyday CLI
+helix
+git-delta
+ShellCheck
+direnv
+glow
+age

@@ -19,11 +19,19 @@ ARG TUIOS_SHA256=4f68bac6e05d826b8c59b671b565c61b859dacedcb5d889160ba6d8624589b5
 # JetBrainsMono Nerd Font release tarball; sha256 from the release's SHA-256.txt,
 # verified against the downloaded asset before pinning. Bump both together.
 ARG NERD_FONT_VERSION=3.5.1
+# Orca (stablyai/orca) RPM and spotify_player (aome510/spotify-player) tarball;
+# sha256 of the exact release asset, checked against the upstream value before
+# pinning. Bump each hash by hand with its version (Renovate opens the PR).
+ARG ORCA_VERSION=1.4.253
+ARG ORCA_SHA256=5282f3a6d51555fe74e6983bef1c0a8adb606cb0ffaab94efbff1dc4b7c30825
+ARG SPOTIFY_PLAYER_VERSION=0.25.2
+ARG SPOTIFY_PLAYER_SHA256=08b572e0ec4b93418ade1d99703dbd0d2bdd14061babd36ea001153d749a1f4c
 ARG NERD_FONT_SHA256=04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf
 
 COPY build/ /tmp/build/
 
 RUN /tmp/build/10-packages.sh "${CLAUDE_CODE_VERSION}" "${TUIOS_VERSION}" "${TUIOS_SHA256}"
+RUN /tmp/build/15-apps.sh "${ORCA_VERSION}" "${ORCA_SHA256}" "${SPOTIFY_PLAYER_VERSION}" "${SPOTIFY_PLAYER_SHA256}"
 # The bind mount keeps a gigabyte of driver RPMs out of the image layers.
 RUN --mount=type=bind,from=akmods,src=/rpms,dst=/tmp/akmods-rpms /tmp/build/25-nvidia.sh
 

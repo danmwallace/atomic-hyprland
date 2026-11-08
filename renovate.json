@@ -69,6 +69,32 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "ryanoasis/nerd-fonts",
       "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "stablyai/orca release pinned in the Containerfile (sha256 updated by hand in the same PR)",
+      "managerFilePatterns": [
+        "/^Containerfile$/"
+      ],
+      "matchStrings": [
+        "ARG ORCA_VERSION=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "stablyai/orca",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "aome510/spotify-player release pinned in the Containerfile (sha256 updated by hand in the same PR)",
+      "managerFilePatterns": [
+        "/^Containerfile$/"
+      ],
+      "matchStrings": [
+        "ARG SPOTIFY_PLAYER_VERSION=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "aome510/spotify-player",
+      "extractVersionTemplate": "^v(?<version>.*)$"
     }
   ],
   "packageRules": [
