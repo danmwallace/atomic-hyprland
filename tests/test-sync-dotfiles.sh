@@ -106,7 +106,8 @@ unit_expect "theme unit runs before the session" 'grep -q "^Before=wayland-sessi
 
 # 10. ensure-theme renders on first login and is a no-op afterwards
 export HOME="$(mktemp -d)" HYPR_THEME_SHARE="${share}" HYPR_THEME_NO_APPLY=1
-mkdir -p "${share}/themes/t/backgrounds" "${share}/themed"
+# This section tests ensure-theme's logic, not the image's templates: use one toy template only.
+rm -rf "${share}/themed"; mkdir -p "${share}/themes/t/backgrounds" "${share}/themed"
 printf 'background = "#000000"\n' > "${share}/themes/t/colors.toml"; : > "${share}/themes/t/backgrounds/a.png"
 echo 'x={{ background }}' > "${share}/themed/x.tpl"
 HYPR_THEME_DEFAULT=t "${ensure}"

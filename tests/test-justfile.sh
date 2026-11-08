@@ -33,4 +33,8 @@ check bash -c 'just -n build 2>&1 | grep -q -- "--build-arg AKMODS_IMAGE="'
 check bash -c '! just -n build 2>&1 | grep -q "NVIDIA="'
 check bash -c '! just --show build | head -3 | grep -q nvidia='
 
+# The image ships every theme; there is no THEME build argument any more.
+check bash -c '! just --show build | grep -q THEME'
+check bash -c '! grep -q THEME Containerfile'
+
 exit "$fail"

@@ -12,40 +12,57 @@ check() {
     fi
 }
 
-check rpm -q hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland
+check rpm -q hyprland hyprlock hypridle xdg-desktop-portal-hyprland
 check rpm -q sddm sddm-x11 waybar wofi alacritty swaybg cliphist
 check rpm -q elvish starship lazygit fzf ripgrep fd-find bat git gh jq yq uv distrobox
 check rpm -q cloud-init qemu-guest-agent
 # Ansible become_user to an unprivileged user (hermes) needs setfacl on the target.
 check rpm -q acl
 check bash -c '! rpm -q fish'
-check bash -c '! rpm -q ansible-core'
+# The Hyprland config lives in this repo now; Ansible left the build with it.
+check bash -c '! rpm -q ansible-core python3-libdnf5 hyprpaper nwg-drawer nwg-dock-hyprland qt6ct waypaper'
+check rpm -q uwsm hyprland-uwsm file
+check bash -c '! rpm -q librsvg2-tools'   # build-time only
+for f in env input binds rules look monitors autostart; do check test -f /usr/share/atomic-hyprland/hypr/$f.lua; done
+check bash -c '! grep -rq special_scale_factor /usr/share/atomic-hyprland /etc/skel'
+check grep -q 'rounding = 3' /usr/share/atomic-hyprland/hypr/look.lua
+check grep -q 'gaps_out = 8' /usr/share/atomic-hyprland/hypr/look.lua
 check test -f /etc/skel/.config/hypr/hyprland.lua
-check test -f /etc/skel/.config/hypr/conf/binds.lua
 check test -f /etc/skel/.config/hypr/local.lua
+check bash -c '! test -e /etc/skel/.config/hypr/conf'
 check bash -c '! test -e /etc/skel/.config/hypr/hyprland.conf'
-check bash -c '! test -e /etc/skel/.config/hypr/local.conf'
+check grep -q 'package.path = "/usr/share/atomic-hyprland/hypr/?.lua;"' /etc/skel/.config/hypr/hyprland.lua
 check grep -q 'pcall(require, "local")' /etc/skel/.config/hypr/hyprland.lua
 check test -f /usr/share/wayland-sessions/hyprland.desktop
-# Wallpaper: the config must point at a file that exists on a fresh install.
-check test -f /usr/share/backgrounds/images/earth_from_space.jpg
-check grep -q 'swaybg -m fill -i /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/conf/autostart.lua
-check grep -q 'path = /usr/share/backgrounds/images/earth_from_space.jpg' /etc/skel/.config/hypr/hyprlock.conf
-# Hyprland's own parser on the skel tree, without --config so its file selection picks hyprland.lua.
-# verify_hypr [binds-line] [look-line]: copies the skel tree, optionally appends
-# a line to conf/binds.lua and/or conf/look.lua, wraps hl.config with a probe
-# (tests/hypr-probe-pre.lua) that records every dotted config key and checks
-# each with hl.get_config at the end (tests/hypr-probe-post.lua), because
-# --verify-config alone ignores unknown keys silently.
+for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
+    check test -f /usr/share/atomic-hyprland/themes/$t/colors.toml
+    check test -f /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png
+    check bash -c "file /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png | grep -q '3840 x 2160'"
+done
+check test -x /usr/bin/hypr-theme
+check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
+check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
+# Hyprland's own parser on the skel tree plus a rendered theme, without --config so
+# its file selection picks hyprland.lua.
+# verify_hypr [binds-line] [look-line] [theme]: copies the skel tree, renders the
+# theme into the throwaway HOME (skipped with HV_NO_THEME=1 to exercise the
+# built-in fallback palette), optionally adds a line as an extra module, wraps
+# hl.config with a probe (tests/hypr-probe-pre.lua) that records every dotted
+# config key and checks each with hl.get_config at the end
+# (tests/hypr-probe-post.lua), because --verify-config alone ignores unknown keys.
 verify_hypr() {
     export HOME=/tmp/hv XDG_RUNTIME_DIR=/tmp/hv/run
     rm -rf /tmp/hv; mkdir -p "$HOME/.config" "$XDG_RUNTIME_DIR"
     cp -r /etc/skel/.config/hypr "$HOME/.config/"
-    [ -n "${1:-}" ] && echo "$1" >> "$HOME/.config/hypr/conf/binds.lua"
-    [ -n "${2:-}" ] && echo "$2" >> "$HOME/.config/hypr/conf/look.lua"
+    if [ -z "${HV_NO_THEME:-}" ]; then
+        HYPR_THEME_SHARE=/usr/share/atomic-hyprland HYPR_THEME_STATE="$HOME/.config/atomic-hyprland" \
+            HYPR_THEME_NO_APPLY=1 hypr-theme set "${3:-monochrome-green}" >/dev/null
+    fi
     cp /tests/hypr-probe-pre.lua "$HOME/.config/hypr/probe_pre.lua"
     cp /tests/hypr-probe-post.lua "$HOME/.config/hypr/probe_post.lua"
     sed -i '1i require("probe_pre")' "$HOME/.config/hypr/hyprland.lua"
+    [ -n "${1:-}" ] && { echo "$1" > "$HOME/.config/hypr/extra_binds.lua"; echo 'require("extra_binds")' >> "$HOME/.config/hypr/hyprland.lua"; }
+    [ -n "${2:-}" ] && { echo "$2" > "$HOME/.config/hypr/extra_look.lua"; echo 'require("extra_look")' >> "$HOME/.config/hypr/hyprland.lua"; }
     echo 'require("probe_post")' >> "$HOME/.config/hypr/hyprland.lua"
     # Run as an unprivileged user, like a real session. Hyprland 0.57 in
     # verify mode has no instance directory and binds its event socket at
@@ -66,21 +83,29 @@ expect_out() {
         echo "FAIL  $1"; fail=1
     fi
 }
+for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
+    out="$(verify_hypr '' '' "$t")"
+    expect_out "hyprland verify-config exits 0 for $t" present '^VERIFY_EXIT=0$'
+    expect_out "hyprland reports config ok for $t" present 'config ok'
+    expect_out "no Lua or config errors for $t" absent 'attempt to|stack traceback|Config error'
+    expect_out "no unresolved placeholder for $t" absent '\{\{'
+done
 out="$(verify_hypr)"
-expect_out "hyprland verify-config exits 0 (no crash)" present '^VERIFY_EXIT=0$'
-expect_out "hyprland verify-config reports config ok" present 'config ok'
-expect_out "hyprland verify-config has no Lua or config errors" absent 'attempt to|stack traceback|Config error'
 # 0.56 printed "Using lua config"; 0.57 prints "Regular config at <path>/hyprland.lua".
 expect_out "hyprland picked the Lua config" present 'Using lua config|Regular config at .*/hyprland\.lua'
 expect_out "every hl.config key is known to this Hyprland" present 'PROBE config keys ok'
 expect_out "no unknown config keys in the shipped config" absent 'PROBE unknown config key'
+# The theme file is missing (fresh home before ensure-theme ran): the built-in fallback palette must carry the config.
+out="$(HV_NO_THEME=1 verify_hypr)"
+expect_out "hyprland verifies with the built-in fallback palette" present '^VERIFY_EXIT=0$'
+expect_out "fallback palette reports config ok" present 'config ok'
 # Test of the test: an unknown key must be caught, since --verify-config alone accepts it.
 out="$(verify_hypr '' 'hl.config({ general = { bogus_key_for_probe = 1 } })')"
 expect_out "an unknown hl.config key is detected by the probe" present 'PROBE unknown config key: general.bogus_key_for_probe'
-# Error isolation: a broken binds.lua must be reported by name while the entry file still loads.
+# Error isolation: a broken module must be reported by name while the entry file still loads.
 out="$(verify_hypr 'hl.bind("SUPER + Z", hl.dsp.nonexistent())')"
-expect_out "broken binds.lua is reported by name" present 'binds.lua'
-expect_out "broken binds.lua does not fail hyprland.lua" absent 'hyprland.lua:'
+expect_out "broken module is reported by name" present 'extra_binds.lua'
+expect_out "broken module does not fail hyprland.lua" absent 'hyprland.lua:'
 check rpm -q hyprland-guiutils
 # Extra terminals: Ghostty from the scottames/ghostty COPR; tuios is not
 # packaged for Fedora, so it is upstream's release binary under /usr/bin.
@@ -89,7 +114,6 @@ check bash -c 'ghostty +version | grep -qi "^ghostty "'
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE
-check bash -c "fc-match -f '%{family}' RobotoMonoNerdFontPropo | grep -q 'Nerd Font Propo'"
 check bash -c '! grep -q "custom/updates" /etc/skel/.config/waybar/config'
 check test -L /etc/systemd/system/display-manager.service
 check test "$(readlink -f /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
@@ -119,6 +143,9 @@ check bash -c "test \"\$(yq '.docker | keys | length' $reg)\" = 1"
 check bash -c '! grep -ls "^enabled=1" /etc/yum.repos.d/_copr:copr.fedorainfracloud.org:*.repo'
 check test -s /usr/share/atomic-hyprland/stamp
 check test -f /usr/share/atomic-hyprland/skel/.config/hypr/hyprland.lua
+check test -f /usr/share/atomic-hyprland/skel.local
+check test -f /usr/share/atomic-hyprland/skel.retired
+check bash -c '! grep -qx .config/hypr/local.lua /usr/share/atomic-hyprland/managed-files.txt'
 check bash -c '! test -e /var/roothome/.ansible'
 check bash -c 'test -z "$(ls -A /var/cache 2>/dev/null)"'
 

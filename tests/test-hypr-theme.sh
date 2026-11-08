@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Host-side: PATH="$PWD/files/usr/bin:$PATH" bash tests/test-hypr-theme.sh (from the repo root)
+# Host-side: bash tests/test-hypr-theme.sh (from the repo root)
 # Exercises the theme engine against the fixture share in tests/fixtures/hypr-theme.
 set -uo pipefail
 
@@ -13,6 +13,7 @@ check() {
     fi
 }
 
+export PATH="$PWD/files/usr/bin:$PATH"
 export HYPR_THEME_SHARE="$PWD/tests/fixtures/hypr-theme/share"
 export HYPR_THEME_STATE="$(mktemp -d)"
 export HYPR_THEME_NO_APPLY=1
