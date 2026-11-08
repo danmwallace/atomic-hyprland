@@ -75,7 +75,9 @@ check bash -c 'PATH="$(mktemp -d)" '"$libexec"'/waybar/notifications | jq -e ".t
 
 # mako
 check bash -c 'head -1 files/usr/share/atomic-hyprland/themed/mako.ini.tpl | grep -qx "include=/usr/share/atomic-hyprland/mako/core.ini"'
-check bash -c 'grep -q "^include=~/.config/mako/local" files/usr/share/atomic-hyprland/themed/mako.ini.tpl'
+# mako accepts include= only in the global section: the local include must come before the first [section]
+check bash -c 'awk "/^\\[/{exit} /^include=~\/.config\/mako\/local/{found=1} END{exit !found}" files/usr/share/atomic-hyprland/themed/mako.ini.tpl'
+check awk '/^\[/{s=1} s && /^include=/{bad=1} END{exit bad}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
 check grep -q '^border-radius=3' files/usr/share/atomic-hyprland/mako/core.ini
 check grep -q '^margin=46,12,0,0' files/usr/share/atomic-hyprland/mako/core.ini
 check grep -q '^default-timeout=6000' files/usr/share/atomic-hyprland/mako/core.ini

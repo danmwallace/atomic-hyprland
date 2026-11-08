@@ -5,6 +5,7 @@
 #   hypr-theme current
 #   hypr-theme set <name> [--keep-background] [--no-apply]
 #   hypr-theme refresh                 re-render the current theme (after an image update)
+#   hypr-theme apply                   push gsettings/Flatpak/Kvantum for the current theme (login)
 #   hypr-theme bg next | bg set <file>
 #   hypr-theme render <tpl> <colors.toml>   render one template to stdout
 #
@@ -28,7 +29,7 @@ default_theme="${HYPR_THEME_DEFAULT:-monochrome-green}"
 current="${state}/current"
 
 die() { echo "hypr-theme: $1" >&2; exit "${2:-1}"; }
-usage() { sed -n '2,10p' "$0" >&2; exit 1; }
+usage() { sed -n '2,11p' "$0" >&2; exit 1; }
 
 valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
 
@@ -171,13 +172,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 restart_swaybg() { want_apply && have systemctl && systemctl --user try-restart swaybg.service >/dev/null 2>&1 || true; }
 
-apply() {
+# apply_settings: the desktop settings that live outside the rendered files
+# (gsettings, the Flatpak override, Kvantum) plus the user's hooks. Run by
+# `set`, `refresh` and, at every login, by `hypr-theme apply` from autostart.
+apply_settings() {
     local name="$1" cursor icons
     want_apply || return 0
-    have hyprctl && hyprctl reload >/dev/null 2>&1 || true
-    have systemctl && systemctl --user try-restart waybar.service mako.service swaybg.service >/dev/null 2>&1 || true
-    have pkill && pkill -SIGUSR2 -x ghostty >/dev/null 2>&1 || true
-    [[ -f "${HOME}/.config/alacritty/alacritty.toml" ]] && touch "${HOME}/.config/alacritty/alacritty.toml"
     cursor="$(sed -nE 's/^cursor_theme *= *"?([^"]*)"?$/\1/p' "${current}/theme/colors.toml" | head -1)"
     icons="$(cat "${current}/theme/icons.theme" 2>/dev/null || echo Papirus-Dark)"
     if have gsettings; then
@@ -196,6 +196,17 @@ apply() {
             [[ -x "${hook}" ]] && "${hook}" "${name}" || true
         done
     fi
+}
+
+# apply: everything a theme switch must poke in a live session.
+apply() {
+    local name="$1"
+    want_apply || return 0
+    have hyprctl && hyprctl reload >/dev/null 2>&1 || true
+    have systemctl && systemctl --user try-restart waybar.service mako.service swaybg.service >/dev/null 2>&1 || true
+    have pkill && pkill -SIGUSR2 -x ghostty >/dev/null 2>&1 || true
+    [[ -f "${HOME}/.config/alacritty/alacritty.toml" ]] && touch "${HOME}/.config/alacritty/alacritty.toml"
+    apply_settings "${name}"
 }
 
 cmd_set() {
@@ -232,6 +243,11 @@ cmd_refresh() {
     echo "hypr-theme: ${name} refreshed"
 }
 
+cmd_apply() {
+    [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
+    apply_settings "$(cat "${current}/theme.name")"
+}
+
 cmd_bg() {
     [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
     case "${1:-}" in
@@ -246,6 +262,7 @@ case "${1:-}" in
     current) [[ -f "${current}/theme.name" ]] && cat "${current}/theme.name" || echo "${default_theme}" ;;
     set) shift; cmd_set "$@" ;;
     refresh) cmd_refresh ;;
+    apply) cmd_apply ;;
     bg) shift; cmd_bg "$@" ;;
     render) [[ -f "${2:-}" && -f "${3:-}" ]] || usage; render "$2" "$3" ;;
     *) usage ;;

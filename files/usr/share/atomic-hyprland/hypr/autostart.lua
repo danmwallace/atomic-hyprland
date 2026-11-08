@@ -9,4 +9,7 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("systemctl --user start hyprpolkitagent")
   hl.exec_cmd("nm-applet --indicator")
   hl.exec_cmd("wl-paste --watch cliphist store")
+  -- gsettings, the Flatpak override and Kvantum are per-session state: push the
+  -- current theme's values now (the pre-session render could not, it had no bus).
+  hl.exec_cmd("hypr-theme apply")
 end)

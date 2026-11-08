@@ -119,6 +119,8 @@ check jq -e '.ExtensionInstallForcelist[0] == "fcoeoabgfenejglbffodgkkbkcdhcgfn;
 check grep -q 'hl.env("BROWSER", "chromium-browser")' $share/hypr/env.lua
 check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
+# login applies the desktop settings (gsettings, flatpak override) for the rendered theme
+check grep -q 'hl.exec_cmd("hypr-theme apply")' $share/hypr/autostart.lua
 check jq -e '.customManagers[] | select(.matchStrings[0] | test("NERD_FONT_VERSION")) | .depNameTemplate == "ryanoasis/nerd-fonts" and .datasourceTemplate == "github-releases"' renovate.json
 
 exit "$fail"

@@ -159,6 +159,8 @@ out="$(verify_hypr)"
 # The render that verify_hypr just did must have produced every app's theme file.
 check grep -q "@define-color accent #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/waybar.css
 check grep -q "^border-color=#39ff14" /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini
+# mako parses the rendered config (it only fails later, on the missing display/bus)
+check bash -c '! HOME=/tmp/hv mako --config /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini 2>&1 | grep -q "Failed to parse"'
 check test -L /tmp/hv/.config/atomic-hyprland/current/background
 for f in wofi.css hyprlock.conf ghostty.conf alacritty.toml btop.theme hyprland.lua gtk.css; do
     check test -s /tmp/hv/.config/atomic-hyprland/current/theme/$f
