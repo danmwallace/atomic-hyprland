@@ -1,0 +1,17 @@
+[Unit]
+# Template: uwsm names its targets after the session's desktop entry
+# (wayland-session-pre@hyprland.desktop.target); enabling the template against
+# wayland-session-pre@.target makes systemd instantiate this unit for whichever
+# entry starts the session.
+Description=Render the current atomic-hyprland theme before the Wayland session
+ConditionPathExists=/usr/share/atomic-hyprland/stamp
+After=atomic-hyprland-dotfiles.service
+Wants=atomic-hyprland-dotfiles.service
+Before=wayland-session-pre@%i.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/atomic-hyprland/ensure-theme
+
+[Install]
+WantedBy=wayland-session-pre@.target

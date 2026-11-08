@@ -100,8 +100,13 @@ check test -f /usr/share/wayland-sessions/hyprland-uwsm.desktop
 check rpm -q chromium
 check test -x /usr/bin/chromium-browser
 check jq -e '.ExtensionInstallForcelist | length == 1' /etc/chromium/policies/managed/10-atomic-hyprland.json
-check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
-check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
+check test -f /usr/lib/systemd/user/atomic-hyprland-theme@.service
+check test -L /etc/systemd/user/wayland-session-pre@.target.wants/atomic-hyprland-theme@.service
+check bash -c '! test -e /usr/lib/systemd/user/atomic-hyprland-theme.service'
+# symlinks in skel are image-managed too (mako config, gtk.css, btop theme)
+check grep -qx .config/mako/config /usr/share/atomic-hyprland/managed-files.txt
+check grep -qx .config/gtk-4.0/gtk.css /usr/share/atomic-hyprland/managed-files.txt
+check grep -qx .config/btop/themes/current.theme /usr/share/atomic-hyprland/managed-files.txt
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so
 # its file selection picks hyprland.lua.
 # verify_hypr [binds-line] [look-line] [theme]: copies the skel tree, renders the

@@ -22,11 +22,11 @@ printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
 
 # Files the login-time sync may overwrite: everything in skel except the
 # user's files listed in skel.local (local.lua and the per-app local includes).
-( cd /etc/skel && find .config -type f | sort ) \
+( cd /etc/skel && find .config \( -type f -o -type l \) | sort ) \
     | grep -vxFf <(grep -vE '^\s*(#|$)' /usr/share/atomic-hyprland/skel.local) \
     > /usr/share/atomic-hyprland/managed-files.txt
 
 systemctl --global enable atomic-hyprland-dotfiles.service
-systemctl --global enable atomic-hyprland-theme.service
+systemctl --global enable atomic-hyprland-theme@.service
 # Session services: uwsm starts graphical-session.target, which pulls these in.
 systemctl --global enable waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer

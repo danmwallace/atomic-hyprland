@@ -34,19 +34,28 @@ while IFS= read -r rel; do
     fi
 done < <(read_list "${share}/skel.retired")
 
+# install_entry REL: copy a skel file, or recreate a skel symlink with the same
+# (relative) target. Symlinks point into the theme directory, which may not
+# exist yet, so they are created blind rather than dereferenced.
+install_entry() {
+    local rel="$1" src="${share}/skel/$1" dst="${home}/$1"
+    if [[ -L "${src}" ]]; then
+        mkdir -p "$(dirname "${dst}")"
+        ln -sfn "$(readlink "${src}")" "${dst}"
+    elif [[ -f "${src}" ]]; then
+        install -D -m "$(stat -c %a "${src}")" "${src}" "${dst}"
+    fi
+}
+
 while IFS= read -r rel; do
-    src="${share}/skel/${rel}"
-    [[ -f "${src}" ]] || continue
-    install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
+    install_entry "${rel}"
 done < <(read_list "${manifest}")
 
 # The user's files: created once from skel (a home that predates the image
 # never got them), never rewritten afterwards.
 while IFS= read -r rel; do
-    src="${share}/skel/${rel}"
-    if [[ ! -e "${home}/${rel}" && -f "${src}" ]]; then
-        install -D -m "$(stat -c %a "${src}")" "${src}" "${home}/${rel}"
-    fi
+    [[ -e "${home}/${rel}" || -L "${home}/${rel}" ]] && continue
+    install_entry "${rel}"
 done < <(read_list "${share}/skel.local")
 
 install -D -m 0644 "${stamp_src}" "${stamp_dst}"

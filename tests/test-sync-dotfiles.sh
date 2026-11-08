@@ -9,6 +9,7 @@
 set -euo pipefail
 
 if [[ -n "${SYNC_HOST:-}" ]]; then
+    export PATH="$PWD/files/usr/bin:$PATH"
     sync="$PWD/files/usr/libexec/atomic-hyprland/sync-dotfiles"
     ensure="$PWD/files/usr/libexec/atomic-hyprland/ensure-theme"
     src_share="$PWD/tests/fixtures/sync/share"
@@ -73,6 +74,16 @@ expect "old hyprland.conf left in place" 'grep -q "^# old" "$HOME/.config/hypr/h
 expect "old local.conf left in place" 'grep -q "^# old" "$HOME/.config/hypr/local.conf"'
 expect "local.lua created beside the old files" 'test -f "$HOME/.config/hypr/local.lua"'
 
+# 5c. symlinks in skel (mako config, gtk.css, btop theme) land as symlinks with the same relative target,
+#     even though the target does not exist yet at sync time (the theme render comes later)
+mkdir -p "${share}/skel/.config/mako"; ln -sfn ../atomic-hyprland/current/theme/mako.ini "${share}/skel/.config/mako/config"
+echo '.config/mako/config' >> "${share}/managed-files.txt"
+export HOME="$(mktemp -d)"; "${sync}"
+expect "skel symlink synced as a symlink" 'test -L "$HOME/.config/mako/config"'
+expect "symlink target kept relative" 'test "$(readlink "$HOME/.config/mako/config")" = ../atomic-hyprland/current/theme/mako.ini'
+echo newer3 > "${share}/stamp"; "${sync}"
+expect "symlink survives a resync" 'test -L "$HOME/.config/mako/config"'
+
 # 6. units enabled for every user
 unit_expect "dotfiles unit enabled globally" 'test -L /etc/systemd/user/default.target.wants/atomic-hyprland-dotfiles.service'
 
@@ -100,9 +111,9 @@ expect "user local.jsonc untouched by retirement" 'test "$(cat "$HOME/.config/wa
 expect "a retired file entry never removes a directory" 'printf ".config/waybar\n" > "$share/skel.retired"; mkdir -p "$HOME/.config/waybar"; echo x > "$share/stamp"; "$sync"; test -d "$HOME/.config/waybar"'
 
 # 9. theme unit ordered before the compositor and enabled for every user
-unit_expect "theme unit enabled globally" 'test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service'
-unit_expect "theme unit runs after dotfiles" 'grep -q "^After=atomic-hyprland-dotfiles.service" /usr/lib/systemd/user/atomic-hyprland-theme.service'
-unit_expect "theme unit runs before the session" 'grep -q "^Before=wayland-session-pre@Hyprland.target" /usr/lib/systemd/user/atomic-hyprland-theme.service'
+unit_expect "theme unit enabled for every uwsm session instance" 'test -L /etc/systemd/user/wayland-session-pre@.target.wants/atomic-hyprland-theme@.service'
+unit_expect "theme unit runs after dotfiles" 'grep -q "^After=atomic-hyprland-dotfiles.service" /usr/lib/systemd/user/atomic-hyprland-theme@.service'
+unit_expect "theme unit runs before the session instance" 'grep -q "^Before=wayland-session-pre@%i.target" /usr/lib/systemd/user/atomic-hyprland-theme@.service'
 
 # 10. ensure-theme renders on first login and is a no-op afterwards
 export HOME="$(mktemp -d)" HYPR_THEME_SHARE="${share}" HYPR_THEME_NO_APPLY=1
