@@ -96,6 +96,10 @@ check bash -c '! grep -rq abstractdark /etc/sddm.conf.d /usr/share/atomic-hyprla
 check bash -c '! grep -q VirtualKeyboard /usr/share/sddm/themes/atomic-hyprland/Main.qml'
 check bash -c '! test -e /etc/sddm.conf.d/10-theme.conf'
 check test -f /usr/share/wayland-sessions/hyprland-uwsm.desktop
+# Chromium with the Claude extension (managed policy); Firefox is a Flatpak concern of the control repo
+check rpm -q chromium
+check test -x /usr/bin/chromium-browser
+check jq -e '.ExtensionInstallForcelist | length == 1' /etc/chromium/policies/managed/10-atomic-hyprland.json
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
 check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so

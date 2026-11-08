@@ -91,3 +91,5 @@ dconf
 rsms-inter-fonts
 google-noto-emoji-color-fonts
 flatpak
+# browser: the Claude extension needs native messaging, which the Flatpak sandbox blocks
+chromium
