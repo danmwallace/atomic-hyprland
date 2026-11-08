@@ -38,8 +38,6 @@ breaks the pipeline, not the login.
 ## Non-goals
 
 - Light themes (the engine must not prevent them; none ship).
-- Chromium frame colour (belongs to the "Chromium + Claude extension" task;
-  the engine must leave a hook for it).
 - Runtime re-theming of SDDM (it runs as root before login; it takes the
   image's default theme colours at build).
 - nwg-dock, nwg-drawer (separate decision task; both dropped from the image
@@ -68,6 +66,7 @@ breaks the pipeline, not the login.
 | Wallpaper | **Plain dark**: a near-black radial gradient, slightly lighter at the centre, no picture; shipped as an image file generated at build from the theme's colours so every palette has its own. `~/Pictures/Wallpapers`, if present, joins the rotation. |
 | Greeter | Same wallpaper; clock, user name, one accent-bordered password field, session selector bottom-right, power bottom-left. **No virtual keyboard.** |
 | Where it lives | The image repo. The Ansible role stays published but the image stops consuming it. |
+| Browser | **Chromium replaces Firefox** (Dan, 2026-11-07: "I want to replace Firefox with Chromium for claude extension support"). The Fedora `chromium` RPM in the image (the extension needs native messaging, which the Flatpak sandbox blocks); the Claude extension (Web Store ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`, read from Dan's own Chromium profile) force-installed for every user through `/etc/chromium/policies/managed/`; Chromium's frame colour follows the theme through the `hypr-theme` hook (`BrowserThemeColor` policy, Omarchy's method). `org.mozilla.firefox` leaves the control repo's Flatpak list. Closes the vault task "Add Chromium with the Claude Extension". |
 | LiteLLM, Omarchy itself | Out of scope; not adopted (Omarchy is Arch-only; its mechanism is copied, nothing else). |
 
 ## The mechanism
@@ -290,6 +289,16 @@ Values the builder implements as given; everything not listed is theirs.
   the accent `gtk.css` reaches GTK3 Flatpaks. Icons inside the sandbox may
   remain Adwaita; the builder decides whether a Papirus icon extension from
   Flathub is worth adding to the control repo's flatpak list.
+- **Chromium**: package `chromium`; shipped, root-owned managed policy
+  `/etc/chromium/policies/managed/10-atomic-hyprland.json` with
+  `ExtensionInstallForcelist` (entry format `id;update_url`:
+  `fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx`),
+  `BrowserColorScheme: 2` (dark) and `BrowserThemeColor` set to the default
+  palette's `background`. Linux Chromium reads policy only from that
+  system-wide directory, so the frame colour is fixed at build and does not
+  follow a runtime theme switch (decision 8 below). `SUPER+B` and `$BROWSER`
+  are `chromium-browser`. Firefox: the base's RPM is already removed in
+  cleanup; the Flatpak leaves the control repo's list.
 - **GTK**: `gsettings` `color-scheme prefer-dark`, `gtk-theme Adwaita-dark`,
   `icon-theme Papirus-Dark`, `cursor-theme breeze_cursors`, `font-name
   "Inter 10"` (Fedora `rsms-inter-fonts`; builder may pick Cantarell if
@@ -388,6 +397,10 @@ Dan.
    from `autostart.lua`; `hypr-theme set` restarts them with `systemctl --user`.
 6. GPU temperature via `nvidia-smi` in a `custom/gpu` module.
 7. `gsettings-desktop-schemas` and `dconf` are added to the package list.
+8. Chromium's frame colour is set once at build from the default palette
+   (managed policy is root-owned and system-wide; there is no per-user
+   policy path on Linux), so switching themes does not recolour Chromium.
+   The `hypr-theme` hook dir stays available for a future per-user method.
 
 ## Left to the builder
 
