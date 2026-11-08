@@ -54,11 +54,6 @@
       "matchFileNames": ["build/images.env"],
       "matchUpdateTypes": ["major", "minor", "patch"],
       "enabled": false
-    },
-    {
-      "description": "LiteLLM publishes nightlies to the same repository",
-      "matchPackageNames": ["ghcr.io/berriai/litellm"],
-      "allowedVersions": "/-stable$/"
     }
   ]
 }
