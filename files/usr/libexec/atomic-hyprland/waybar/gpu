@@ -7,8 +7,22 @@ set -uo pipefail
 proc="${GPU_PROC_ROOT:-/proc}"
 hwmon_root="${HWMON_ROOT:-/sys/class/hwmon}"
 
+pci_root="${PCI_ROOT:-/sys/bus/pci/devices}"
+
+# A runtime-suspended NVIDIA card (hybrid laptop on the iGPU) must stay asleep:
+# nvidia-smi would wake it every poll. Report the CPU instead until it is up.
+nvidia_asleep() {
+    local d
+    for d in "${pci_root}"/*; do
+        [[ -f "${d}/vendor" && "$(cat "${d}/vendor")" == 0x10de ]] || continue
+        [[ -f "${d}/class" && "$(cat "${d}/class")" == 0x03* ]] || continue
+        [[ -f "${d}/power/runtime_status" && "$(cat "${d}/power/runtime_status")" == suspended ]] && return 0
+    done
+    return 1
+}
+
 temp=""; label=""
-if [[ -e "${proc}/driver/nvidia/version" ]] && command -v nvidia-smi >/dev/null 2>&1; then
+if [[ -e "${proc}/driver/nvidia/version" ]] && command -v nvidia-smi >/dev/null 2>&1 && ! nvidia_asleep; then
     temp="$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')"
     label="gpu"
 fi

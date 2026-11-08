@@ -9,3 +9,4 @@
 .config/hypr/hyprlock.local.conf
 .config/ghostty/local
 .config/alacritty/local.toml
+.config/btop/btop.conf

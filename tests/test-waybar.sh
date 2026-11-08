@@ -15,7 +15,8 @@ check() {
 }
 
 skel=files/etc/skel/.config
-cfg=$skel/waybar/config.jsonc
+cfg=files/usr/share/atomic-hyprland/waybar/config.jsonc
+thin=$skel/waybar/config.jsonc
 units=files/usr/lib/systemd/user
 libexec=files/usr/libexec/atomic-hyprland
 
@@ -23,7 +24,11 @@ check jq -e . "$cfg"
 check bash -c 'jq -e ".\"modules-left\" == [\"hyprland/workspaces\",\"hyprland/window\"] and .\"modules-center\" == [\"clock\"]" '"$cfg"
 check bash -c 'jq -e ".\"modules-right\" == [\"group/tray-drawer\",\"bluetooth\",\"network\",\"pulseaudio\",\"cpu\",\"memory\",\"custom/gpu\",\"battery\",\"idle_inhibitor\",\"custom/notifications\",\"custom/power\"]" '"$cfg"
 check bash -c 'jq -e ".layer == \"top\" and .position == \"top\" and .height == 30 and .\"margin-top\" == 8 and .\"margin-left\" == 8 and .\"margin-right\" == 8 and .reload_style_on_change == true" '"$cfg"
-check bash -c 'jq -e ".include == [\"~/.config/waybar/local.jsonc\"]" '"$cfg"
+# waybar: the FIRST definition wins across includes, so the skel file is thin and
+# names the local file before the shipped config
+check jq -e . "$thin"
+check bash -c 'jq -e ".include == [\"~/.config/waybar/local.jsonc\", \"/usr/share/atomic-hyprland/waybar/config.jsonc\"] and (keys | length) == 1" '"$thin"
+check bash -c '! jq -e ".include" '"$cfg"' >/dev/null'
 # glyph-only default formats: no numbers in the right-hand modules' default format
 check bash -c 'for m in cpu memory battery network pulseaudio bluetooth; do jq -er ".\"$m\".format" '"$cfg"' | grep -qE "\{(capacity|usage|percentage|volume|essid|ipaddr|signalStrength)" && exit 1; done; exit 0'
 # ...but the numbers are in the tooltips
@@ -66,6 +71,12 @@ check bash -c 'PATH="'"$bin"':$PATH" GPU_PROC_ROOT="'"$fakeproc"'" '"$libexec"'/
 fakesys=$(mktemp -d); mkdir -p "$fakesys/hwmon0"; echo coretemp > "$fakesys/hwmon0/name"; echo 45000 > "$fakesys/hwmon0/temp1_input"
 check bash -c 'GPU_PROC_ROOT="$(mktemp -d)" HWMON_ROOT="'"$fakesys"'" '"$libexec"'/waybar/gpu | jq -e ".percentage == 45 and .class == \"normal\" and (.tooltip | test(\"cpu 45\"))"'
 check bash -c 'GPU_PROC_ROOT="$(mktemp -d)" HWMON_ROOT="$(mktemp -d)" '"$libexec"'/waybar/gpu | jq -e ".text and .tooltip"'   # nothing readable at all: still JSON
+# a runtime-suspended dGPU must not be woken by nvidia-smi every 5 s: fall back to the CPU reading
+pci=$(mktemp -d); mkdir -p "$pci/0000:01:00.0/power"; echo 0x030000 > "$pci/0000:01:00.0/class"; echo 0x10de > "$pci/0000:01:00.0/vendor"; echo suspended > "$pci/0000:01:00.0/power/runtime_status"
+printf '#!/bin/sh\necho woke > %s/woke; echo 71\n' "$bin" > "$bin/nvidia-smi"; rm -f "$bin/woke"
+check bash -c 'PATH="'"$bin"':$PATH" GPU_PROC_ROOT="'"$fakeproc"'" PCI_ROOT="'"$pci"'" HWMON_ROOT="'"$fakesys"'" '"$libexec"'/waybar/gpu | jq -e ".percentage == 45 and (.tooltip | test(\"cpu\"))" && ! test -e '"$bin"'/woke'
+echo active > "$pci/0000:01:00.0/power/runtime_status"
+check bash -c 'PATH="'"$bin"':$PATH" GPU_PROC_ROOT="'"$fakeproc"'" PCI_ROOT="'"$pci"'" HWMON_ROOT="'"$fakesys"'" '"$libexec"'/waybar/gpu | jq -e ".percentage == 71" && test -e '"$bin"'/woke'
 # notifications: makoctl mode output drives the class
 printf '#!/bin/sh\necho default\n' > "$bin/makoctl"; chmod +x "$bin/makoctl"
 check bash -c 'PATH="'"$bin"':$PATH" '"$libexec"'/waybar/notifications | jq -e ".class == \"normal\" and .text == \"󰂚\""'
@@ -80,6 +91,9 @@ check bash -c 'awk "/^\\[/{exit} /^include=~\/.config\/mako\/local/{found=1} END
 check awk '/^\[/{s=1} s && /^include=/{bad=1} END{exit bad}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
 check grep -q '^border-radius=3' files/usr/share/atomic-hyprland/mako/core.ini
 check grep -q '^margin=46,12,0,0' files/usr/share/atomic-hyprland/mako/core.ini
+# do-not-disturb is a mode mako must be told about, or the bell toggle does nothing
+check grep -q '^\[mode=do-not-disturb\]' files/usr/share/atomic-hyprland/mako/core.ini
+check bash -c 'awk "/^\\[mode=do-not-disturb\\]/{s=1;next} /^\\[/{s=0} s && /^invisible=1/{f=1} END{exit !f}" files/usr/share/atomic-hyprland/mako/core.ini'
 check grep -q '^default-timeout=6000' files/usr/share/atomic-hyprland/mako/core.ini
 check grep -q 'border-color={{ accent }}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
 check grep -q 'border-color={{ critical }}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl

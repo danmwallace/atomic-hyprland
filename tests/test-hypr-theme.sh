@@ -66,6 +66,10 @@ check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=tes
 check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && grep -q called-gsettings "$bin/log" && grep -q called-flatpak "$bin/log" && ! grep -q called-hyprctl "$bin/log" && ! grep -q called-systemctl "$bin/log"'
 check bash -c 'unset HYPR_THEME_NO_APPLY HYPRLAND_INSTANCE_SIGNATURE; bin=$(mktemp -d); for c in gsettings flatpak; do printf "#!/bin/sh\necho called >> %s\n" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && ! test -e "$bin/log"'
 check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in gsettings flatpak; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && test "$(cat "$HYPR_THEME_STATE/hook.out")" = fixture'
+# a colors.toml without a trailing newline keeps its last key
+check bash -c 'd=$(mktemp -d); printf "background = \"#0a0a0a\"\naccent = \"#39ff14\"" > $d/c.toml; echo "a={{ accent }}" > $d/t.tpl; test "$(hypr-theme render $d/t.tpl $d/c.toml)" = "a=#39ff14"'
+# the Flatpak override must expose the theme directory the gtk.css symlink points into
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in gsettings kvantummanager; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; printf "#!/bin/sh\necho \"\$@\" > %s/fp\n" "$bin" > "$bin/flatpak"; chmod +x "$bin/flatpak"; PATH="$bin:$PATH" hypr-theme apply && grep -q -- "--filesystem=xdg-config/atomic-hyprland/current/theme:ro" "$bin/fp"'
 # usage errors
 check bash -c '! hypr-theme >/dev/null 2>&1'
 check bash -c '! hypr-theme bogus >/dev/null 2>&1'

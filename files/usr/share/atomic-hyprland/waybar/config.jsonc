@@ -1,0 +1,191 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "margin-top": 8,
+  "margin-left": 8,
+  "margin-right": 8,
+  "spacing": 0,
+  "reload_style_on_change": true,
+  "modules-left": [
+    "hyprland/workspaces",
+    "hyprland/window"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "group/tray-drawer",
+    "bluetooth",
+    "network",
+    "pulseaudio",
+    "cpu",
+    "memory",
+    "custom/gpu",
+    "battery",
+    "idle_inhibitor",
+    "custom/notifications",
+    "custom/power"
+  ],
+  "hyprland/workspaces": {
+    "format": "{id}",
+    "on-click": "activate",
+    "on-scroll-up": "hyprctl dispatch workspace m-1",
+    "on-scroll-down": "hyprctl dispatch workspace m+1",
+    "persistent-workspaces": {
+      "*": 5
+    }
+  },
+  "hyprland/window": {
+    "max-length": 60,
+    "separate-outputs": true
+  },
+  "clock": {
+    "interval": 30,
+    "format": "{:%a %-d %b  %H:%M}",
+    "tooltip-format": "<tt><small>{calendar}</small></tt>",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "right",
+      "on-scroll": 1,
+      "format": {
+        "months": "<b>{}</b>",
+        "weeks": "<span alpha='60%'>W{}</span>",
+        "weekdays": "<span alpha='60%'>{}</span>",
+        "today": "<b><u>{}</u></b>"
+      }
+    },
+    "actions": {
+      "on-scroll-up": "shift_up",
+      "on-scroll-down": "shift_down"
+    }
+  },
+  "group/tray-drawer": {
+    "orientation": "inherit",
+    "drawer": {
+      "transition-duration": 150,
+      "transition-left-to-right": false
+    },
+    "modules": [
+      "custom/tray-toggle",
+      "tray"
+    ]
+  },
+  "custom/tray-toggle": {
+    "format": "󰅀",
+    "tooltip-format": "tray"
+  },
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  },
+  "bluetooth": {
+    "format": "󰂯",
+    "format-disabled": "󰂲",
+    "format-off": "󰂲",
+    "format-connected": "󰂱",
+    "tooltip-format": "bluetooth {status}",
+    "tooltip-format-connected": "bluetooth {device_alias}",
+    "on-click": "ghostty -e bluetoothctl"
+  },
+  "network": {
+    "interval": 5,
+    "format-wifi": "{icon}",
+    "format-ethernet": "󰈀",
+    "format-linked": "󰈀",
+    "format-disconnected": "󰤮",
+    "format-icons": [
+      "󰤯",
+      "󰤟",
+      "󰤢",
+      "󰤥",
+      "󰤨"
+    ],
+    "tooltip-format-wifi": "wifi {essid} {signalStrength}%  {ipaddr}",
+    "tooltip-format-ethernet": "ethernet {ifname}  {ipaddr}/{cidr}",
+    "tooltip-format-disconnected": "network disconnected",
+    "on-click": "nm-connection-editor"
+  },
+  "pulseaudio": {
+    "scroll-step": 5,
+    "format": "{icon}",
+    "format-bluetooth": "{icon}",
+    "format-muted": "󰝟",
+    "format-icons": {
+      "headphone": "󰋋",
+      "default": [
+        "󰕿",
+        "󰖀",
+        "󰕾"
+      ]
+    },
+    "tooltip-format": "volume {volume}%  {desc}",
+    "on-click": "pavucontrol",
+    "on-click-right": "pamixer -t"
+  },
+  "cpu": {
+    "interval": 2,
+    "format": "󰍛",
+    "tooltip-format": "cpu {usage}%  {avg_frequency} GHz  load {load}",
+    "on-click": "ghostty -e btop"
+  },
+  "memory": {
+    "interval": 5,
+    "format": "󰘚",
+    "tooltip-format": "memory {used:0.1f}G / {total:0.1f}G  swap {swapUsed:0.1f}G",
+    "on-click": "ghostty -e btop"
+  },
+  "custom/gpu": {
+    "exec": "/usr/libexec/atomic-hyprland/waybar/gpu",
+    "return-type": "json",
+    "interval": 5,
+    "format": "{}",
+    "tooltip": true
+  },
+  "battery": {
+    "interval": 30,
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{icon}",
+    "format-charging": "󰂄",
+    "format-plugged": "󰚥",
+    "format-icons": [
+      "󰁺",
+      "󰁻",
+      "󰁼",
+      "󰁽",
+      "󰁾",
+      "󰁿",
+      "󰂀",
+      "󰂁",
+      "󰂂",
+      "󰁹"
+    ],
+    "tooltip-format": "battery {capacity}%  {timeTo}  {power:0.1f} W"
+  },
+  "idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": {
+      "activated": "󰅶",
+      "deactivated": "󰾪"
+    },
+    "tooltip-format-activated": "idle inhibitor on",
+    "tooltip-format-deactivated": "idle inhibitor off"
+  },
+  "custom/notifications": {
+    "exec": "/usr/libexec/atomic-hyprland/waybar/notifications",
+    "return-type": "json",
+    "interval": 5,
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "makoctl mode -t do-not-disturb",
+    "on-click-right": "makoctl dismiss -a"
+  },
+  "custom/power": {
+    "format": "󰐥",
+    "tooltip-format": "power",
+    "on-click": "hypr-power"
+  }
+}

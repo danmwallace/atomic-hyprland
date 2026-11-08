@@ -188,7 +188,9 @@ check bash -c 'ghostty +version | grep -qi "^ghostty "'
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE
-check bash -c '! grep -q "custom/updates" /etc/skel/.config/waybar/config'
+check bash -c '! grep -q "custom/updates" /usr/share/atomic-hyprland/waybar/config.jsonc'
+check jq -e . /usr/share/atomic-hyprland/waybar/config.jsonc
+check test -f /usr/share/atomic-hyprland/alacritty/core.toml
 check test -L /etc/systemd/system/display-manager.service
 check test "$(readlink -f /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
 check grep -q '^/usr/bin/elvish$' /etc/shells

@@ -1,18 +1,4 @@
-# Image-managed. Colours come from the theme import; your settings go in local.toml.
+# Image-managed. Alacritty loads the importing file last, so this file holds no
+# settings of its own: defaults, then the theme, then your local.toml (wins).
 [general]
-import = ["~/.config/atomic-hyprland/current/theme/alacritty.toml", "~/.config/alacritty/local.toml"]
-live_config_reload = true
-
-[window]
-padding = { x = 8, y = 8 }
-decorations = "None"
-dynamic_padding = false
-
-[font]
-size = 11
-normal = { family = "JetBrainsMono Nerd Font", style = "Regular" }
-bold = { family = "JetBrainsMono Nerd Font", style = "Bold" }
-italic = { family = "JetBrainsMono Nerd Font", style = "Italic" }
-
-[terminal.shell]
-program = "/usr/bin/elvish"
+import = ["/usr/share/atomic-hyprland/alacritty/core.toml", "~/.config/atomic-hyprland/current/theme/alacritty.toml", "~/.config/alacritty/local.toml"]

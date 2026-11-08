@@ -16,23 +16,8 @@ stamp_src="${share}/stamp"
 stamp_dst="${home}/.config/atomic-hyprland/stamp"
 manifest="${share}/managed-files.txt"
 
-if [[ -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
-    echo "atomic-hyprland dotfiles: up to date ($(cat "${stamp_src}"))"
-    exit 0
-fi
-
 # read_list FILE: lines of a list file, minus blanks and comments; missing file is empty.
 read_list() { [[ -f "$1" ]] && grep -vE '^\s*(#|$)' "$1" || true; }
-
-# Retire first, so a retired path never shadows a managed one of the same name.
-while IFS= read -r rel; do
-    target="${home}/${rel}"
-    if [[ "${rel}" == */ ]]; then
-        [[ -d "${target}" ]] && rm -rf "${target}"
-    else
-        [[ -f "${target}" ]] && rm -f "${target}"
-    fi
-done < <(read_list "${share}/skel.retired")
 
 # install_entry REL: copy a skel file, or recreate a skel symlink with the same
 # (relative) target. Symlinks point into the theme directory, which may not
@@ -47,16 +32,50 @@ install_entry() {
     fi
 }
 
-while IFS= read -r rel; do
-    install_entry "${rel}"
-done < <(read_list "${manifest}")
-
 # The user's files: created once from skel (a home that predates the image
-# never got them), never rewritten afterwards.
+# never got them, and a deleted one would otherwise break its app), never
+# rewritten. This runs on every login, before the stamp check.
 while IFS= read -r rel; do
     [[ -e "${home}/${rel}" || -L "${home}/${rel}" ]] && continue
     install_entry "${rel}"
 done < <(read_list "${share}/skel.local")
+
+if [[ -f "${stamp_dst}" ]] && cmp -s "${stamp_src}" "${stamp_dst}"; then
+    echo "atomic-hyprland dotfiles: up to date ($(cat "${stamp_src}"))"
+    exit 0
+fi
+
+# Retire first, so a retired path never shadows a managed one of the same
+# name. This is the only place the image deletes anything under $HOME, so the
+# list is checked: relative, under .config/<something>, no "..", and a path
+# that is itself a symlink is unlinked, never followed.
+retire_entry() {
+    local rel="${1%/}" target
+    if [[ "${rel}" != .config/?* || "${rel}" == *..* || "${rel}" == */ ]]; then
+        echo "atomic-hyprland dotfiles: refusing retired path '${1}'" >&2
+        return 1
+    fi
+    target="${home}/${rel}"
+    if [[ -L "${target}" ]]; then
+        rm -f "${target}"
+    elif [[ "${1}" == */ && -d "${target}" ]]; then
+        rm -rf "${target}"
+    elif [[ "${1}" != */ && -f "${target}" ]]; then
+        rm -f "${target}"
+    fi
+}
+retire_failed=0
+while IFS= read -r rel; do
+    retire_entry "${rel}" || retire_failed=1
+done < <(read_list "${share}/skel.retired")
+if (( retire_failed )); then
+    echo "atomic-hyprland dotfiles: skel.retired has bad entries; nothing retired or installed" >&2
+    exit 1
+fi
+
+while IFS= read -r rel; do
+    install_entry "${rel}"
+done < <(read_list "${manifest}")
 
 install -D -m 0644 "${stamp_src}" "${stamp_dst}"
 echo "atomic-hyprland dotfiles: synced to $(cat "${stamp_src}")"

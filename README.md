@@ -52,6 +52,7 @@ hypr-theme list                 # monochrome-green monochrome-blue tokyo-night n
 hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland, restarts bar/mako/swaybg, pushes gsettings
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
+hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
 ```
 
 Your own theme: copy a shipped one to `~/.config/atomic-hyprland/themes/<name>/`
@@ -69,13 +70,17 @@ with the theme name as `$1`.
   `hypr/local.lua`, `waybar/local.jsonc`, `waybar/local.css`, `mako/local`,
   `wofi/local.css`, `ghostty/local`, `alacritty/local.toml`,
   `hypr/hyprlock.local.conf`, `hypr/hypridle.local.conf`. Each is included
-  last by its image-managed counterpart, so your settings win without merging.
+  by its image-managed counterpart in the order that makes yours win: waybar
+  and Alacritty read the *first* definition, so their skel files are thin
+  include lists with yours before the shipped defaults; the others include
+  yours last. hyprlock and hypridle blocks add up rather than replace, so a
+  different idle timeout means a user template override, not a local file.
 - `skel.retired`: paths an earlier image wrote and this one no longer ships
   (the role's `waybar/config`, `hypr/conf/*.lua`, wofi `style-*.css`, nwg
   directories); removed on the next update so they cannot shadow the new files.
 
-The theme is rendered before the compositor starts (`atomic-hyprland-theme.service`,
-ordered before uwsm's `wayland-session-pre@Hyprland.target`); `hyprland.lua`
+The theme is rendered before the compositor starts (`atomic-hyprland-theme@.service`,
+a template enabled against uwsm's `wayland-session-pre@.target`); `hyprland.lua`
 also carries a built-in fallback palette. Waybar, mako and hypridle run from the
 user units their packages ship; the image adds `swaybg.service` and a two-minute
 battery warning timer, all bound to `graphical-session.target`.

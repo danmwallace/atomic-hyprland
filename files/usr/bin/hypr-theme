@@ -50,7 +50,7 @@ list_themes() {
 # Build the sed script that renders one colors.toml.
 sed_script_for() {
     local colors="$1" key value r g b
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "${line}" ]]; do
         [[ "${line}" =~ ^[[:space:]]*([a-z0-9_]+)[[:space:]]*=[[:space:]]*\"?([^\"]*)\"?[[:space:]]*$ ]] || continue
         key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
         if [[ "${value}" =~ ^#([0-9a-fA-F]{6})$ ]]; then
@@ -186,8 +186,10 @@ apply_settings() {
         gsettings set org.gnome.desktop.interface icon-theme "${icons}" >/dev/null 2>&1 || true
         [[ -n "${cursor}" ]] && gsettings set org.gnome.desktop.interface cursor-theme "${cursor}" >/dev/null 2>&1 || true
     fi
+    # gtk.css in the sandbox is a symlink into the theme directory, so expose that too.
     have flatpak && flatpak override --user --env=GTK_THEME=Adwaita:dark \
-        --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro >/dev/null 2>&1 || true
+        --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro \
+        --filesystem=xdg-config/atomic-hyprland/current/theme:ro >/dev/null 2>&1 || true
     if have kvantummanager && [[ -d "${HOME}/.config/Kvantum/atomic-hyprland" ]]; then
         kvantummanager --set atomic-hyprland >/dev/null 2>&1 || true
     fi

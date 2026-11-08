@@ -110,6 +110,23 @@ expect "old nwg-drawer removed" '! test -e "$HOME/.config/nwg-drawer"'
 expect "user local.jsonc untouched by retirement" 'test "$(cat "$HOME/.config/waybar/local.jsonc")" = mine'
 expect "a retired file entry never removes a directory" 'printf ".config/waybar\n" > "$share/skel.retired"; mkdir -p "$HOME/.config/waybar"; echo x > "$share/stamp"; "$sync"; test -d "$HOME/.config/waybar"'
 
+# 8b. a retired directory that is a symlink: the link is removed, its target is untouched
+export HOME="$(mktemp -d)"; real="$(mktemp -d)"; echo keep > "${real}/mine.lua"
+mkdir -p "$HOME/.config/hypr"; ln -s "${real}" "$HOME/.config/hypr/conf"
+printf '.config/hypr/conf/\n' > "${share}/skel.retired"; echo r1 > "${share}/stamp"; "${sync}"
+expect "retired symlinked dir: link removed" '! test -L "$HOME/.config/hypr/conf"'
+expect "retired symlinked dir: target untouched" 'test -f "${real}/mine.lua"'
+# 8c. malformed retire entries are refused and nothing is removed
+export HOME="$(mktemp -d)"; mkdir -p "$HOME/.config/keep"; echo x > "$HOME/.config/keep/f"
+printf '/\n.config/\n.config/../.bashrc\n/etc/passwd\nnotdotconfig/x\n' > "${share}/skel.retired"; echo r2 > "${share}/stamp"
+rc=0; out="$("${sync}" 2>&1)" || rc=$?
+expect "malformed retire entries are rejected" '[[ "$out" == *"refusing retired path"* ]]'
+expect "home untouched after rejected entries" 'test -f "$HOME/.config/keep/f" && test -d "$HOME/.config"'
+printf '' > "${share}/skel.retired"
+# 8d. a deleted local file comes back on the next login even when the stamp is unchanged
+export HOME="$(mktemp -d)"; "${sync}"; rm "$HOME/.config/waybar/local.jsonc"; "${sync}"
+expect "deleted local file recreated without a stamp change" 'test -f "$HOME/.config/waybar/local.jsonc"'
+
 # 9. theme unit ordered before the compositor and enabled for every user
 unit_expect "theme unit enabled for every uwsm session instance" 'test -L /etc/systemd/user/wayland-session-pre@.target.wants/atomic-hyprland-theme@.service'
 unit_expect "theme unit runs after dotfiles" 'grep -q "^After=atomic-hyprland-dotfiles.service" /usr/lib/systemd/user/atomic-hyprland-theme@.service'
@@ -126,6 +143,11 @@ expect "ensure-theme rendered the default theme" 'test -f "$HOME/.config/atomic-
 expect "ensure-theme recorded the stamp" 'cmp -s "$share/stamp" "$HOME/.config/atomic-hyprland/current/.stamp"'
 out="$(HYPR_THEME_DEFAULT=t "${ensure}")"
 expect "ensure-theme no-op on same stamp" '[[ "$out" == *"up to date"* ]]'
+# a chosen theme that no longer exists falls back to the default instead of failing every login
+echo gone > "$HOME/.config/atomic-hyprland/current/theme.name"; echo again > "${share}/stamp"
+rc=0; out="$(HYPR_THEME_DEFAULT=t "${ensure}" 2>&1)" || rc=$?
+expect "ensure-theme falls back when the chosen theme is gone" 'test $rc = 0 && [[ "$out" == *"falling back"* ]]'
+expect "ensure-theme fallback records the default" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = t'
 echo other > "${share}/stamp"; echo 'y={{ background }}' > "${share}/themed/y.tpl"
 HYPR_THEME_DEFAULT=t "${ensure}"
 expect "ensure-theme re-renders when the image stamp changes" 'test -f "$HOME/.config/atomic-hyprland/current/theme/y"'

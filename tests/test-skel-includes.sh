@@ -46,8 +46,13 @@ check grep -qx 'font-size = 11' $skel/ghostty/config
 check grep -qx 'window-padding-x = 8' $skel/ghostty/config
 check test -f $skel/ghostty/local
 # alacritty
-check grep -q 'import = \["~/.config/atomic-hyprland/current/theme/alacritty.toml", "~/.config/alacritty/local.toml"\]' $skel/alacritty/alacritty.toml
-check grep -q 'JetBrainsMono Nerd Font' $skel/alacritty/alacritty.toml
+# alacritty loads the importing file LAST, so the skel file carries only the import list: core, theme, local
+check grep -q 'import = \["/usr/share/atomic-hyprland/alacritty/core.toml", "~/.config/atomic-hyprland/current/theme/alacritty.toml", "~/.config/alacritty/local.toml"\]' $skel/alacritty/alacritty.toml
+check bash -c '! grep -qE "^\[(font|window|terminal)" '"$skel"'/alacritty/alacritty.toml'
+check grep -q 'JetBrainsMono Nerd Font' $share/alacritty/core.toml
+check bash -c '! grep -q "terminal.shell" '"$share"'/alacritty/core.toml'   # the login shell decides
+# btop writes its own config back: it is the user's after the first copy
+check grep -qx '.config/btop/btop.conf' $share/skel.local
 check test -f $skel/alacritty/local.toml
 # btop
 check test "$(readlink $skel/btop/themes/current.theme)" = ../../atomic-hyprland/current/theme/btop.theme

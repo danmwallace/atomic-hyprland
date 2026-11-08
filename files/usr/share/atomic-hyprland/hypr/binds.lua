@@ -22,10 +22,11 @@ hl.bind(mod .. " + V",         hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mod .. " + F",         hl.dsp.window.fullscreen({ action = "toggle", mode = "fullscreen" }))
 hl.bind(mod .. " + SHIFT + F", hl.dsp.window.fullscreen({ action = "toggle", mode = "maximized" }))
 hl.bind(mod .. " + P",         hl.dsp.window.pseudo({ action = "toggle" }))
-hl.bind(mod .. " + J",         hl.dsp.layout("togglesplit"))
-hl.bind(mod .. " + L",         hl.dsp.exec_cmd(lock))
-hl.bind(mod .. " + SHIFT + L", hl.dsp.exec_cmd(power))
-hl.bind(mod .. " + ESCAPE",    hl.dsp.exec_cmd(power))
+-- Hyprland matches keys case-insensitively, so letters used by the vim focus
+-- keys below (h j k l) are not reused with SUPER alone.
+hl.bind(mod .. " + U",              hl.dsp.layout("togglesplit"))
+hl.bind(mod .. " + ESCAPE",         hl.dsp.exec_cmd(lock))
+hl.bind(mod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd(power))
 
 -- Screenshots
 hl.bind(mod .. " + SHIFT + S",     hl.dsp.exec_cmd("grim -g \"$(slurp)\" - | wl-copy && wl-paste | cliphist store"))
@@ -55,8 +56,8 @@ for i = 1, 10 do
   hl.bind(mod .. " + SHIFT + " .. key,        hl.dsp.window.move({ workspace = i, follow = true }))
   hl.bind(mod .. " + CTRL + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
 end
-hl.bind(mod .. " + S",          hl.dsp.workspace.toggle_special("magic"))
-hl.bind(mod .. " + SHIFT + S",  hl.dsp.window.move({ workspace = "special:magic" }))
+hl.bind(mod .. " + W",          hl.dsp.workspace.toggle_special("magic"))
+hl.bind(mod .. " + SHIFT + W",  hl.dsp.window.move({ workspace = "special:magic" }))
 hl.bind(mod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
 hl.bind(mod .. " + mouse:272",  hl.dsp.window.drag(),   { mouse = true })
