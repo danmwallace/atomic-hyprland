@@ -96,7 +96,7 @@ check grep -q 'XCURSOR_THEME", palette.cursor_theme' $share/hypr/env.lua
 check grep -q 'JetBrainsMono Nerd Font' files/etc/fonts/local.conf
 check grep -q 'Inter' files/etc/fonts/local.conf
 check bash -c 'xmllint --noout files/etc/fonts/local.conf 2>/dev/null || python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(\"files/etc/fonts/local.conf\")"'
-check bash -c 'for p in papirus-icon-theme breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-emoji-color-fonts flatpak; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
+check bash -c 'for p in papirus-icon-theme papirus-icon-theme-dark breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-color-emoji-fonts flatpak; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
 # SDDM theme sources and their build-time render
 sddm=files/usr/share/sddm/themes/atomic-hyprland
 check test -f $sddm/Main.qml

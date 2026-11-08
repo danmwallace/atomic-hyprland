@@ -70,7 +70,7 @@ check test -L /etc/skel/.config/btop/themes/current.theme
 check grep -q 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' /etc/skel/.config/hypr/hyprlock.conf
 check bash -c '! grep -rq earth_from_space /etc/skel /usr/share/atomic-hyprland'
 # GTK, Qt, Flatpak, icons, cursor, fonts
-check rpm -q papirus-icon-theme breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-emoji-color-fonts flatpak
+check rpm -q papirus-icon-theme papirus-icon-theme-dark breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-color-emoji-fonts flatpak
 check bash -c 'fc-match "JetBrainsMono Nerd Font" | grep -q JetBrainsMono'
 check bash -c 'fc-match monospace | grep -q JetBrainsMono'
 check bash -c '! fc-list | grep -q RobotoMono'

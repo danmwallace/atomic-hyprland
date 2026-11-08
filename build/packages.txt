@@ -83,13 +83,14 @@ btop
 
 # Look: icons, cursor, GTK/Qt theming plumbing, fonts, Flatpak overrides
 papirus-icon-theme
+papirus-icon-theme-dark
 breeze-cursor-theme
 kvantum
 kvantum-qt5
 gsettings-desktop-schemas
 dconf
 rsms-inter-fonts
-google-noto-emoji-color-fonts
+google-noto-color-emoji-fonts
 flatpak
 # browser: the Claude extension needs native messaging, which the Flatpak sandbox blocks
 chromium
