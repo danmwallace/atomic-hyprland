@@ -58,6 +58,17 @@ check bash -c '/usr/libexec/atomic-hyprland/waybar/notifications | jq -e .text'
 check grep -qx .config/waybar/local.jsonc /usr/share/atomic-hyprland/skel.local
 check bash -c '! grep -q local.jsonc /usr/share/atomic-hyprland/managed-files.txt'
 check grep -qx .config/waybar/config /usr/share/atomic-hyprland/skel.retired
+# Launcher, power menu, lock screen, terminals, btop
+check rpm -q btop
+check test -x /usr/bin/hypr-power
+check bash -c '! rpm -q wlogout'
+check test -f /etc/skel/.config/wofi/style.css
+check bash -c '! test -e /etc/skel/.config/wofi/style-power.css'
+check test -f /etc/skel/.config/ghostty/config
+check test -f /etc/skel/.config/alacritty/alacritty.toml
+check test -L /etc/skel/.config/btop/themes/current.theme
+check grep -q 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' /etc/skel/.config/hypr/hyprlock.conf
+check bash -c '! grep -rq earth_from_space /etc/skel /usr/share/atomic-hyprland'
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
 check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so
@@ -113,6 +124,9 @@ out="$(verify_hypr)"
 check grep -q "@define-color accent #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/waybar.css
 check grep -q "^border-color=#39ff14" /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini
 check test -L /tmp/hv/.config/atomic-hyprland/current/background
+for f in wofi.css hyprlock.conf ghostty.conf alacritty.toml btop.theme hyprland.lua; do
+    check test -s /tmp/hv/.config/atomic-hyprland/current/theme/$f
+done
 # 0.56 printed "Using lua config"; 0.57 prints "Regular config at <path>/hyprland.lua".
 expect_out "hyprland picked the Lua config" present 'Using lua config|Regular config at .*/hyprland\.lua'
 expect_out "every hl.config key is known to this Hyprland" present 'PROBE config keys ok'

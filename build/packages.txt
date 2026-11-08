@@ -78,3 +78,5 @@ file
 # notifications
 mako
 libnotify
+# system monitor (themed through hypr-theme)
+btop

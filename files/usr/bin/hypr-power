@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+# Power menu in wofi: lock, suspend, logout, reboot, shutdown. Replaces wlogout.
+set -uo pipefail
+
+choice="$(printf '󰌾 lock\n󰒲 suspend\n󰍃 logout\n󰜉 reboot\n󰐥 shutdown\n' \
+    | wofi --show dmenu --prompt power --width 300 --lines 5 --insensitive 2>/dev/null)" || exit 0
+
+case "${choice##* }" in
+    lock)     exec hyprlock ;;
+    suspend)  exec systemctl suspend ;;
+    logout)   exec uwsm stop ;;
+    reboot)   exec systemctl reboot ;;
+    shutdown) exec systemctl poweroff ;;
+    *) exit 0 ;;
+esac

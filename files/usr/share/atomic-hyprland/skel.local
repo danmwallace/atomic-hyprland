@@ -5,3 +5,7 @@
 .config/waybar/local.css
 .config/mako/local
 .config/hypr/hypridle.local.conf
+.config/wofi/local.css
+.config/hypr/hyprlock.local.conf
+.config/ghostty/local
+.config/alacritty/local.toml
