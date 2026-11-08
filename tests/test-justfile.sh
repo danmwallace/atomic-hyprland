@@ -43,7 +43,9 @@ check bash -c '! grep -q THEME Containerfile'
 check bash -c 'just --show iso | grep -q -- "--type anaconda-iso"'
 check bash -c 'just --show iso | grep -q -- "--rootfs btrfs"'
 check bash -c 'just --show iso | grep -q "output/bootiso/install.iso"'
-check bash -c '! just --show iso | grep -qiE "unattended|--config"'
-check bash -c '! grep -rqiE "unattended|clearpart|zerombr|autopart" build/ --include=*.toml'
+check bash -c '! just --show iso | grep -qi unattended'
+check bash -c 'just --show iso | grep -q -- "-v ./build/iso.toml:/config.toml:ro"'
+check bash -c 'just --show iso | grep -q "bash tests/test-iso.sh output/bootiso/install.iso"'
+check bash -c '! cat build/*.toml | grep -vE "^\s*#" | grep -qiE "unattended|clearpart|zerombr|autopart"'
 
 exit "$fail"

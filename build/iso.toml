@@ -1,0 +1,19 @@
+# bootc-image-builder config for `just iso`.
+#
+# Supplying our own kickstart is what makes the installer interactive. Without
+# one, BIB writes `clearpart --all` + `autopart` + `reboot` and installs
+# unattended over every disk (found by booting it in a VM, 2026-11-08). With
+# this kickstart Anaconda stops for the disk, the "Encrypt my data" (LUKS)
+# passphrase, and the user account; language, keyboard and time zone too.
+#
+# The %post runs after BIB's own, which points the installed system at the
+# image with no signature checks; ours re-points it at the signed transport,
+# so the very first update is already verified with cosign.pub.
+[customizations.installer.kickstart]
+contents = """
+graphical
+
+%post --erroronfail
+bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ghcr.io/danmwallace/atomic-hyprland:44
+%end
+"""

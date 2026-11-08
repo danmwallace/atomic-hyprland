@@ -28,6 +28,7 @@ test:
     bash tests/test-waybar.sh
     bash tests/test-skel-includes.sh
     bash tests/test-binds.sh
+    bash tests/test-iso.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
@@ -65,22 +66,22 @@ qcow2:
         build --type qcow2 --rootfs btrfs --chown "$(id -u):$(id -g)" {{image}}:{{tag}}
     ls -lh output/qcow2/disk.qcow2
 
-# Installer ISO for bare metal (output/bootiso/install.iso, write it to a USB
+# Installer ISO for bare metal (output/bootiso/install.iso; write it to a USB
 # stick). Interactive Anaconda: you pick the disk, set the LUKS passphrase and
-# create your user; nothing is wiped without asking (BIB only installs
-# unattended when a config sets installer.unattended, and none here does).
-# Like qcow2 it needs root podman. The installed system tracks the image
-# without signature checks (BIB strips them from the embedded copy); move it to
-# the signed transport after the first boot:
-#   sudo bootc switch --enforce-container-sigpolicy ghcr.io/danmwallace/atomic-hyprland:44
+# create your user. build/iso.toml supplies the kickstart that makes it so;
+# without it BIB installs unattended over every disk. tests/test-iso.sh checks
+# the kickstarts inside the built ISO and fails the recipe if they could wipe
+# a disk without asking. Needs root podman, like qcow2.
 iso:
     mkdir -p output
     sudo podman pull {{image}}:{{tag}}
     sudo podman run --rm -it --privileged --security-opt label=type:unconfined_t \
         -v ./output:/output \
+        -v ./build/iso.toml:/config.toml:ro \
         -v /var/lib/containers/storage:/var/lib/containers/storage \
         quay.io/centos-bootc/bootc-image-builder:latest \
         build --type anaconda-iso --rootfs btrfs --chown "$(id -u):$(id -g)" {{image}}:{{tag}}
+    bash tests/test-iso.sh output/bootiso/install.iso
     ls -lh output/bootiso/install.iso
 
 # Lint the workflow (actionlint) via podman; nothing installed locally
