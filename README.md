@@ -87,7 +87,11 @@ without the hardware: `hypr-test` has no GPU and runs the same image.
   `build/images.env`. `build/25-nvidia.sh` bind-mounts its RPMs and runs
   ublue's own `nvidia-install.sh`: kernel module, userspace driver,
   `nvidia-container-toolkit`, `egl-wayland`, `libva-nvidia-driver` and the
-  SELinux module for GPU containers. No 32-bit libraries. Three third-party
+  SELinux module for GPU containers (`nvidia_container_t`, which turned out
+  not to be needed: with CDI the device nodes inside the container are
+  `container_file_t`, which the default `container_t` can open and mmap and
+  `nvidia_container_t` can only open, so CUDA fails under it while
+  `nvidia-smi` works). No 32-bit libraries. Three third-party
   repos are enabled only for that step (negativo17 `fedora-nvidia`, NVIDIA's
   toolkit repo, the `ublue-os/staging` COPR).
 - **Kernel match.** The module is built for one exact kernel. `just
@@ -173,11 +177,15 @@ First graphical login needs a password: `ssh dwallace@192.168.70.14 sudo passwd 
    bootc-fetch-apply-updates.service`, then `bootc status` shows a staged
    deployment and `uptime` shows no reboot.
 
-### Alienware rebase (from Bazzite; not yet run)
+### Alienware rebase (from Bazzite; done 2026-11-07)
 
-The Alienware (10.10.70.27, RTX 2070) runs base Bazzite with NVIDIA drivers,
-itself a bootc image, so no reinstall is needed. `/var` and `/home` are kept in
-both directions. Do this at the machine, not remotely.
+The Alienware is an m15 R3 laptop (172.16.20.14 on Wi-Fi, RTX 2070 Mobile plus
+an Intel iGPU with no outputs, LUKS root on btrfs with `home` and `var`
+subvolumes). It ran base Bazzite with NVIDIA drivers, itself a bootc image, so
+no reinstall was needed. `/var` and `/home` are kept in both directions.
+Someone must be at the machine: the LUKS passphrase is typed at every boot.
+The steps below are what actually worked; deviations from the plan are noted
+inline.
 
 0. Pre-flight on Bazzite, read-only:
 
@@ -190,6 +198,23 @@ both directions. Do this at the machine, not remotely.
    flatpak list
    mokutil --sb-state         # Secure Boot?
    ```
+
+   If `rpm-ostree status` shows `LayeredPackages`, `bootc switch` will refuse
+   ("local rpm-ostree modifications"). Either `rpm-ostree reset` and reboot
+   first, or do the switch with rpm-ostree in one go (what was done; same
+   transport and policy as `bootc switch --enforce-container-sigpolicy`):
+
+   ```bash
+   sudo rpm-ostree rebase --uninstall <pkg>... ostree-image-signed:docker://ghcr.io/danmwallace/atomic-hyprland:44
+   ```
+
+   Caveat of that path: only bootc reads `/usr/lib/bootc/kargs.d`, so the
+   three NVIDIA kargs are missing until the first `bootc upgrade` deploys
+   through bootc. Nothing breaks meanwhile (the driver's modprobe.d defaults
+   cover both), but check `/proc/cmdline` after that upgrade. Also keep the
+   laptop from suspending during the pull: run it under
+   `systemd-inhibit --what=sleep:idle` (a KDE idle timeout killed the first
+   attempt).
 
    If Secure Boot is enabled, the NVIDIA module (signed with ublue's akmods
    key) loads only if that key is enrolled: `mokutil --test-key
@@ -232,8 +257,12 @@ both directions. Do this at the machine, not remotely.
    nvidia-smi                        # lists the RTX 2070
    systemctl --failed                # empty
    cat /proc/cmdline                 # has our three arguments; Bazzite's own kargs carry over too, duplicates are harmless
-   sudo semodule -l | grep nvidia_container
    ```
+
+   Expect one failed unit on a Bazzite-born host: `systemd-remount-fs`,
+   because Bazzite's `/etc/fstab` (kept, it mounts the `home` and `var`
+   subvolumes) has a line for `/` that cannot remount a composefs root
+   (`overlay: No changes allowed in reconfigure`). Delete that one line.
 
    Then log in through SDDM to a Hyprland session.
 
@@ -249,7 +278,8 @@ both directions. Do this at the machine, not remotely.
    sudo ostree admin config-diff | grep -E "policy.json|atomic-hyprland"   # prints nothing
    ```
 
-4. Create `~/.config/hypr/local.lua` (never managed by the image):
+4. Create `~/.config/hypr/local.lua` (never managed by the image) before the
+   first graphical login:
 
    ```lua
    hl.env("LIBVA_DRIVER_NAME", "nvidia")
@@ -258,11 +288,14 @@ both directions. Do this at the machine, not remotely.
    hl.config({ cursor = { no_hardware_cursors = true } })
    ```
 
-   If the integrated and NVIDIA cards fight over ordering (black screen or the
-   wrong output), add `hl.env("AQ_DRM_DEVICES", "/dev/dri/cardN")` for the
-   NVIDIA card here.
+   Do not set `AQ_DRM_DEVICES` unless Hyprland picks the wrong card: Aquamarine
+   skips a card without KMS outputs on its own, and it splits the variable on
+   `:`, so a `/dev/dri/by-path/pci-0000:01:00.0-card` value is read as three
+   nonexistent devices and the session dies with "Found no gpus to use"
+   (crash reports under `~/.cache/hyprland/`). If it is ever needed, use a
+   `/dev/dri/cardN` path and accept that the number can change.
 
-5. In ansible-homelab-cfg: add `alienware` (10.10.70.27) to `hypr_desktops`,
+5. In ansible-homelab-cfg: add `alienware` (172.16.20.14) to `hypr_desktops`,
    create `host_vars/alienware/ollama.yml` with `hypr_desktop_ollama_gpu: true`,
    and run `playbooks/fedora-hypr-desktop.yml --limit alienware` (use `--check
    --skip-tags hermes` for the first dry run). Then:
@@ -272,9 +305,11 @@ both directions. Do this at the machine, not remotely.
    sudo podman logs ollama | grep -i -E "cuda|gpu"
    ```
 
-   If Ollama reports CPU only, check the container's SELinux label first:
-   `sudo podman inspect ollama --format '{{.ProcessLabel}}'` should contain
-   `nvidia_container_t`.
+   If Ollama reports CPU only while `nvidia-smi` works inside the container,
+   it is the SELinux domain: the drop-in must not set
+   `SecurityLabelType=nvidia_container_t` (see the NVIDIA section). Under
+   `container_t` the model loads into VRAM; qwen2.5-coder:7b ran at 60 tok/s
+   on the RTX 2070 against 9.7 on the CPU.
 
 6. Way back: `sudo bootc rollback && sudo systemctl reboot` returns to
    Bazzite. Restore `/etc/containers/policy.json.bazzite` if you stay there.
