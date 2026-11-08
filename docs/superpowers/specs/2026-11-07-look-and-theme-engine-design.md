@@ -1,6 +1,6 @@
 # Look and theme engine — design
 
-Date: 2026-11-07. Status: approved in conversation by Dan; builder check pending.
+Date: 2026-11-07. Status: approved in conversation by Dan (mockups 2026-11-07); builder check done, its four questions settled below under "Builder-check decisions".
 
 ## Intent
 
@@ -189,12 +189,40 @@ in the home directory never need to change (same promise as Omarchy's
 ### First login and image updates
 
 `sync-dotfiles` (existing, runs from `atomic-hyprland-dotfiles.service` at
-login) lays down `skel/` as today and then, if `current/theme/` is missing or
-`current/theme.name` is set but the image version stamp changed, runs
-`hypr-theme set "$(cat theme.name 2>/dev/null || echo monochrome-green)"
---keep-background`. The chosen theme survives updates; a template fix in a
-new image is applied at the next login. `local.lua` and the user overlay are
-never written by the image.
+login) lays down `skel/` as today. A second user unit,
+`atomic-hyprland-theme.service`, runs `hypr-theme set "$(cat theme.name
+2>/dev/null || echo monochrome-green)" --keep-background --no-apply` when
+`current/theme/` is missing or the image version stamp changed; it is
+`After=atomic-hyprland-dotfiles.service` and ordered **before the compositor**
+through uwsm (`WantedBy=wayland-session-pre@Hyprland.target`,
+`Before=wayland-session-pre@Hyprland.target`), so Hyprland never reads a
+missing theme file. As a second line, `hyprland.lua` wraps the theme
+`dofile` in `pcall` and falls back to a built-in copy of the default palette.
+The chosen theme survives updates; a template fix in a new image is applied
+at the next login.
+
+**Ownership of files in the home directory (Goal 3), made explicit:**
+
+- *Image-managed*: every path in `skel.manifest`. Overwritten on every image
+  update. Dan does not edit these.
+- *Dan's*: `local.lua`, the `~/.config/atomic-hyprland/themes/` and `themed/`
+  overlays, and one `local` counterpart per image-managed config, created
+  empty once by `sync-dotfiles` and never written again (same contract as
+  `local.lua`): `waybar/local.jsonc` (waybar `"include"`), `waybar/local.css`
+  (`@import`, last), `ghostty/local` (`config-file = ?…`), `alacritty/local.toml`
+  (`import`, last), `mako/local` (`include=`, last), `wofi/local.css`,
+  `hypr/hyprlock.local.conf` and `hypr/hypridle.local.conf` (`source =`);
+  btop has none (its config is the user's own after the first copy). Later
+  entries win, so a local file overrides the shipped one without merging.
+- *Retired*: paths an earlier image wrote and this one no longer ships are
+  listed in `skel.retired` and removed by `sync-dotfiles` (exact paths, no
+  globs beyond `hypr/conf/*.lua`): `waybar/config`, `waybar/mediaplayer.py`,
+  `hypr/conf/*.lua`, `hypr/scripts/sleep.sh`, `hypr/xdg-portal-hyprland`,
+  `wofi/style-power.css`, `wofi/style-run.css`, `nwg-drawer/`,
+  `nwg-dock-hyprland/`. Needed because waybar reads `config` before
+  `config.jsonc` in the same directory: without the removal the Alienware and
+  hypr-test keep loading the old Nord bar forever. `local*` files are never
+  on this list.
 
 ## The look, pinned
 
@@ -220,8 +248,9 @@ Values the builder implements as given; everything not listed is theirs.
   `foreground_dim`), `hyprland/window` (`max-length 60`, dim). Center:
   `clock` (`{:%a %-d %b  %H:%M}`, tooltip calendar). Right, in order:
   `group/tray-drawer` (tray collapsed behind a `󰅀` toggle), `bluetooth`,
-  `network`, `pulseaudio`, `cpu`, `memory`, `temperature` (GPU via the
-  `nvidia` hwmon when present, else the CPU package), `battery`, `idle_inhibitor`,
+  `network`, `pulseaudio`, `cpu`, `memory`, `custom/gpu` (a script reading
+  `nvidia-smi --query-gpu=temperature.gpu` when a card is present, else the
+  CPU package temperature; the open driver exposes no hwmon), `battery`, `idle_inhibitor`,
   `custom/notifications` (mako do-not-disturb state), separator, `custom/power`
   (`hypr-power`). Every right module: `format "{icon}"` or a single glyph,
   **no number in the default format**, full figures in `tooltip-format`,
@@ -253,6 +282,14 @@ Values the builder implements as given; everything not listed is theirs.
   battery only; `before_sleep` locks; lid close locks (bindl in binds).
 - **Terminals**: Ghostty default terminal (`$TERMINAL`), Alacritty themed
   too. Font JetBrainsMono Nerd Font 11; padding 8.
+- **Flatpak apps** (Firefox, Thunderbird, LibreOffice from the control repo's
+  flatpak task) are in Goal 1: dark mode reaches them through the settings
+  portal (`xdg-desktop-portal-gtk`, already running); `hypr-theme set` also
+  runs, idempotently, `flatpak override --user --env=GTK_THEME=Adwaita:dark
+  --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro` so
+  the accent `gtk.css` reaches GTK3 Flatpaks. Icons inside the sandbox may
+  remain Adwaita; the builder decides whether a Papirus icon extension from
+  Flathub is worth adding to the control repo's flatpak list.
 - **GTK**: `gsettings` `color-scheme prefer-dark`, `gtk-theme Adwaita-dark`,
   `icon-theme Papirus-Dark`, `cursor-theme breeze_cursors`, `font-name
   "Inter 10"` (Fedora `rsms-inter-fonts`; builder may pick Cantarell if
@@ -332,6 +369,25 @@ Gate on hypr-test (no GPU) as before: greeter screenshot (no keyboard
 overlay, correct colours) and a Hyprland session screenshot (bar island,
 green border). Then the Alienware by `bootc upgrade` and a visual check by
 Dan.
+
+## Builder-check decisions (2026-11-07, Claude's calls; Dan may veto)
+
+1. Flatpak apps are in scope with the minimal mechanism above.
+2. File ownership in the home directory as spelled out under "First login
+   and image updates": image-managed files are overwritten, each has a
+   never-written `local` counterpart, retired paths are deleted.
+3. Retired image-managed files are removed from existing homes by
+   `sync-dotfiles` (list above). This is the one call that deletes files
+   under `$HOME`; every file on the list was written by a previous image.
+4. The first-login race is solved by ordering the render before the
+   compositor through uwsm, plus a `pcall` fallback palette in `hyprland.lua`.
+   `hypr-theme` skips every apply step when `HYPRLAND_INSTANCE_SIGNATURE` is
+   unset (SSH logins, the `hermes` user).
+5. waybar, mako, swaybg and hypridle run as systemd user units bound to the
+   uwsm session target (`wayland-session@Hyprland.target`), not `exec_cmd`
+   from `autostart.lua`; `hypr-theme set` restarts them with `systemctl --user`.
+6. GPU temperature via `nvidia-smi` in a `custom/gpu` module.
+7. `gsettings-desktop-schemas` and `dconf` are added to the package list.
 
 ## Left to the builder
 
