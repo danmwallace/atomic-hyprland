@@ -39,6 +39,12 @@ done
 check test -f $share/themed/wallpaper.svg.tpl
 check grep -q '{{ background_glow }}' $share/themed/wallpaper.svg.tpl
 check grep -q 'width="3840" height="2160"' $share/themed/wallpaper.svg.tpl
+# the default glow is visible (Dan, 2026-11-08: "a bit too dark, I can barely see the gradient"),
+# and it fades softly over most of the screen to the theme background at the edges
+check test "$(grep -E '^background_glow = ' $share/themes/monochrome-green/colors.toml)" = 'background_glow = "#2a2a2a"'
+check grep -q 'offset="85%" stop-color="{{ background_glow }}" stop-opacity="0"' $share/themed/wallpaper.svg.tpl
+check grep -q '<rect width="3840" height="2160" fill="{{ background }}"/>' $share/themed/wallpaper.svg.tpl
+check grep -q 'background_glow = "2a2a2a"' files/etc/skel/.config/hypr/hyprland.lua   # fallback palette matches
 check test -x build/render-wallpapers.sh
 check grep -q 'rsvg-convert' build/render-wallpapers.sh
 check grep -q '00-plain.png' build/render-wallpapers.sh

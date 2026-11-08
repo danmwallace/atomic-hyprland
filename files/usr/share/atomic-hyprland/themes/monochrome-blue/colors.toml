@@ -1,7 +1,7 @@
 # Monochrome with an electric blue accent.
 # Keys are fixed: tests/test-themes.sh requires the same set in every theme.
 background = "#0a0a0a"
-background_glow = "#15171c"
+background_glow = "#272a31"
 background_alt = "#0c0c0c"
 surface = "#2a2a2a"
 foreground = "#c8c8c8"
