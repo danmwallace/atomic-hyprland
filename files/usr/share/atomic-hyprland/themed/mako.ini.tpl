@@ -1,0 +1,11 @@
+include=/usr/share/atomic-hyprland/mako/core.ini
+background-color={{ background_alt }}
+text-color={{ foreground }}
+border-color={{ accent }}
+progress-color=over {{ surface }}
+[urgency=low]
+text-color={{ foreground_dim }}
+border-color={{ surface }}
+[urgency=critical]
+border-color={{ critical }}
+include=~/.config/mako/local

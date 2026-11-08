@@ -25,6 +25,7 @@ test:
     bash tests/test-justfile.sh
     bash tests/test-hypr-theme.sh
     bash tests/test-themes.sh
+    bash tests/test-waybar.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh

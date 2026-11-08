@@ -28,3 +28,5 @@ printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
 
 systemctl --global enable atomic-hyprland-dotfiles.service
 systemctl --global enable atomic-hyprland-theme.service
+# Session services: uwsm starts graphical-session.target, which pulls these in.
+systemctl --global enable waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer

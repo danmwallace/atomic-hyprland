@@ -1,0 +1,89 @@
+@import "../atomic-hyprland/current/theme/waybar.css";
+/* Image-managed. Colours come from the theme import above; put your own rules in local.css. */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-shadow: none;
+  transition: none;
+}
+
+#waybar {
+  background: @background;
+  color: @foreground;
+  border: 1px solid @surface;
+  border-radius: 3px;
+}
+
+#workspaces {
+  margin: 0 4px;
+}
+#workspaces button {
+  padding: 0 6px;
+  color: @foreground_dim;
+  background: transparent;
+  border-radius: 2px;
+}
+#workspaces button.empty {
+  color: @foreground_dim;
+}
+#workspaces button.occupied, #workspaces button.visible {
+  color: @foreground;
+}
+#workspaces button.active {
+  background: @accent;
+  color: @background;
+}
+#workspaces button.urgent {
+  color: @critical;
+}
+
+#window {
+  margin-left: 8px;
+  color: @foreground_dim;
+}
+
+#clock, #bluetooth, #network, #pulseaudio, #cpu, #memory, #custom-gpu,
+#battery, #idle_inhibitor, #custom-notifications, #custom-tray-toggle, #tray {
+  padding: 0 9px;
+  color: @foreground_dim;
+}
+#clock {
+  color: @foreground;
+}
+
+/* Attention states: accent for good news, critical for things to look at. */
+#battery.charging, #battery.plugged, #idle_inhibitor.activated, #custom-notifications.dnd, #bluetooth.connected {
+  color: @accent;
+}
+#battery.warning:not(.charging) {
+  color: @warning;
+}
+#battery.critical:not(.charging), #custom-gpu.critical, #pulseaudio.muted, #network.disconnected {
+  color: @critical;
+}
+
+#custom-power {
+  padding: 0 10px 0 9px;
+  margin-left: 4px;
+  color: @foreground_dim;
+  border-left: 1px solid @surface;
+}
+#custom-power:hover {
+  color: @critical;
+}
+
+tooltip {
+  background: @background;
+  color: @foreground;
+  border: 1px solid @accent;
+  border-radius: 3px;
+}
+tooltip label {
+  color: @foreground;
+}
+@import "local.css";

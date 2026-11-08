@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+# Warn once when the battery drops to 15 % while discharging; forget once it charges.
+# Run by atomic-hyprland-battery.timer every two minutes.
+set -uo pipefail
+root="${POWER_SUPPLY_ROOT:-/sys/class/power_supply}"
+state="${BATTERY_WARN_STATE:-${XDG_RUNTIME_DIR:-/tmp}/atomic-hyprland-battery-warned}"
+threshold=15
+
+for bat in "${root}"/BAT*; do
+    [[ -f "${bat}/capacity" && -f "${bat}/status" ]] || continue
+    capacity="$(cat "${bat}/capacity")"; status="$(cat "${bat}/status")"
+    if [[ "${status}" == "Discharging" && "${capacity}" -le "${threshold}" ]]; then
+        if [[ ! -e "${state}" ]]; then
+            notify-send -u critical -a battery "Battery at ${capacity}%" "Plug in soon." || true
+            : > "${state}"
+        fi
+    else
+        rm -f "${state}"
+    fi
+done
+exit 0

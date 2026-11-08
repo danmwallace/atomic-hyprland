@@ -1,0 +1,7 @@
+[Unit]
+Description=Low battery warning
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/atomic-hyprland/battery-warn

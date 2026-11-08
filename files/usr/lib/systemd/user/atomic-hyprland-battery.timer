@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the battery level every two minutes
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=graphical-session.target

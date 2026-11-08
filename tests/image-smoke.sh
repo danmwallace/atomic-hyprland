@@ -40,6 +40,24 @@ for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
     check bash -c "file /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png | grep -q '3840 x 2160'"
 done
 check test -x /usr/bin/hypr-theme
+# The quiet bar, notifications, wallpaper and idle daemon as session units.
+check rpm -q mako libnotify
+for u in waybar mako swaybg hypridle; do
+    check test -f /usr/lib/systemd/user/$u.service
+    check test -L /etc/systemd/user/graphical-session.target.wants/$u.service
+done
+check test -L /etc/systemd/user/graphical-session.target.wants/atomic-hyprland-battery.timer
+check test -f /etc/skel/.config/waybar/config.jsonc
+check bash -c '! test -e /etc/skel/.config/waybar/config'
+check jq -e . /etc/skel/.config/waybar/config.jsonc
+check test -L /etc/skel/.config/mako/config
+check test "$(readlink /etc/skel/.config/mako/config)" = ../atomic-hyprland/current/theme/mako.ini
+check test -x /usr/libexec/atomic-hyprland/waybar/gpu
+check bash -c '/usr/libexec/atomic-hyprland/waybar/gpu | jq -e .text'
+check bash -c '/usr/libexec/atomic-hyprland/waybar/notifications | jq -e .text'
+check grep -qx .config/waybar/local.jsonc /usr/share/atomic-hyprland/skel.local
+check bash -c '! grep -q local.jsonc /usr/share/atomic-hyprland/managed-files.txt'
+check grep -qx .config/waybar/config /usr/share/atomic-hyprland/skel.retired
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme.service
 check test -L /etc/systemd/user/wayland-session-pre@Hyprland.target.wants/atomic-hyprland-theme.service
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so
@@ -91,6 +109,10 @@ for t in monochrome-green monochrome-blue tokyo-night nord dracula; do
     expect_out "no unresolved placeholder for $t" absent '\{\{'
 done
 out="$(verify_hypr)"
+# The render that verify_hypr just did must have produced every app's theme file.
+check grep -q "@define-color accent #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/waybar.css
+check grep -q "^border-color=#39ff14" /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini
+check test -L /tmp/hv/.config/atomic-hyprland/current/background
 # 0.56 printed "Using lua config"; 0.57 prints "Regular config at <path>/hyprland.lua".
 expect_out "hyprland picked the Lua config" present 'Using lua config|Regular config at .*/hyprland\.lua'
 expect_out "every hl.config key is known to this Hyprland" present 'PROBE config keys ok'

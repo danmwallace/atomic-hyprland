@@ -1,3 +1,6 @@
 # Paths an earlier image wrote into $HOME that this image no longer ships.
 # sync-dotfiles removes them on the next stamp change. A trailing / removes
 # the directory. Only image-written paths belong here, never local* files.
+# The role's waybar (the image reads config.jsonc; waybar would prefer `config`).
+.config/waybar/config
+.config/waybar/mediaplayer.py
