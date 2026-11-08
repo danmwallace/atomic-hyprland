@@ -9,6 +9,8 @@ dnf -y copr disable atim/starship
 dnf -y copr disable atim/lazygit
 dnf -y copr disable lionheartp/Hyprland
 dnf -y copr disable scottames/ghostty
+# Tailscale's repo is for the build; updates come with the image.
+dnf5 config-manager setopt tailscale-stable.enabled=0
 dnf clean all
 
 rm -rf /tmp/build /tmp/* /var/cache/* /var/log/* /var/roothome/.cache
