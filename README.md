@@ -24,22 +24,20 @@ branch (`gh workflow run build.yml --ref <branch>`) to publish a signed
   `/usr/bin/elvish`, the dotfile sync unit ran, SDDM greeter is up on Xorg.
   Verified over SSH 2026-10-03. Graphical login: see the VM runbook.
 - Still open from this phase: the role's `10-theme.conf` names an SDDM theme
-  that is not installed, so SDDM uses its default. Ollama and LiteLLM arrived
-  in Phase 2, signing in Phase 3, the NVIDIA driver in Phase 4.
+  that is not installed, so SDDM uses its default. Ollama arrived in Phase 2, signing in Phase 3, the NVIDIA driver in Phase 4.
 
 ## AI services (Phase 2)
 
 The image ships `ollama.service` (starts on first boot, models under
-`/var/lib/ollama`) and `litellm.service`, which stays inactive until
-`playbooks/fedora-hypr-desktop.yml` in ansible-homelab-cfg renders
-`/etc/litellm/config.yaml` and `/etc/litellm/env`. Both bind to loopback only.
-Claude Code is in the image for every user. Firefox, LibreOffice and
+`/var/lib/ollama`, loopback only). LiteLLM shipped alongside it until
+2026-11-07 and was dropped: it was heavy for what it did, and OpenRouter covers
+the hosted-model routing it was there for. Claude Code is in the image for
+every user. Firefox, LibreOffice and
 Thunderbird are Flatpaks installed by the same playbook.
 
 Verified on hypr-test 2026-10-04: Ollama (CPU) with the two small models,
-LiteLLM answering a completion through the local model, Hermes agent and
-dashboard active under SELinux enforcing, five Flatpaks, playbook idempotent.
-First boot pulls the two container images with `ai-images-pull.service`
+Hermes agent and dashboard active under SELinux enforcing, five Flatpaks,
+playbook idempotent. First boot pulls the Ollama image with `ai-images-pull.service`
 (podman caps pulls started inside a container unit at five minutes).
 
 ## Publishing and trust (Phase 3)
@@ -60,7 +58,7 @@ has a `sigstoreSigned` entry for `ghcr.io/danmwallace/atomic-hyprland` keyed
 on `/etc/pki/containers/atomic-hyprland.pub` (the repo's `cosign.pub`), and
 `registries.d/atomic-hyprland.yaml` makes clients fetch the signature. Other
 registries keep the base's catch-all accept-anything rule, which is how the
-Ollama and LiteLLM images pull.
+Ollama image pulls.
 
 Key material: private key in the GitHub secret `COSIGN_PRIVATE_KEY`, backup in
 the control repo's `hypr_desktops` vault as `vault_atomic_hyprland_cosign_key`.

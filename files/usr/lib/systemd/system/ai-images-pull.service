@@ -1,8 +1,8 @@
 [Unit]
-Description=Pull the AI service container images (no in-systemd pull cap)
+Description=Pull the Ollama container image (no in-systemd pull cap)
 After=network-online.target
 Wants=network-online.target
-Before=ollama.service litellm.service
+Before=ollama.service
 
 [Service]
 Type=oneshot
@@ -11,9 +11,8 @@ RemainAfterExit=yes
 # plain oneshot has no such cap, so a slow first boot still succeeds.
 TimeoutStartSec=0
 # Only the first boot (or a tag change) touches the registry; an offline boot
-# with the images present must not fail this unit or delay graphical.target.
+# with the image present must not fail this unit or delay graphical.target.
 ExecStart=/bin/sh -c 'podman image exists docker.io/ollama/ollama:0.35.1 || podman pull docker.io/ollama/ollama:0.35.1'
-ExecStart=/bin/sh -c 'podman image exists ghcr.io/berriai/litellm:v1.83.14-stable || podman pull ghcr.io/berriai/litellm:v1.83.14-stable'
 
 [Install]
 WantedBy=multi-user.target

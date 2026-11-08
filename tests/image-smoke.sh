@@ -95,7 +95,7 @@ check test -L /etc/systemd/system/display-manager.service
 check test "$(readlink -f /etc/systemd/system/default.target)" = /usr/lib/systemd/system/graphical.target
 check grep -q '^/usr/bin/elvish$' /etc/shells
 # Phase 3: trust policy. Our scope demands a cosign signature; the base's
-# catch-all "" docker scope must survive, it is what lets Ollama and LiteLLM pull.
+# catch-all "" docker scope must survive, it is what lets the Ollama image pull.
 policy=/etc/containers/policy.json
 scope='.transports.docker["ghcr.io/danmwallace/atomic-hyprland"]'
 check jq -e "${scope} | length == 1" "$policy"
@@ -125,10 +125,11 @@ check bash -c 'test -z "$(ls -A /var/cache 2>/dev/null)"'
 # Phase 2: AI service Quadlets, Claude Code, GUI apps as Flatpaks
 check test -f /usr/share/containers/systemd/ai.network
 check test -f /usr/share/containers/systemd/ollama.container
-check test -f /usr/share/containers/systemd/litellm.container
+# LiteLLM was dropped 2026-11-07 (OpenRouter covers the hosted-model use); nothing may bring it back.
+check test ! -e /usr/share/containers/systemd/litellm.container
 out="$(/usr/lib/systemd/system-generators/podman-system-generator --dryrun 2>&1)"
 expect_out "quadlet generator renders ollama.service" present 'ollama.service'
-expect_out "quadlet generator renders litellm.service" present 'litellm.service'
+expect_out "quadlet generator renders no litellm.service" absent 'litellm.service'
 expect_out "quadlet generator renders ai-network.service" present 'ai-network.service'
 expect_out "quadlet generator reports no errors" absent '[Ee]rror'
 # First boot: images are pulled by a oneshot without podman's 5-minute in-systemd cap.
@@ -136,9 +137,9 @@ check test -f /usr/lib/systemd/system/ai-images-pull.service
 check test -L /etc/systemd/system/multi-user.target.wants/ai-images-pull.service
 check grep -q 'TimeoutStartSec=0' /usr/lib/systemd/system/ai-images-pull.service
 # Later boots must not touch the registry (offline boot must not fail the unit).
-check bash -c 'grep -c "podman image exists" /usr/lib/systemd/system/ai-images-pull.service | grep -qx 2'
+check bash -c 'grep -c "podman image exists" /usr/lib/systemd/system/ai-images-pull.service | grep -qx 1'
+check bash -c '! grep -q litellm /usr/lib/systemd/system/ai-images-pull.service'
 check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/ollama.container
-check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/litellm.container
 # podman does not create a missing bind-mount source; tmpfiles makes /var/lib/ollama at boot.
 check grep -qE '^d /var/lib/ollama ' /usr/lib/tmpfiles.d/atomic-hyprland.conf
 check bash -c 'claude --version | grep -q "^2\.1\.289"'
