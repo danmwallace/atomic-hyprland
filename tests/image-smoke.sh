@@ -194,7 +194,7 @@ check rpm -q fuse-libs
 check bash -c 'ldconfig -p | grep -q "libfuse.so.2 "'
 check test -f /etc/xdg/uwsm/env-hyprland
 check test -f /etc/dconf/db/local
-check bash -c 'test "$(dconf dump /org/gnome/desktop/interface/ 2>/dev/null | grep -c prefer-dark)" -ge 0 && strings /etc/dconf/db/local | grep -q prefer-dark'
+check grep -aq prefer-dark /etc/dconf/db/local   # compiled by dconf update at build
 check test -f /etc/skel/.config/gtk-4.0/settings.ini
 check jq -e . /usr/share/atomic-hyprland/waybar/config.jsonc
 check test -f /usr/share/atomic-hyprland/alacritty/core.toml
