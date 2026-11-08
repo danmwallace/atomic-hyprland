@@ -152,5 +152,10 @@ echo other > "${share}/stamp"; echo 'y={{ background }}' > "${share}/themed/y.tp
 HYPR_THEME_DEFAULT=t "${ensure}"
 expect "ensure-theme re-renders when the image stamp changes" 'test -f "$HOME/.config/atomic-hyprland/current/theme/y"'
 expect "ensure-theme keeps the chosen theme name" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = t'
+# ...and pushes the desktop settings before the compositor starts (session bus only)
+bin="$(mktemp -d)"; printf '#!/bin/sh\necho "$@" >> %s/gs.log\n' "$bin" > "$bin/gsettings"; chmod +x "$bin/gsettings"
+echo again2 > "${share}/stamp"
+( unset HYPR_THEME_NO_APPLY; export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent PATH="$bin:$PATH"; HYPR_THEME_DEFAULT=t "${ensure}" >/dev/null 2>&1 )
+expect "ensure-theme applies gsettings before the session" 'grep -q "color-scheme prefer-dark" "$bin/gs.log"'
 
 exit "$fail"

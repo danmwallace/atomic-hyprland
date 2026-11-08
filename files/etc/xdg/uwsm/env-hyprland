@@ -1,0 +1,16 @@
+# atomic-hyprland session environment, sourced by uwsm before Hyprland starts
+# and exported to the systemd user manager, so it reaches everything in the
+# session: apps started with uwsm-app, D-Bus activated services (the keyring
+# prompt, portals) and user units, not only processes Hyprland spawns itself.
+# Per-user additions: ~/.config/uwsm/env-hyprland (sourced after this file).
+export QT_QPA_PLATFORM="wayland;xcb"
+export QT_STYLE_OVERRIDE=kvantum
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+export GDK_BACKEND="wayland,x11"
+export MOZ_ENABLE_WAYLAND=1
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+export HYPRCURSOR_SIZE=24
+export TERMINAL=ghostty
+export BROWSER=chromium-browser

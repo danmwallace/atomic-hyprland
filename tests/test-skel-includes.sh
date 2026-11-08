@@ -20,14 +20,21 @@ export PATH="$PWD/files/usr/bin:$PATH"
 export HOME="$(mktemp -d)"
 
 # wofi: launcher and power menu share one stylesheet
-check grep -qx '@import "../atomic-hyprland/current/theme/wofi.css";' $skel/wofi/style.css
-check bash -c "tail -1 $skel/wofi/style.css | grep -qx '@import \"local.css\";'"
+# wofi parses its stylesheet as a string, so relative @imports resolve against the cwd and silently fail
+# (the menus rendered fully transparent). The whole stylesheet is rendered per theme; style.css links to it.
+check test "$(readlink $skel/wofi/style.css)" = ../atomic-hyprland/current/theme/wofi.css
+check bash -c '! grep -q "@import \"\.\." '"$share"'/themed/wofi.css.tpl'
+check bash -c "tail -1 $share/themed/wofi.css.tpl | grep -qx '@import \"{{ home }}/.config/wofi/local.css\";'"
 check test -f $skel/wofi/local.css
+# obsidian glass: translucent dark fill (blurred by Hyprland), faint highlight edge, accent on focus/selection only
+check grep -q 'background-color: rgba({{ background_alt_rgb }}, 0.7' $share/themed/wofi.css.tpl
+check grep -q 'hl.layer_rule({ match = { namespace = "^wofi$" }, blur = true, ignore_alpha = ' $share/hypr/rules.lua
+check bash -c 'grep -A3 "blur = {" '"$share"'/hypr/look.lua | grep -q "enabled = true"'
 check grep -qx 'term=ghostty' $skel/wofi/config
 check grep -qx 'width=600' $skel/wofi/config
 check grep -qx 'lines=8' $skel/wofi/config
-check grep -q 'border-radius: 3px' $skel/wofi/style.css
-check grep -q 'JetBrainsMono Nerd Font' $skel/wofi/style.css
+check grep -q 'border-radius: 3px' $share/themed/wofi.css.tpl
+check grep -q 'JetBrainsMono Nerd Font' $share/themed/wofi.css.tpl
 # hyprlock
 check grep -qx 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' $skel/hypr/hyprlock.conf
 check grep -qx 'source = ~/.config/hypr/hyprlock.local.conf' $skel/hypr/hyprlock.conf
@@ -76,7 +83,8 @@ check grep -qx '$accent = rgb(39ff14)' $s/current/theme/hyprlock.conf
 check grep -qx '$critical = rgb(e05050)' $s/current/theme/hyprlock.conf
 check grep -q '^\[colors.primary\]' $s/current/theme/alacritty.toml
 check grep -q 'green = "#39ff14"' $s/current/theme/alacritty.toml
-check grep -q '@define-color accent #39ff14;' $s/current/theme/wofi.css
+check bash -c '! grep -q "@define-color\|@import \"\.\." '"$s"'/current/theme/wofi.css'
+check grep -q "@import \"$HOME/.config/wofi/local.css\";" $s/current/theme/wofi.css
 check grep -qF 'theme[main_bg]="#0a0a0a"' $s/current/theme/btop.theme
 check grep -qF 'theme[hi_fg]="#39ff14"' $s/current/theme/btop.theme
 check bash -c 'ls '"$s"'/current/theme/ | grep -qx chromium.theme || true'
@@ -124,6 +132,24 @@ check jq -e '.ExtensionInstallForcelist[0] == "fcoeoabgfenejglbffodgkkbkcdhcgfn;
 check grep -q 'hl.env("BROWSER", "chromium-browser")' $share/hypr/env.lua
 check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
+# AppImages need the FUSE 2 library (OpenRGB on the Alienware is one)
+check grep -qx fuse-libs build/packages.txt
+# session env for everything uwsm starts (D-Bus services, uwsm-app launches), not just Hyprland's children
+uenv=files/etc/xdg/uwsm/env-hyprland
+check sh -n $uenv
+for v in QT_STYLE_OVERRIDE=kvantum QT_QPA_PLATFORM= XCURSOR_THEME=breeze_cursors XCURSOR_SIZE=24 TERMINAL=ghostty BROWSER=chromium-browser; do
+    check grep -qE "^export ${v}" $uenv
+done
+# dconf system defaults: dark from the very first moment of a new home
+dc=files/etc/dconf/db/local.d/00-atomic-hyprland
+check grep -qx '\[org/gnome/desktop/interface\]' $dc
+check grep -qx "color-scheme='prefer-dark'" $dc
+check grep -qx "gtk-theme='Adwaita-dark'" $dc
+check grep -qx "icon-theme='Papirus-Dark'" $dc
+check grep -qx "cursor-theme='breeze_cursors'" $dc
+check grep -q 'dconf update' build/40-finalize.sh
+# GTK4 reads its own settings.ini: same values as GTK3, image-managed
+check diff <(grep -v '^gtk-decoration' $skel/gtk-3.0/settings.ini) <(grep -v '^gtk-decoration' $skel/gtk-4.0/settings.ini)
 # nvidia-settings (X11) ships an autostart entry that fails under Wayland on every login: hidden
 check grep -qx 'Hidden=true' files/etc/xdg/autostart/nvidia-settings-load.desktop
 # login applies the desktop settings (gsettings, flatpak override) for the rendered theme

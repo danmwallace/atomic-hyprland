@@ -1,0 +1,10 @@
+# atomic-hyprland desktop defaults. User values (set by `hypr-theme apply`)
+# take precedence; these make a new home dark from its very first moment.
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+gtk-theme='Adwaita-dark'
+icon-theme='Papirus-Dark'
+cursor-theme='breeze_cursors'
+cursor-size=24
+font-name='Inter 10'
+monospace-font-name='JetBrainsMono Nerd Font 11'

@@ -428,3 +428,14 @@ Dan.
 - Kvantum with Qt 6.10 on Fedora 44: if the `kvantum` package lags, fall back
   to `QT_QPA_PLATFORMTHEME=gtk3` (Adwaita-dark via the GTK platform theme),
   which still gives a dark, consistent Qt.
+
+## Changes after first use (2026-11-08)
+
+- Dan: the wallpaper was too dark to see; `background_glow` is now `#2a2a2a`
+  with a wider smoothstep falloff (PR #8).
+- Dan: the launcher and power menu should be "dark obsidian glass". Blur is
+  enabled (size 6, 3 passes, brightness 0.7) and applied to wofi's layer
+  only; windows stay opaque, so the "no blur" look holds everywhere else.
+- Dark everywhere, including D-Bus started dialogs: dconf system defaults,
+  `hypr-theme apply` before the compositor, session env via uwsm.
+- AppImages need `fuse-libs` (OpenRGB on the Alienware).

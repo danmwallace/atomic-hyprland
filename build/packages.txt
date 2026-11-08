@@ -94,3 +94,5 @@ google-noto-color-emoji-fonts
 flatpak
 # browser: the Claude extension needs native messaging, which the Flatpak sandbox blocks
 chromium
+# AppImages (OpenRGB and friends) need the FUSE 2 library
+fuse-libs
