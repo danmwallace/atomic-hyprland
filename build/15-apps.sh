@@ -16,7 +16,7 @@ work=/tmp/build/apps
 mkdir -p "${work}"
 
 # --- Tailscale -------------------------------------------------------------
-curl -fsSL -o /etc/yum.repos.d/tailscale.repo https://pkgs.tailscale.com/stable/fedora/tailscale.repo
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /etc/yum.repos.d/tailscale.repo https://pkgs.tailscale.com/stable/fedora/tailscale.repo
 dnf -y install --setopt=install_weak_deps=False tailscale
 
 # --- Orca ------------------------------------------------------------------
@@ -26,7 +26,7 @@ dnf -y install --setopt=install_weak_deps=False tailscale
 # their paths relative to themselves; only the launcher, the /usr/bin link and
 # chrome-sandbox's setuid bit (set by the RPM scriptlet) need adjusting.
 orca_rpm="orca-ide-${orca_version}.x86_64.rpm"
-curl -fsSL -o "${work}/${orca_rpm}" "https://github.com/stablyai/orca/releases/download/v${orca_version}/orca-ide-${orca_version}.x86_64.rpm"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${orca_rpm}" "https://github.com/stablyai/orca/releases/download/v${orca_version}/orca-ide-${orca_version}.x86_64.rpm"
 ( cd "${work}" && echo "${orca_sha256}  ${orca_rpm}" | sha256sum -c - )
 rm /opt && mkdir /opt
 dnf -y install --setopt=install_weak_deps=False "${work}/${orca_rpm}"
@@ -38,7 +38,7 @@ sed -i 's|^Exec=/opt/Orca/orca-ide|Exec=/usr/lib/Orca/orca-ide|' /usr/share/appl
 
 # --- spotify_player --------------------------------------------------------
 sp_tar="spotify_player-x86_64-unknown-linux-gnu.tar.gz"
-curl -fsSL -o "${work}/${sp_tar}" "https://github.com/aome510/spotify-player/releases/download/v${spotify_player_version}/${sp_tar}"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${sp_tar}" "https://github.com/aome510/spotify-player/releases/download/v${spotify_player_version}/${sp_tar}"
 ( cd "${work}" && echo "${spotify_player_sha256}  ${sp_tar}" | sha256sum -c - )
 tar -xzf "${work}/${sp_tar}" -C "${work}" spotify_player
 install -m 0755 "${work}/spotify_player" /usr/bin/spotify_player

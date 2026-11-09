@@ -36,6 +36,8 @@ check grep -q 'Terminus.tar.xz' build/20-desktop.sh
 check grep -q '/usr/share/fonts/terminess-nerd' build/20-desktop.sh
 # GitHub's release CDN returns transient 504s; a download retries before failing the build
 check grep -q 'curl -fsSL --retry 5 --retry-all-errors' build/20-desktop.sh
+# ...and so does every other download in the build (tuios, Orca, spotify_player, the Tailscale repo)
+check bash -c '! grep -hE "^[[:space:]]*curl " build/*.sh | grep -v -- "--retry 5 --retry-all-errors"'
 check grep -q 'fc-cache' build/20-desktop.sh
 
 

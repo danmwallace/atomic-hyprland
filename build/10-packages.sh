@@ -25,7 +25,7 @@ npm_config_cache=/tmp/build/npm-cache npm install -g --prefix /usr "@anthropic-a
 tuios_tar="tuios_${tuios_version}_Linux_x86_64.tar.gz"
 tuios_url="https://github.com/Gaurav-Gosain/tuios/releases/download/v${tuios_version}"
 mkdir -p /tmp/build/tuios
-curl -fsSL -o "/tmp/build/tuios/${tuios_tar}" "${tuios_url}/${tuios_tar}"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "/tmp/build/tuios/${tuios_tar}" "${tuios_url}/${tuios_tar}"
 ( cd /tmp/build/tuios && echo "${tuios_sha256}  ${tuios_tar}" | sha256sum -c - )
 tar -xzf "/tmp/build/tuios/${tuios_tar}" -C /tmp/build/tuios tuios LICENSE
 install -m 0755 /tmp/build/tuios/tuios /usr/bin/tuios
