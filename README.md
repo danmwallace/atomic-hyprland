@@ -53,6 +53,7 @@ hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland, restarts bar
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
 hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
+hypr-theme oled on              # true-black backgrounds for any theme, black wallpaper first (off / no arg: status)
 ```
 
 Your own theme: copy a shipped one to `~/.config/atomic-hyprland/themes/<name>/`
@@ -68,6 +69,21 @@ Shipped themes: `monochrome-green` (default), `monochrome-blue`, `-amber`,
 black base), `tokyo-night`, `nord`, `dracula`, `catppuccin-mocha`,
 `gruvbox-dark`, `rose-pine`, `kanagawa`, `everforest`, and `neon-night` (an
 original: synthwave purple with pink and cyan).
+
+**OLED mode.** `hypr-theme oled on` renders whatever theme is set with
+`background`, `background_alt` and terminal `color0` at `#000000`, which an
+OLED panel switches off, and puts a plain black wallpaper first (`bg next`
+still reaches the theme's own). It sticks across `hypr-theme set` until
+`hypr-theme oled off`. It is per user, not per display: LCDs show the same
+black. Burn-in: the bar is the one thing that never moves; hypridle dims and
+locks when idle, and the panel's own pixel shift does the rest.
+
+**Displays.** `hypr/monitors.lua` matches Dan's displays by EDID description
+(the LG OLED TV runs 3840x2160@120 at scale 1.5, VRR for fullscreen apps
+only, 10-bit); anything else picks its own scale (`auto`). XWayland apps
+render at full resolution (`xwayland.force_zero_scaling`) and Electron apps
+run as native Wayland clients (`ELECTRON_OZONE_PLATFORM_HINT=auto`), so
+fractional scales stay sharp. Per-machine changes go in `~/.config/hypr/local.lua`.
 
 **RGB lighting follows the theme.** Every theme has an `led` colour: the
 accent when it is saturated, otherwise a saturated stand-in, because LEDs

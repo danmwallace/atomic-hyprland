@@ -8,6 +8,7 @@
 #   hypr-theme apply                   push gsettings/Flatpak/Kvantum for the current theme (login)
 #   hypr-theme bg next | bg set <file>
 #   hypr-theme render <tpl> <colors.toml>   render one template to stdout
+#   hypr-theme oled [on|off]           true-black backgrounds for any theme (OLED panels)
 #
 # A theme is a directory with colors.toml, backgrounds/ and icons.theme. The
 # shipped ones live in $HYPR_THEME_SHARE/themes; a user may overlay a theme of
@@ -20,6 +21,10 @@
 # {{ key_rgb }} -> r,g,b. Non-colour values substitute {{ key }} only. An
 # unresolved placeholder is a render error (exit 2), never silent text.
 #
+# OLED mode ($HYPR_THEME_STATE/oled exists) renders every theme with
+# background, background_alt and color0 set to #000000, pixels an OLED
+# switches off, and puts a black wallpaper first in the rotation.
+#
 # Exit codes: 0 ok, 1 usage / bad name / unknown theme, 2 render error.
 set -euo pipefail
 
@@ -27,9 +32,11 @@ share="${HYPR_THEME_SHARE:-/usr/share/atomic-hyprland}"
 state="${HYPR_THEME_STATE:-${HOME:?HOME is not set}/.config/atomic-hyprland}"
 default_theme="${HYPR_THEME_DEFAULT:-monochrome-green}"
 current="${state}/current"
+oled_flag="${state}/oled"
+oled_wallpaper="${share}/backgrounds/oled-black.png"
 
 die() { echo "hypr-theme: $1" >&2; exit "${2:-1}"; }
-usage() { sed -n '2,11p' "$0" >&2; exit 1; }
+usage() { sed -n '2,12p' "$0" >&2; exit 1; }
 
 valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
 
@@ -83,6 +90,7 @@ render() {
 checksum_for() {
     local name="$1" d
     {
+        [[ -e "${oled_flag}" ]] && echo oled
         for d in "$(shipped_dir "${name}")" "$(overlay_dir "${name}")" "${state}/themed" "${share}/themed"; do
             [[ -n "${d}" && -d "${d}" ]] || continue
             find "${d}" -type f | sort | while IFS= read -r f; do printf '%s\n' "${f}"; cat "${f}"; done
@@ -102,6 +110,9 @@ build_next() {
     [[ -n "${odir}" ]] && cp -a "${odir}/." "${next}/"
     colors="${next}/colors.toml"
     [[ -f "${colors}" ]] || die "theme ${name} has no colors.toml" 2
+    if [[ -e "${oled_flag}" ]]; then
+        sed -i -E 's/^(background|background_alt|color0)( *= *)"#[0-9a-fA-F]{6}"/\1\2"#000000"/' "${colors}"
+    fi
     for dir in "${state}/themed" "${share}/themed"; do
         [[ -d "${dir}" ]] || continue
         for tpl in "${dir}"/*.tpl; do
@@ -123,6 +134,7 @@ swap_in() {
 
 backgrounds() {
     local dir
+    [[ -e "${oled_flag}" && -f "${oled_wallpaper}" ]] && echo "${oled_wallpaper}"
     for dir in "${current}/theme/backgrounds" "${HOME}/Pictures/Wallpapers"; do
         [[ -d "${dir}" ]] || continue
         find "${dir}" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print
@@ -274,6 +286,19 @@ cmd_apply() {
     HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-apply}" apply_settings "$(cat "${current}/theme.name")"
 }
 
+# oled on|off re-renders the current theme in the new mode and starts its
+# wallpaper rotation over (black first when on); no argument prints the mode.
+cmd_oled() {
+    case "${1:-}" in
+        "") [[ -e "${oled_flag}" ]] && echo on || echo off; return 0 ;;
+        on) mkdir -p "${state}"; : > "${oled_flag}" ;;
+        off) rm -f "${oled_flag}" ;;
+        *) usage ;;
+    esac
+    [[ -f "${current}/theme.name" ]] || return 0
+    cmd_set "$(cat "${current}/theme.name")"
+}
+
 cmd_bg() {
     [[ -f "${current}/theme.name" ]] || die "no current theme; run: hypr-theme set <name>"
     case "${1:-}" in
@@ -290,6 +315,7 @@ case "${1:-}" in
     refresh) cmd_refresh ;;
     apply) cmd_apply ;;
     bg) shift; cmd_bg "$@" ;;
+    oled) shift; cmd_oled "$@" ;;
     render) [[ -f "${2:-}" && -f "${3:-}" ]] || usage; render "$2" "$3" ;;
     *) usage ;;
 esac

@@ -78,6 +78,27 @@ check bash -c 'd=$(mktemp -d); printf "accent = \"#39ff14\"\n" > $d/c.toml; echo
 check bash -c 'd=$(mktemp -d); printf "background = \"#0a0a0a\"\naccent = \"#39ff14\"" > $d/c.toml; echo "a={{ accent }}" > $d/t.tpl; test "$(hypr-theme render $d/t.tpl $d/c.toml)" = "a=#39ff14"'
 # the Flatpak override must expose the theme directory the gtk.css symlink points into
 check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in gsettings kvantummanager; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; printf "#!/bin/sh\necho \"\$@\" > %s/fp\n" "$bin" > "$bin/flatpak"; chmod +x "$bin/flatpak"; PATH="$bin:$PATH" hypr-theme apply && grep -q -- "--filesystem=xdg-config/atomic-hyprland/current/theme:ro" "$bin/fp"'
+# OLED mode: true black backgrounds for whatever theme is set, black wallpaper first
+# (start from the shipped fixture: drop the overlay and user template earlier tests added)
+rm -rf "$HYPR_THEME_STATE/themes/fixture" "$HYPR_THEME_STATE/themed/sample.conf.tpl"
+check bash -c 'hypr-theme set fixture && test "$(hypr-theme oled)" = off'
+check hypr-theme oled on
+check test "$(hypr-theme oled)" = on
+check grep -qx 'bg=#000000 strip=39ff14 rgb=57,255,20 cur=breeze_cursors' "$HYPR_THEME_STATE/current/theme/sample.conf"
+check test "$(readlink "$HYPR_THEME_STATE/current/background")" = "$HYPR_THEME_SHARE/backgrounds/oled-black.png"
+check grep -q '^background = "#000000"' "$HYPR_THEME_STATE/current/theme/colors.toml"
+# it sticks across theme changes
+check bash -c 'hypr-theme set fixture && grep -q "^bg=#000000" "$HYPR_THEME_STATE/current/theme/sample.conf"'
+# the theme's own wallpapers stay in the rotation after the black one
+check bash -c 'hypr-theme bg next; test "$(basename "$(readlink "$HYPR_THEME_STATE/current/background")")" = 00-a.png'
+# off: the theme's own background colour and first wallpaper again
+check hypr-theme oled off
+check test "$(hypr-theme oled)" = off
+check grep -qx 'bg=#0a0a0a strip=39ff14 rgb=57,255,20 cur=breeze_cursors' "$HYPR_THEME_STATE/current/theme/sample.conf"
+check test "$(readlink "$HYPR_THEME_STATE/current/background")" = "$HYPR_THEME_SHARE/themes/fixture/backgrounds/00-a.png"
+# refresh notices the mode changed (it is part of the checksum)
+check bash -c 'touch "$HYPR_THEME_STATE/oled"; hypr-theme refresh | grep -q refreshed; grep -q "^bg=#000000" "$HYPR_THEME_STATE/current/theme/sample.conf"; rc=$?; hypr-theme oled off >/dev/null; exit $rc'
+check bash -c '! hypr-theme oled sideways >/dev/null 2>&1'
 # usage errors
 check bash -c '! hypr-theme >/dev/null 2>&1'
 check bash -c '! hypr-theme bogus >/dev/null 2>&1'

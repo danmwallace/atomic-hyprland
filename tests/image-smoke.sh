@@ -42,6 +42,7 @@ for t in $(ls /usr/share/atomic-hyprland/themes); do
     check bash -c "file /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png | grep -q '3840 x 2160'"
 done
 check test -x /usr/bin/hypr-theme
+check test -f /usr/share/atomic-hyprland/backgrounds/oled-black.png   # hypr-theme oled on
 # RGB lighting follows the theme's led colour where OpenRGB exists (Alienware)
 check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/50-openrgb
 # The quiet bar, notifications, wallpaper and idle daemon as session units.
