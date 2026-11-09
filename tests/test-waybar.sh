@@ -54,7 +54,7 @@ check grep -q '#custom-gpu.critical' $skel/waybar/style.css
 check grep -q '#pulseaudio.muted' $skel/waybar/style.css
 check grep -q '#network.disconnected' $skel/waybar/style.css
 check grep -q '#idle_inhibitor.activated' $skel/waybar/style.css
-check grep -q 'JetBrainsMono Nerd Font' $skel/waybar/style.css
+check grep -q 'FiraCode Nerd Font' $skel/waybar/style.css
 check grep -q 'border-radius: 3px' $skel/waybar/style.css
 check jq -e . $skel/waybar/local.jsonc
 check test -f $skel/waybar/local.css

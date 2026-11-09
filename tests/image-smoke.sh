@@ -80,8 +80,11 @@ check grep -q 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' /
 check bash -c '! grep -rq earth_from_space /etc/skel /usr/share/atomic-hyprland'
 # GTK, Qt, Flatpak, icons, cursor, fonts
 check rpm -q papirus-icon-theme papirus-icon-theme-dark breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-color-emoji-fonts flatpak
+# FiraCode Nerd Font is the default monospace; JetBrainsMono stays installed to pick per user
+check bash -c 'fc-match "FiraCode Nerd Font" | grep -q FiraCode'
 check bash -c 'fc-match "JetBrainsMono Nerd Font" | grep -q JetBrainsMono'
-check bash -c 'fc-match monospace | grep -q JetBrainsMono'
+check bash -c 'fc-match monospace | grep -q FiraCode'
+check bash -c 'fc-list "FiraCode Nerd Font" style | grep -q Bold'
 check bash -c '! fc-list | grep -q RobotoMono'
 check test -d /usr/share/icons/Papirus-Dark
 check test -d /usr/share/icons/breeze_cursors
@@ -89,7 +92,7 @@ check test -d /usr/share/Kvantum/KvGnomeDark
 check test "$(readlink /etc/skel/.config/gtk-4.0/gtk.css)" = ../atomic-hyprland/current/theme/gtk.css
 check grep -q 'QT_STYLE_OVERRIDE", "kvantum"' /usr/share/atomic-hyprland/hypr/env.lua
 check bash -c '! grep -q qt6ct /usr/share/atomic-hyprland/hypr/env.lua'
-check grep -q JetBrainsMono /etc/fonts/local.conf
+check grep -q FiraCode /etc/fonts/local.conf
 check bash -c 'gsettings list-schemas | grep -qx org.gnome.desktop.interface'
 # SDDM greeter: our theme, coloured from the default palette at build, no virtual keyboard
 check test -f /usr/share/sddm/themes/atomic-hyprland/Main.qml

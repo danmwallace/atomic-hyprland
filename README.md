@@ -148,7 +148,7 @@ work (`fuse-libs`).
 CI renders every shipped theme and runs the result through
 `Hyprland --verify-config` (plus `jq` on the bar's strict-JSON config), so a
 Hyprland or template change that breaks the look fails the nightly, not your
-login. Fonts: JetBrainsMono Nerd Font (pinned upstream release) and Inter.
+login. Fonts: FiraCode Nerd Font for terminals, the bar, menus and the lock screen, and JetBrainsMono Nerd Font installed beside it (both pinned upstream releases); Inter for app UI.
 Browser: Fedora's `chromium` with the Claude extension force-installed by
 managed policy (`/etc/chromium/policies/managed/`); Firefox left with it.
 

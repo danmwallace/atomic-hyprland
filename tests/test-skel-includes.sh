@@ -34,7 +34,7 @@ check grep -qx 'term=ghostty' $skel/wofi/config
 check grep -qx 'width=600' $skel/wofi/config
 check grep -qx 'lines=8' $skel/wofi/config
 check grep -q 'border-radius: 3px' $share/themed/wofi.css.tpl
-check grep -q 'JetBrainsMono Nerd Font' $share/themed/wofi.css.tpl
+check grep -q 'FiraCode Nerd Font' $share/themed/wofi.css.tpl
 # hyprlock
 check grep -qx 'source = ~/.config/atomic-hyprland/current/theme/hyprlock.conf' $skel/hypr/hyprlock.conf
 check grep -qx 'source = ~/.config/hypr/hyprlock.local.conf' $skel/hypr/hyprlock.conf
@@ -43,12 +43,12 @@ check grep -qx '    blur_passes = 0' $skel/hypr/hyprlock.conf
 check grep -qx '    rounding = 3' $skel/hypr/hyprlock.conf
 check grep -q 'outer_color = $accent' $skel/hypr/hyprlock.conf
 check grep -q 'fail_color = $critical' $skel/hypr/hyprlock.conf
-check grep -q 'font_family = JetBrainsMono Nerd Font' $skel/hypr/hyprlock.conf
+check grep -q 'font_family = FiraCode Nerd Font' $skel/hypr/hyprlock.conf
 check test -f $skel/hypr/hyprlock.local.conf
 # ghostty
 check grep -qx 'config-file = ?~/.config/atomic-hyprland/current/theme/ghostty.conf' $skel/ghostty/config
 check bash -c "tail -1 $skel/ghostty/config | grep -qx 'config-file = ?~/.config/ghostty/local'"
-check grep -qx 'font-family = JetBrainsMono Nerd Font' $skel/ghostty/config
+check grep -qx 'font-family = FiraCode Nerd Font' $skel/ghostty/config
 check grep -qx 'font-size = 11' $skel/ghostty/config
 check grep -qx 'window-padding-x = 8' $skel/ghostty/config
 check test -f $skel/ghostty/local
@@ -56,7 +56,7 @@ check test -f $skel/ghostty/local
 # alacritty loads the importing file LAST, so the skel file carries only the import list: core, theme, local
 check grep -q 'import = \["/usr/share/atomic-hyprland/alacritty/core.toml", "~/.config/atomic-hyprland/current/theme/alacritty.toml", "~/.config/alacritty/local.toml"\]' $skel/alacritty/alacritty.toml
 check bash -c '! grep -qE "^\[(font|window|terminal)" '"$skel"'/alacritty/alacritty.toml'
-check grep -q 'JetBrainsMono Nerd Font' $share/alacritty/core.toml
+check grep -q 'FiraCode Nerd Font' $share/alacritty/core.toml
 check bash -c '! grep -q "terminal.shell" '"$share"'/alacritty/core.toml'   # the login shell decides
 # btop writes its own config back: it is the user's after the first copy
 check grep -qx '.config/btop/btop.conf' $share/skel.local
@@ -115,7 +115,7 @@ check grep -qx 'theme=KvGnomeDark' $skel/Kvantum/kvantum.kvconfig
 check grep -q 'hl.env("QT_STYLE_OVERRIDE", "kvantum")' $share/hypr/env.lua
 check bash -c '! grep -q qt6ct '"$share"'/hypr/env.lua'
 check grep -q 'XCURSOR_THEME", palette.cursor_theme' $share/hypr/env.lua
-check grep -q 'JetBrainsMono Nerd Font' files/etc/fonts/local.conf
+check grep -q 'FiraCode Nerd Font' files/etc/fonts/local.conf
 check grep -q 'Inter' files/etc/fonts/local.conf
 check bash -c 'xmllint --noout files/etc/fonts/local.conf 2>/dev/null || python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(\"files/etc/fonts/local.conf\")"'
 check bash -c 'for p in papirus-icon-theme papirus-icon-theme-dark breeze-cursor-theme kvantum kvantum-qt5 gsettings-desktop-schemas dconf rsms-inter-fonts google-noto-color-emoji-fonts flatpak; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'

@@ -2,7 +2,7 @@
 /* Image-managed. Colours come from the theme import above; put your own rules in local.css. */
 
 * {
-  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-family: "FiraCode Nerd Font", monospace;
   font-size: 12px;
   min-height: 0;
   border: none;
