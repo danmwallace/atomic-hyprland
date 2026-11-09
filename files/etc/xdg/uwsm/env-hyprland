@@ -9,6 +9,8 @@ export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export GDK_BACKEND="wayland,x11"
 export MOZ_ENABLE_WAYLAND=1
+# Electron apps as native Wayland clients (sharp at fractional scales)
+export ELECTRON_OZONE_PLATFORM_HINT=auto
 export XCURSOR_THEME=breeze_cursors
 export XCURSOR_SIZE=24
 export HYPRCURSOR_SIZE=24

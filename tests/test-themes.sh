@@ -49,6 +49,11 @@ done
 for t in $themes; do
     check env HYPR_THEME_SHARE="$share" HYPR_THEME_STATE="$(mktemp -d)" HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set "$t"
 done
+# OLED mode renders every theme on true black (bar background included)
+for t in $themes; do
+    check bash -c "st=\$(mktemp -d); : > \$st/oled; HYPR_THEME_SHARE='$share' HYPR_THEME_STATE=\$st HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set '$t' && grep -q '@define-color background #000000;' \$st/current/theme/waybar.css"
+done
+check test -f $share/backgrounds/oled-black.png
 check test -f $share/themed/wallpaper.svg.tpl
 check grep -q '{{ background_glow }}' $share/themed/wallpaper.svg.tpl
 check grep -q 'width="3840" height="2160"' $share/themed/wallpaper.svg.tpl
