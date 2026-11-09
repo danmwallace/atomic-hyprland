@@ -52,4 +52,11 @@ for s in 'Login to ghcr' 'Push version tag' 'Install cosign' 'Sign' 'Push releas
     check bash -c "step '$s' if | grep -q \"github.event_name != 'pull_request'\""
 done
 
+# setup-just downloads from GitHub releases, which return transient 504s: a
+# second attempt runs only when the first failed
+wf=.github/workflows/build.yml
+check bash -c "grep -A3 'name: Install just\$' $wf | grep -q 'continue-on-error: true'"
+check bash -c "grep -A2 'name: Install just (retry)' $wf | grep -q \"if: steps.just.outcome == 'failure'\""
+check bash -c "grep -A1 'name: Install just\$' $wf | grep -q 'id: just'"
+
 exit "$fail"

@@ -3,7 +3,7 @@
    are inlined and your overrides are imported by absolute path at the end. */
 
 * {
-  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-family: "FiraCode Nerd Font", monospace;
   font-size: 13px;
 }
 

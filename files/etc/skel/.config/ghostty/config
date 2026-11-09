@@ -1,5 +1,5 @@
 # Image-managed. Colours come from the theme file below; your settings go in ~/.config/ghostty/local.
-font-family = JetBrainsMono Nerd Font
+font-family = FiraCode Nerd Font
 font-size = 11
 window-padding-x = 8
 window-padding-y = 8
