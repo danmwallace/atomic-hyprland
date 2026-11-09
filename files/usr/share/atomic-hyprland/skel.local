@@ -10,3 +10,4 @@
 .config/ghostty/local
 .config/alacritty/local.toml
 .config/btop/btop.conf
+.config/elvish/rc.elv

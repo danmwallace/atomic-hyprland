@@ -61,6 +61,15 @@ check bash -c '! grep -q "terminal.shell" '"$share"'/alacritty/core.toml'   # th
 # btop writes its own config back: it is the user's after the first copy
 check grep -qx '.config/btop/btop.conf' $share/skel.local
 check test -f $skel/alacritty/local.toml
+# elvish: a starter rc.elv, the user's from the first login on (skel.local)
+check test -f $skel/elvish/rc.elv
+check grep -qx '.config/elvish/rc.elv' $share/skel.local
+check grep -qx 'set E:EDITOR = hx' $skel/elvish/rc.elv
+check grep -q 'starship init elvish' $skel/elvish/rc.elv
+check grep -q 'os:exists /home/linuxbrew/.linuxbrew/bin/brew' $skel/elvish/rc.elv
+check grep -q 'set paths = \[$@paths /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin\]' $skel/elvish/rc.elv
+# it parses and runs (starship needs the interactive editor, so it is left out here)
+check bash -c "command -v elvish >/dev/null || exit 0; elvish -norc -c 'eval (grep -v starship $skel/elvish/rc.elv | slurp); echo \$E:EDITOR' | grep -qx hx"
 # btop
 check test "$(readlink $skel/btop/themes/current.theme)" = ../../atomic-hyprland/current/theme/btop.theme
 check grep -qx 'color_theme = "current"' $skel/btop/btop.conf
