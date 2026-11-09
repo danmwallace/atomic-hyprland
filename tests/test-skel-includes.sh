@@ -104,6 +104,12 @@ check grep -qx btop build/packages.txt
 
 # GTK, Qt, fonts
 check grep -qx 'gtk-theme-name=Adwaita-dark' $skel/gtk-3.0/settings.ini
+# GTK3 has no built-in "Adwaita-dark" (only Adwaita plus a dark variant), and Fedora 44
+# dropped gnome-themes-extra, which used to ship it: without this file every GTK3 window
+# (the keyring prompt among them) falls back to light Adwaita. It points at GTK's own dark CSS.
+check test -f files/usr/share/themes/Adwaita-dark/gtk-3.0/gtk.css
+check grep -qx '@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained-dark.css");' files/usr/share/themes/Adwaita-dark/gtk-3.0/gtk.css
+check grep -q '^Name=Adwaita-dark$' files/usr/share/themes/Adwaita-dark/index.theme
 check grep -qx 'gtk-icon-theme-name=Papirus-Dark' $skel/gtk-3.0/settings.ini
 check grep -qx 'gtk-cursor-theme-name=breeze_cursors' $skel/gtk-3.0/settings.ini
 check grep -qx 'gtk-application-prefer-dark-theme=1' $skel/gtk-3.0/settings.ini

@@ -1,0 +1,5 @@
+/* atomic-hyprland: GTK3 has no built-in "Adwaita-dark", only Adwaita and its
+   dark variant, and Fedora 44 dropped gnome-themes-extra, which shipped this
+   theme. gtk-theme is Adwaita-dark throughout the desktop, so name it here and
+   point it at GTK's own dark stylesheet. */
+@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained-dark.css");
