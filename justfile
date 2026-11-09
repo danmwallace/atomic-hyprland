@@ -23,6 +23,7 @@ test:
     bash tests/test-ci-push.sh
     bash tests/test-openrgb-hook.sh
     bash tests/test-claude-usage.sh
+    bash tests/test-monitors.sh
     bash tests/test-workflow.sh
     bash tests/test-justfile.sh
     bash tests/test-hypr-theme.sh

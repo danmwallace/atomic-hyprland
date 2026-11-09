@@ -12,5 +12,7 @@ hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 hl.env("GDK_BACKEND", "wayland,x11")
 hl.env("MOZ_ENABLE_WAYLAND", "1")
+-- Electron apps as native Wayland clients: sharp at fractional scales, not upscaled XWayland.
+hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 hl.env("TERMINAL", "ghostty")
 hl.env("BROWSER", "chromium-browser")
