@@ -59,7 +59,7 @@
     },
     {
       "customType": "regex",
-      "description": "Nerd Fonts release (JetBrainsMono + FiraCode) pinned in the Containerfile (both sha256 updated by hand in the same PR)",
+      "description": "Nerd Fonts release (JetBrainsMono, FiraCode, Terminus) pinned in the Containerfile (each sha256 updated by hand in the same PR)",
       "managerFilePatterns": [
         "/^Containerfile$/"
       ],

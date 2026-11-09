@@ -85,6 +85,8 @@ check bash -c 'fc-match "FiraCode Nerd Font" | grep -q FiraCode'
 check bash -c 'fc-match "JetBrainsMono Nerd Font" | grep -q JetBrainsMono'
 check bash -c 'fc-match monospace | grep -q FiraCode'
 check bash -c 'fc-list "FiraCode Nerd Font" style | grep -q Bold'
+# Terminus, patched by Nerd Fonts, ships as "Terminess" (Terminus's licence reserves the name)
+check bash -c 'fc-match "Terminess Nerd Font" | grep -q Terminess'
 check bash -c '! fc-list | grep -q RobotoMono'
 check test -d /usr/share/icons/Papirus-Dark
 check test -d /usr/share/icons/breeze_cursors

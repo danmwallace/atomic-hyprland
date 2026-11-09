@@ -6,6 +6,7 @@ set -euo pipefail
 nerd_font_version="${1:?nerd font version}"
 nerd_font_sha256="${2:?nerd font sha256}"
 nerd_firacode_sha256="${3:?FiraCode nerd font sha256}"
+nerd_terminus_sha256="${4:?Terminus nerd font sha256}"
 
 # Build-time only; removed in 90-cleanup.sh.
 dnf -y install --setopt=install_weak_deps=False librsvg2-tools
@@ -18,7 +19,8 @@ dnf -y install --setopt=install_weak_deps=False librsvg2-tools
 mkdir -p /tmp/build/nerd
 install_nerd_font() { # install_nerd_font TARBALL SHA256 /usr/share/fonts/DIR
     local tar="$1" sha="$2" dir="$3"
-    curl -fsSL -o "/tmp/build/nerd/${tar}" "https://github.com/ryanoasis/nerd-fonts/releases/download/v${nerd_font_version}/${tar}"
+    # GitHub's release CDN returns transient 504s; retry before failing the build.
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "/tmp/build/nerd/${tar}" "https://github.com/ryanoasis/nerd-fonts/releases/download/v${nerd_font_version}/${tar}"
     ( cd /tmp/build/nerd && echo "${sha}  ${tar}" | sha256sum -c - )
     install -d -m 0755 "${dir}"
     tar -xJf "/tmp/build/nerd/${tar}" -C "${dir}" --wildcards '*.ttf'
@@ -27,6 +29,8 @@ install_nerd_font() { # install_nerd_font TARBALL SHA256 /usr/share/fonts/DIR
 nerd_tar=JetBrainsMono.tar.xz
 install_nerd_font "${nerd_tar}" "${nerd_font_sha256}" /usr/share/fonts/jetbrains-mono-nerd
 install_nerd_font FiraCode.tar.xz "${nerd_firacode_sha256}" /usr/share/fonts/firacode-nerd
+# Terminus, patched; installs as "Terminess Nerd Font" (the licence reserves the name). To try.
+install_nerd_font Terminus.tar.xz "${nerd_terminus_sha256}" /usr/share/fonts/terminess-nerd
 fc-cache -f
 
 /tmp/build/render-wallpapers.sh

@@ -23,7 +23,8 @@ check bash -c '! grep -q "checksums.txt\"" build/10-packages.sh'
 check grep -Eq '^ARG NERD_FONT_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' Containerfile
 check grep -Eq '^ARG NERD_FONT_SHA256=[0-9a-f]{64}$' Containerfile
 check grep -Eq '^ARG NERD_FONT_FIRACODE_SHA256=[0-9a-f]{64}$' Containerfile
-check grep -q '"${NERD_FONT_VERSION}" "${NERD_FONT_SHA256}" "${NERD_FONT_FIRACODE_SHA256}"' Containerfile
+check grep -Eq '^ARG NERD_FONT_TERMINUS_SHA256=[0-9a-f]{64}$' Containerfile
+check grep -q '"${NERD_FONT_VERSION}" "${NERD_FONT_SHA256}" "${NERD_FONT_FIRACODE_SHA256}" "${NERD_FONT_TERMINUS_SHA256}"' Containerfile
 check grep -q 'releases/download/v${nerd_font_version}/' build/20-desktop.sh
 check grep -q 'nerd_tar=JetBrainsMono.tar.xz' build/20-desktop.sh
 check grep -Fq 'sha256sum -c -' build/20-desktop.sh
@@ -31,6 +32,10 @@ check bash -c '! grep -qE "SHA-256.txt|checksums.txt" build/20-desktop.sh'
 check grep -q '/usr/share/fonts/jetbrains-mono-nerd' build/20-desktop.sh
 check grep -q 'FiraCode.tar.xz' build/20-desktop.sh
 check grep -q '/usr/share/fonts/firacode-nerd' build/20-desktop.sh
+check grep -q 'Terminus.tar.xz' build/20-desktop.sh
+check grep -q '/usr/share/fonts/terminess-nerd' build/20-desktop.sh
+# GitHub's release CDN returns transient 504s; a download retries before failing the build
+check grep -q 'curl -fsSL --retry 5 --retry-all-errors' build/20-desktop.sh
 check grep -q 'fc-cache' build/20-desktop.sh
 
 

@@ -16,8 +16,9 @@ ARG TUIOS_VERSION=0.12.1
 # sha256 of tuios_${TUIOS_VERSION}_Linux_x86_64.tar.gz. Bump it by hand with
 # the version: take the line for that file from the release's checksums.txt.
 ARG TUIOS_SHA256=4f68bac6e05d826b8c59b671b565c61b859dacedcb5d889160ba6d8624589b50
-# JetBrainsMono and FiraCode Nerd Font release tarballs (one version, a sha256
-# each) from the release's SHA-256.txt. Bump the version and both hashes together.
+# JetBrainsMono, FiraCode and Terminus Nerd Font release tarballs (one version,
+# a sha256 each) from the release's SHA-256.txt. Bump the version and all three
+# hashes together.
 ARG NERD_FONT_VERSION=3.5.1
 # Orca (stablyai/orca) RPM and spotify_player (aome510/spotify-player) tarball;
 # sha256 of the exact release asset, checked against the upstream value before
@@ -28,6 +29,7 @@ ARG SPOTIFY_PLAYER_VERSION=0.25.2
 ARG SPOTIFY_PLAYER_SHA256=08b572e0ec4b93418ade1d99703dbd0d2bdd14061babd36ea001153d749a1f4c
 ARG NERD_FONT_SHA256=04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf
 ARG NERD_FONT_FIRACODE_SHA256=68e3bd6164864b8b514605bc34e3a87ac401c8c48682fcce6478c70263340207
+ARG NERD_FONT_TERMINUS_SHA256=80c6431f5789a72dc7464ecce3ee820cdc0f0123585befada87b13876d2fda90
 
 COPY build/ /tmp/build/
 
@@ -41,7 +43,7 @@ RUN --mount=type=bind,from=akmods,src=/rpms,dst=/tmp/akmods-rpms /tmp/build/25-n
 # package cache, and before 20-desktop.sh, which renders the wallpapers with them.
 COPY files/ /
 COPY --chmod=0644 cosign.pub /etc/pki/containers/atomic-hyprland.pub
-RUN /tmp/build/20-desktop.sh "${NERD_FONT_VERSION}" "${NERD_FONT_SHA256}" "${NERD_FONT_FIRACODE_SHA256}"
+RUN /tmp/build/20-desktop.sh "${NERD_FONT_VERSION}" "${NERD_FONT_SHA256}" "${NERD_FONT_FIRACODE_SHA256}" "${NERD_FONT_TERMINUS_SHA256}"
 RUN /tmp/build/30-policy.sh && /tmp/build/40-finalize.sh "${IMAGE_VERSION}"
 RUN /tmp/build/90-cleanup.sh
 
