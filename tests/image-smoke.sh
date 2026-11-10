@@ -18,6 +18,7 @@ check rpm -q elvish starship lazygit fzf ripgrep fd-find bat git gh jq yq uv dis
 check rpm -q cloud-init qemu-guest-agent
 # Ansible become_user to an unprivileged user (hermes) needs setfacl on the target.
 check rpm -q acl
+check rpm -q libatomic
 check bash -c '! rpm -q fish'
 # The Hyprland config lives in this repo now; Ansible left the build with it.
 check bash -c '! rpm -q ansible-core python3-libdnf5 hyprpaper nwg-drawer nwg-dock-hyprland qt6ct waypaper'
