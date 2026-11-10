@@ -30,6 +30,8 @@ desktop-backgrounds-basic
 # used by the dotfile sync and hermes_native later
 rsync
 curl
+# Hermes (v0.23.0+) stages its own Node.js build, which needs libatomic.so.1
+libatomic
 
 # Desktop (the Hyprland config itself is in files/, rendered by hypr-theme)
 hyprland
