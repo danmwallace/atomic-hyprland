@@ -74,11 +74,14 @@ qcow2:
 # create your user. build/iso.toml supplies the kickstart that makes it so;
 # without it BIB installs unattended over every disk. tests/test-iso.sh checks
 # the kickstarts inside the built ISO and fails the recipe if they could wipe
-# a disk without asking. Needs root podman, like qcow2.
+# a disk without asking. Needs root podman, like qcow2. Host networking because
+# BIB downloads the installer's packages from inside the container, and on a
+# host that also runs Docker (frmwrk) Docker's FORWARD-DROP firewall policy
+# leaves rootful podman's bridge without DNS.
 iso:
     mkdir -p output
     sudo podman pull {{image}}:{{tag}}
-    sudo podman run --rm -it --privileged --security-opt label=type:unconfined_t \
+    sudo podman run --rm -it --privileged --net=host --security-opt label=type:unconfined_t \
         -v ./output:/output \
         -v ./build/iso.toml:/config.toml:ro \
         -v /var/lib/containers/storage:/var/lib/containers/storage \

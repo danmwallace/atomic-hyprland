@@ -46,6 +46,9 @@ check bash -c 'just --show iso | grep -q "output/bootiso/install.iso"'
 check bash -c '! just --show iso | grep -qi unattended'
 check bash -c 'just --show iso | grep -q -- "-v ./build/iso.toml:/config.toml:ro"'
 check bash -c 'just --show iso | grep -q "bash tests/test-iso.sh output/bootiso/install.iso"'
+# BIB depsolves the installer from inside the container. On a host running Docker,
+# rootful podman's bridge cannot forward (Docker sets FORWARD to DROP), so DNS fails.
+check bash -c 'just --show iso | grep -q -- "--net=host"'
 check bash -c '! cat build/*.toml | grep -vE "^\s*#" | grep -qiE "unattended|clearpart|zerombr|autopart"'
 
 exit "$fail"
