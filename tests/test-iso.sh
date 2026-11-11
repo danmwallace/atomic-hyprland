@@ -23,9 +23,20 @@ if [[ -n "${1:-}" ]]; then
     src="$1"; dir="$src"
     if [[ -f "$src" ]]; then
         dir="$(mktemp -d)"
-        for ks in osbuild.ks osbuild-base.ks; do
-            xorriso -osirrox on -indev "$src" -extract "/$ks" "$dir/$ks" >/dev/null 2>&1 || true
-        done
+        # Any ISO reader will do; frmwrk has 7z but not xorriso. With none, say so
+        # rather than reporting the kickstarts as missing.
+        if command -v xorriso >/dev/null; then
+            for ks in osbuild.ks osbuild-base.ks; do
+                xorriso -osirrox on -indev "$src" -extract "/$ks" "$dir/$ks" >/dev/null 2>&1 || true
+            done
+        elif command -v 7z >/dev/null; then
+            7z e -o"$dir" "$src" 'osbuild*.ks' >/dev/null 2>&1 || true
+        elif command -v bsdtar >/dev/null; then
+            bsdtar -xf "$src" -C "$dir" 'osbuild*.ks' >/dev/null 2>&1 || true
+        else
+            echo "FAIL  no ISO reader: install xorriso (sudo dnf install xorriso) or 7z"
+            fail=1
+        fi
     fi
     check test -s "$dir/osbuild.ks"
     for bad in clearpart zerombr autopart 'reboot' 'rootpw'; do
