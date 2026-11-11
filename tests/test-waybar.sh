@@ -128,6 +128,16 @@ check grep -q 'timeout = 600' $skel/hypr/hypridle.conf
 check grep -q 'timeout = 1200' $skel/hypr/hypridle.conf
 check grep -q 'before_sleep_cmd = loginctl lock-session' $skel/hypr/hypridle.conf
 check grep -q 'source = ~/.config/hypr/hypridle.local.conf' $skel/hypr/hypridle.conf
+# Hyprland 0.57 runs Lua: `hyprctl dispatch dpms on` is a Lua syntax error now, and
+# hl.dsp.dpms("on") toggles; only the table form sets a state. After sleep the panel
+# is cycled off and on: the NVIDIA eDP can come back with a CRTC that rejects every
+# commit, and a fresh modeset clears it (Alienware, 2026-11-11).
+check bash -c '! grep -rnE "hyprctl dispatch [a-z]" files/'
+check grep -qF "after_sleep_cmd = hyprctl dispatch 'hl.dsp.dpms({ action = \"off\" })' && sleep 1 && hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'" $skel/hypr/hypridle.conf
+check grep -qF "on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = \"off\" })'" $skel/hypr/hypridle.conf
+check grep -qF "on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'" $skel/hypr/hypridle.conf
+check bash -c 'jq -er ".\"hyprland/workspaces\".\"on-scroll-up\"" '"$cfg"' | grep -qF "hyprctl dispatch '"'"'hl.dsp.focus({ workspace = \"e-1\" })'"'"'"'
+check bash -c 'jq -er ".\"hyprland/workspaces\".\"on-scroll-down\"" '"$cfg"' | grep -qF "hyprctl dispatch '"'"'hl.dsp.focus({ workspace = \"e+1\" })'"'"'"'
 check test -f $skel/hypr/hypridle.local.conf
 # ownership lists
 check bash -c 'for f in .config/waybar/local.jsonc .config/waybar/local.css .config/mako/local .config/hypr/hypridle.local.conf; do grep -qx "$f" files/usr/share/atomic-hyprland/skel.local || exit 1; done'
