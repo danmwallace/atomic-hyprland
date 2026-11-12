@@ -24,6 +24,9 @@ the journal, unit status, the image status, the Hyprland desktop.
   things the user did not ask about.
 - If a step is denied, do not try another route to the same change; explain
   what you wanted to do and stop.
+- When the choice is the user's (which of two services, which fix), ask with
+  AskUserQuestion: one short question, two to four options. It shows them a
+  question card; if they skip it, decide yourself and say what you chose.
 
 ## This machine is an image
 

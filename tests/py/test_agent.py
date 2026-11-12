@@ -205,6 +205,14 @@ class FixStopUndoTest(unittest.TestCase):
         self.assertTrue(ctx.screenshot.exists())
         self.assertFalse(shot.exists())
 
+    def test_answer_card_is_plain_with_full_answer_view(self):
+        answer = "**Fine.** Shows:\n```\nok\n```\n" + "more " * 200
+        body, choices, views = agent.answer_card(answer)
+        self.assertTrue(body.startswith("Fine. Shows:\n  ok"))
+        self.assertTrue(body.endswith("Click for: full answer · Fix it · chat"))
+        self.assertEqual([k for k, _ in choices], ["read", "fix", "chat", "dismiss"])
+        self.assertEqual(views, {"read": answer})
+
     def test_finalize_screenshot_across_filesystems(self):
         # The screenshot waits in $XDG_RUNTIME_DIR (tmpfs) and is kept under ~/.local/state
         # (btrfs on real installs): a rename across them fails with EXDEV.

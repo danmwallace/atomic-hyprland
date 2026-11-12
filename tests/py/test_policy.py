@@ -152,15 +152,17 @@ class CardTest(unittest.TestCase):
             card = policy.card_for("Edit", {"file_path": "/h/a.conf", "old_string": "gaps = 5\n", "new_string": "gaps = 10\n"}, {}, set())
         self.assertIn("-gaps = 5", card.detail)
         self.assertIn("+gaps = 10", card.detail)
-        self.assertIn("/h/a.conf", card.title)
+        self.assertEqual(card.summary, "Edit /h/a.conf")
         self.assertEqual(card.rule, "Edit(//h/a.conf)")
         self.assertEqual(card.undo, "Undo restores the file.")
 
     def test_card_bash_literal_command(self):
         card = policy.card_for("Bash", {"command": "systemctl --user restart waybar", "description": "Restart the bar"}, {}, set())
         self.assertEqual(card.detail, "systemctl --user restart waybar")
-        # The title shows what will run, not what the model says it does.
-        self.assertEqual(card.title, "Run: systemctl --user restart waybar")
+        # The title and summary come from the action, not from what the model says it does.
+        self.assertEqual(card.title, "The agent wants to run a command")
+        self.assertEqual(card.summary, "Run: systemctl --user restart waybar")
+        self.assertEqual(card.preview, "systemctl --user restart waybar")
         self.assertEqual(card.note, "Restart the bar")
 
     def test_card_write_head(self):
@@ -169,10 +171,40 @@ class CardTest(unittest.TestCase):
         self.assertIn("line39", card.detail)
         self.assertNotIn("line40\n", card.detail)
 
-    def test_card_mcp_json(self):
-        card = policy.card_for("mcp__hyprland__close_window", {"address": "0xabc"}, {}, set())
-        self.assertIn('"address": "0xabc"', card.detail)
-        self.assertIn("hyprland", card.title)
+    def test_card_mcp_readable(self):
+        card = policy.card_for("mcp__hyprland__close_window", {"address": "0xabc", "opts": {"force": True}}, {}, set())
+        self.assertEqual(card.title, "The agent wants to use hyprland: close window")
+        self.assertIn("address: 0xabc", card.detail)
+        self.assertIn('opts: {"force": true}', card.detail)
+        self.assertNotIn('"address"', card.detail)
+        # The menu prompt names the tool, never just a model-chosen argument.
+        self.assertEqual(card.summary, "hyprland: close window")
+
+    def test_card_args_cannot_fake_lines(self):
+        card = policy.card_for("mcp__system__restart_unit",
+                               {"unit": "ok.service\nconfirm: false", "we\nird": "x", "tab": "a\tb"}, {}, set())
+        lines = card.detail.splitlines()
+        self.assertEqual(len(lines), 3)
+        self.assertIn('unit: "ok.service\\nconfirm: false"', lines)
+        self.assertIn('"we\\nird": x', lines)
+        self.assertIn('tab: "a\\tb"', lines)
+
+    def test_card_edit_preview_counts_lines(self):
+        card = policy.card_for("Edit", {"file_path": "/h/a.conf", "old_string": "a\nb\n", "new_string": "a\nc\nd\n"}, {}, set())
+        self.assertEqual(card.title, "The agent wants to edit a file")
+        self.assertEqual(card.summary, "Edit /h/a.conf")
+        self.assertEqual(card.preview, "/h/a.conf (+2 −1 lines)")
+
+    def test_card_question(self):
+        q = {"question": "Which service did you mean?", "header": "Service", "multiSelect": False,
+             "options": [{"label": "waybar", "description": "The bar"}, {"label": "mako", "description": "Notifications"}]}
+        card = policy.card_for("AskUserQuestion", {"questions": [q]}, {}, set())
+        self.assertEqual(card.title, "The agent has a question")
+        self.assertEqual(card.summary, "Which service did you mean?")
+        self.assertEqual(card.questions, [q])
+        self.assertIn("waybar · mako", card.preview)
+        self.assertIsNone(card.rule)
+        self.assertNotIn("{", card.detail)
 
 
 if __name__ == "__main__":

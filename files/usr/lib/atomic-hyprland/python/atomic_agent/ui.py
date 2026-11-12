@@ -5,11 +5,13 @@ mako draws no buttons, so a card is a notification whose default action
 the menu for the oldest pending approval. A right click dismisses: Deny.
 
 Pending approvals are files in $XDG_RUNTIME_DIR/hypr-agent/pending:
-<id>.json holds the card, <id>.answer the choice (allow | deny | always).
+<id>.json holds the card, <id>.answer the choice (allow | deny | always), or for
+a question card {"answers": {question: label}}.
 Ids sort by creation time, so the oldest is the first in name order.
 """
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -22,6 +24,8 @@ from .policy import Card
 
 ALLOW, DENY, DETAILS = "Allow", "Deny", "Details…"
 ALWAYS = "Always allow: "
+SKIP = "Skip: let the agent decide"
+EXPLAIN = "Allow lets the agent do this now. Deny blocks it, and the agent stops that step."
 
 
 def _pending(pid: str, ext: str) -> Path:
@@ -48,6 +52,11 @@ def answer(pid: str, choice: str) -> None:
         raise ValueError(choice)
     if _pending(pid, "json").exists():
         _pending(pid, "answer").write_text(choice)
+
+
+def answer_questions(pid: str, answers: dict[str, str]) -> None:
+    if _pending(pid, "json").exists():
+        _pending(pid, "answer").write_text(json.dumps({"answers": answers}))
 
 
 def list_pending() -> list[str]:
@@ -106,6 +115,34 @@ def _wofi(prompt: str, lines: list[str]) -> str | None:
     return pick if out.returncode == 0 and pick else None
 
 
+def plain_summary(md: str, limit: int = 400) -> str:
+    """Markdown to the plain text a notification can show: no fences, emphasis or
+    heading marks; code lines indented; cut at a word near the limit."""
+    out, fence = [], False
+    for line in md.strip().splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            out.append("  " + line)
+            continue
+        line = re.sub(r"^#{1,6}\s+", "", line)
+        out.append(line.replace("**", "").replace("__", "").replace("`", ""))
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(None, 1)[0] if " " in text[:limit] else text[:limit]
+    return cut.rstrip() + "…"
+
+
+def details_text(card: dict) -> str:
+    note = f"Agent's note: {card['note']}\n" if card.get("note") else ""
+    head = card.get("title", "")
+    if card.get("summary"):
+        head += f"\n{card['summary']}"
+    return f"{head}\n\n{EXPLAIN}\n\n{card.get('detail', '')}\n\n{note}{card.get('undo', '')}\n"
+
+
 def _details(text: str) -> None:
     f = paths.runtime_dir() / "details.txt"
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -113,20 +150,48 @@ def _details(text: str) -> None:
     subprocess.run(["hypr-terminal", "-e", "less", str(f)])
 
 
+def _review_questions(pid: str, card: dict, menu) -> None:
+    answers = {}
+    for q in card["questions"]:
+        lines = {_flat(f"{o.get('label', '')} — {o['description']}" if o.get("description") else o.get("label", "")):
+                 o.get("label", "") for o in q.get("options", [])}
+        pick = menu(_one(q.get("question", "") or card.get("summary", "")), [*lines, SKIP])
+        if pick is None:
+            return  # Escape: the card stays pending
+        if pick == SKIP or pick not in lines:
+            answer(pid, "deny")
+            return
+        answers[q.get("question", "")] = lines[pick]
+    answer_questions(pid, answers)
+
+
+def _flat(text: str) -> str:
+    """One menu line: a newline in an option must not become a line of its own."""
+    return " ".join("".join(c if c.isprintable() else " " for c in text).split())
+
+
+def _one(text: str, width: int = 80) -> str:
+    first = (text.strip().splitlines() or [""])[0]
+    return first[:width] + ("…" if len(first) > width else "")
+
+
 def review(pid: str, menu=_wofi) -> None:
     card = read_pending(pid)
     if card is None:
+        return
+    if card.get("questions"):
+        _review_questions(pid, card, menu)
         return
     lines = [ALLOW, DENY]
     if card.get("rule"):
         lines.append(ALWAYS + card["rule"])
     lines.append(DETAILS)
     while True:
-        pick = menu(card["title"], lines)
+        pick = menu(card.get("summary") or card["title"], lines)
         if pick is None:
             return
         if pick == DETAILS:
-            _details(f"{card['title']}\n\n{card['detail']}\n\n{card['undo']}\n")
+            _details(details_text(card))
             continue
         choice = {ALLOW: "allow", DENY: "deny"}.get(pick, "always" if pick.startswith(ALWAYS) else None)
         if choice:
@@ -153,9 +218,10 @@ def _await_action(proc: subprocess.Popen, on_id=None) -> tuple[str | None, str |
 
 
 def card_body(card: dict) -> str:
-    detail = card["detail"] if len(card["detail"]) <= 300 else card["detail"][:300] + "…"
+    detail = card.get("preview") or (card["detail"] if len(card["detail"]) <= 300 else card["detail"][:300] + "…")
     note = f"Agent's note: {card['note']}\n" if card.get("note") else ""
-    return f"{detail}\n\n{note}{card['undo']}\nClick to answer (or Super+Y)."
+    undo = f"{card['undo']}\n" if card.get("undo") else ""
+    return f"{detail}\n\n{note}{undo}Click to answer (or Super+Y)."
 
 
 def show_card(pid: str, notify=_notify) -> threading.Thread:
@@ -180,12 +246,20 @@ def close_card(nid: str | None) -> None:
         subprocess.run(["makoctl", "dismiss", "-n", str(nid)], capture_output=True)
 
 
-def choose(title: str, body: str, choices: list[tuple[str, str]], menu=_wofi, notify=_notify) -> str | None:
-    """A card with a menu of choices; returns the chosen key, or None if dismissed."""
+def choose(title: str, body: str, choices: list[tuple[str, str]], menu=_wofi, notify=_notify,
+           views: dict[str, str] | None = None, pager=_details) -> str | None:
+    """A card with a menu of choices; returns the chosen key, or None if dismissed.
+    A key in views opens its text in the pager, then the menu comes back."""
     # No expiry: Fix it / Undo live on this card.
     _, action = _await_action(notify(title, body, "normal", 0))
     if action != "default":
         return None
     labels = {label: key for key, label in choices}
-    pick = menu(title, [label for _, label in choices])
-    return labels.get(pick) if pick else None
+    views = views or {}
+    while True:
+        pick = menu(title, [label for _, label in choices])
+        key = labels.get(pick) if pick else None
+        if key in views:
+            pager(views[key])
+            continue
+        return key
