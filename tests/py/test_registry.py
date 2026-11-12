@@ -43,6 +43,16 @@ class RegistryTest(unittest.TestCase):
         for key in ("toolNotes", "rootTools", "readOnlyTools", "disabled"):
             self.assertNotIn(key, reg["a"].spec)
 
+    def test_root_tools_survive_override(self):
+        # A later layer replaces the definition but cannot declassify a root tool:
+        # rootTools accumulate across layers, and a root tool is never read-only.
+        write_json(self.share / "system.json", '{"command": "x", "rootTools": ["restart_unit"], "readOnlyTools": ["journal"]}')
+        write_json(self.user / "system.json", '{"command": "y", "readOnlyTools": ["journal", "restart_unit"]}')
+        d = load_registry(self.dirs)["system"]
+        self.assertEqual(d.spec["command"], "y")
+        self.assertEqual(d.root_tools, ["restart_unit"])
+        self.assertEqual(d.read_only_tools, ["journal"])
+
     def test_invalid_file_skipped(self):
         write_json(self.share / "bad.json", "{not json")
         write_json(self.share / "empty.json", '{"args": ["x"]}')
