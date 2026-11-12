@@ -57,7 +57,9 @@ class AgentTest(unittest.TestCase):
     def test_base_settings_guard_the_agent(self):
         deny = BASE["permissions"]["deny"]
         for rule in ("Bash(sudo:*)", "Bash(pkexec:*)", "Bash(su:*)", "Bash(run0:*)", "Bash(bootc switch:*)",
-                     "Edit(~/.config/atomic-hyprland/agent/**)", "Edit(~/.config/atomic-hyprland/mcp.d/**)"):
+                     "Edit(~/.config/atomic-hyprland/agent/**)", "Edit(~/.config/atomic-hyprland/mcp.d/**)",
+                     # session folders hold the undo manifest and copies: tampering would turn Undo into a write
+                     "Edit(~/.local/state/atomic-hyprland/**)"):
             self.assertIn(rule, deny)
         self.assertEqual(BASE["permissions"]["disableBypassPermissionsMode"], "disable")
 

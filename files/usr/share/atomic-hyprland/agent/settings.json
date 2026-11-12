@@ -1,6 +1,11 @@
 {
   "permissions": {
-    "allow": ["Read", "Glob", "Grep", "LS"],
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "LS"
+    ],
     "deny": [
       "Bash(sudo:*)",
       "Bash(pkexec:*)",
@@ -10,6 +15,7 @@
       "Bash(bootc switch:*)",
       "Edit(~/.config/atomic-hyprland/agent/**)",
       "Edit(~/.config/atomic-hyprland/mcp.d/**)",
+      "Edit(~/.local/state/atomic-hyprland/**)",
       "Read(~/.ssh/**)",
       "Read(~/.gnupg/**)",
       "Read(~/.claude/.credentials.json)",
