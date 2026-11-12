@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 version="${1:?image version}"
+source_repo="${2:?image source repo}"
 
 systemctl enable sddm.service
 systemctl enable ai-images-pull.service
@@ -24,6 +25,8 @@ grep -qx /usr/bin/elvish /etc/shells || echo /usr/bin/elvish >> /etc/shells
 install -d /usr/share/atomic-hyprland
 cp -a /etc/skel /usr/share/atomic-hyprland/skel
 printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
+# Where the desktop agent proposes image fixes (hypr-agent pr-target).
+printf '%s\n' "${source_repo}" > /usr/share/atomic-hyprland/image-source
 
 # Files the login-time sync may overwrite: everything in skel except the
 # user's files listed in skel.local (local.lua and the per-app local includes).
@@ -35,5 +38,7 @@ systemctl --global enable atomic-hyprland-dotfiles.service
 # Adds the Claude Code status line that feeds the bar's usage widget, once per user.
 systemctl --global enable atomic-hyprland-claude-statusline.service
 systemctl --global enable atomic-hyprland-theme@.service
+# MCP registry: written into each agent's config at login and when a registry folder changes.
+systemctl --global enable hypr-mcp-sync.service hypr-mcp-sync.path
 # Session services: uwsm starts graphical-session.target, which pulls these in.
 systemctl --global enable waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer

@@ -166,6 +166,35 @@ Hermes agent and dashboard active under SELinux enforcing, five Flatpaks,
 playbook idempotent. First boot pulls the Ollama image with `ai-images-pull.service`
 (podman caps pulls started inside a container unit at five minutes).
 
+## Desktop agent
+
+Super+A asks a Claude agent about what is on screen: it attaches a screenshot
+of the focused window, the clipboard (never what a password manager copied)
+and the focused terminal's folder, shown as chips you can remove before
+sending. Ask mode is read-only. The answer card offers **Fix it**, which works
+in the background: every change shows an approval card first (click it, or
+Super+Y, then Allow / Deny / Always allow), file edits are saved so the done
+card's **Undo** restores them, and root changes (a listed service, a staged
+update or rollback, `/etc/hosts`) ask for your password through polkit.
+Super+Shift+A, or clicking the bar's agent icon, stops everything and denies
+whatever is waiting. Image-level fixes become pull requests to the repo the
+image was built from (`IMAGE_SOURCE` in the Containerfile; a fork changes that
+line), and only when your `gh` login can push there.
+
+| Path | What |
+|---|---|
+| `hypr-agent ask \| fix \| chat \| stop \| undo \| review \| sessions` | the agent (`hypr-agent sessions` lists ids) |
+| `/usr/share/atomic-hyprland/mcp.d/` | the image's MCP servers: hyprland, system, screen, notify |
+| `/etc/atomic-hyprland/mcp.d/`, `~/.config/atomic-hyprland/mcp.d/` | your MCP servers, one `<name>.json` each; later folders override earlier ones, `{"disabled": true}` turns one off |
+| `hypr-mcp sync \| list \| run <name>` | writes the registry into Claude Code and Gemini CLI (runs at login and on change) |
+| `~/.config/atomic-hyprland/agent/permissions.json` | the "always allow" rules you chose; delete a line to revoke it |
+| `/etc/atomic-hyprland/agent-units`, `agent-etc` | root-owned lists of extra units and `/etc` files the agent may change |
+
+Agent sessions load none of your own Claude Code settings (or a project's):
+only the image's settings plus your rules, so a permissive personal setting
+never skips an approval card. Your `~/.claude/CLAUDE.md` is passed in. Design:
+`docs/superpowers/specs/2026-11-11-agentic-desktop-design.md`.
+
 ## Publishing and trust (Phase 3)
 
 `.github/workflows/build.yml` runs on push to `main`, nightly at 03:00 UTC,

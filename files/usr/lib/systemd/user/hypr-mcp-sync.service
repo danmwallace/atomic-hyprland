@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync the MCP registry into Claude Code and Gemini CLI
+Documentation=file:///usr/lib/atomic-hyprland/python/atomic_agent/mcp_sync.py
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/hypr-mcp sync
+
+[Install]
+WantedBy=default.target

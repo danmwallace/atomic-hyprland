@@ -15,6 +15,10 @@ hl.bind(mod .. " + RETURN",    app(terminal))
 hl.bind(mod .. " + B",         app(browser))
 hl.bind(mod .. " + E",         app(fileManager))
 hl.bind(mod .. " + SPACE",     app(menu))
+-- The desktop agent: ask about what is on screen (see hypr-agent)
+hl.bind(mod .. " + A",         hl.dsp.exec_cmd("hypr-agent ask"))
+hl.bind(mod .. " + Y",         hl.dsp.exec_cmd("hypr-agent review"))   -- answer the oldest approval card
+hl.bind(mod .. " + SHIFT + A", hl.dsp.exec_cmd("hypr-agent stop"))     -- stop every agent session
 hl.bind(mod .. " + SHIFT + V", hl.dsp.exec_cmd("cliphist list | wofi --show dmenu --lines 12 | cliphist decode | wl-copy"))
 hl.bind(mod .. " + SHIFT + T", hl.dsp.exec_cmd("hypr-theme bg next"))
 

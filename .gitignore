@@ -6,3 +6,4 @@ output/
 *.log
 cosign.key
 .worktrees/
+__pycache__/

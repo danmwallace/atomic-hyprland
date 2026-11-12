@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "LS"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(pkexec:*)",
+      "Bash(su:*)",
+      "Bash(run0:*)",
+      "Bash(doas:*)",
+      "Bash(bootc switch:*)",
+      "Edit(//etc/**)",
+      "Edit(~/.config/atomic-hyprland/agent/**)",
+      "Edit(~/.config/atomic-hyprland/mcp.d/**)",
+      "Edit(~/.local/state/atomic-hyprland/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.local/share/keyrings/**)",
+      "Read(~/.password-store/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.config/rclone/**)",
+      "Read(~/.var/app/**)",
+      "Read(~/.mozilla/**)",
+      "Read(~/.config/chromium/**)",
+      "Read(~/.config/google-chrome/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.docker/config.json)",
+      "Read(~/.netrc)",
+      "Read(~/.config/atomic-hyprland/credentials/**)"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  }
+}

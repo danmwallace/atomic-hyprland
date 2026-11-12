@@ -15,6 +15,8 @@ nodejs
 npm
 python3
 python3-pip
+# MCP SDK for the agentic desktop's servers (Fedora package)
+python3-mcp
 uv
 skopeo
 # terminals beyond alacritty (ghostty: scottames/ghostty COPR; tuios is
