@@ -32,6 +32,22 @@ class DecideTest(unittest.TestCase):
         out = approvals.decide("Bash", {"command": "id"}, ask=lambda card, session: "deny")
         self.assertEqual(out, {"behavior": "deny", "message": "Denied by the user"})
 
+    def test_decide_question_returns_answers(self):
+        inp = {"questions": [{"question": "Which service?", "header": "S", "options": []}]}
+        out = approvals.decide("AskUserQuestion", inp,
+                               ask=lambda c, s: json.dumps({"answers": {"Which service?": "waybar"}}))
+        self.assertEqual(out, {"behavior": "allow",
+                               "updatedInput": {**inp, "answers": {"Which service?": "waybar"}}})
+
+    def test_decide_question_skipped(self):
+        out = approvals.decide("AskUserQuestion", {"questions": []}, ask=lambda c, s: "deny")
+        self.assertEqual(out["behavior"], "deny")
+        self.assertIn("skipped", out["message"])
+
+    def test_decide_answer_json_never_allows_other_tools(self):
+        out = approvals.decide("Bash", {"command": "id"}, ask=lambda c, s: json.dumps({"answers": {}}))
+        self.assertEqual(out, {"behavior": "deny", "message": "Denied by the user"})
+
     def test_decide_allow_passes_input(self):
         inp = {"file_path": "/h/a", "content": "x"}
         self.assertEqual(approvals.decide("Write", inp, ask=lambda c, s: "allow"),

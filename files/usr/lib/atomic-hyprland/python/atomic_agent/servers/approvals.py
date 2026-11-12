@@ -44,10 +44,28 @@ def save_rule(rule: str) -> None:
     tmp.replace(f)
 
 
+SKIPPED = {"behavior": "deny",
+           "message": "The user skipped the question. Decide yourself, and say what you chose and why."}
+
+
+def _question_result(tool_input: dict, choice: str) -> dict:
+    # A question card answers {"answers": {question: label}}; Claude Code reads them
+    # from updatedInput (as the Agent SDK's canUseTool does). Anything else: skipped.
+    try:
+        answers = json.loads(choice)["answers"]
+    except (ValueError, TypeError, KeyError):
+        return dict(SKIPPED)
+    if not isinstance(answers, dict) or not answers:
+        return dict(SKIPPED)
+    return {"behavior": "allow", "updatedInput": {**tool_input, "answers": answers}}
+
+
 def decide(tool_name: str, tool_input: dict, ask=_ask) -> dict:
     notes, roots = _registry_maps()
     card = card_for(tool_name, tool_input, notes, roots)
     choice = ask(card, os.environ.get("HYPR_AGENT_SESSION", ""))
+    if tool_name == "AskUserQuestion":
+        return _question_result(tool_input, choice)
     if choice == "always" and card.rule:
         save_rule(card.rule)
     if choice in ("allow", "always"):

@@ -8,7 +8,7 @@ import json
 import os
 import re
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # Tools that can run anything: an "always allow" rule would cover every command.
@@ -33,11 +33,14 @@ _NEVER_FIRST = {"sudo", "pkexec", "su", "run0", "doas", "bootc", "rm", "rmdir", 
 
 @dataclass
 class Card:
-    title: str          # what will happen, from the action itself
+    title: str          # the kind of action, in words ("The agent wants to run a command")
     detail: str         # the literal command, diff or arguments
     undo: str
     rule: str | None    # the "always allow" rule offered, if any
     note: str = ""      # the model's own description, shown as its words
+    summary: str = ""   # one line from the action itself: the command, path or first argument
+    preview: str = ""   # the notification body: short, plain text
+    questions: list = field(default_factory=list)  # AskUserQuestion: answered, not approved
 
 
 def _words(segment: str) -> list[str]:
@@ -142,30 +145,71 @@ def _diff(path: str, old: str, new: str) -> str:
     return "".join(lines)
 
 
+def _one_line(text: str, width: int = 80) -> str:
+    lines = text.strip().splitlines()
+    first = lines[0] if lines else ""
+    return first[:width] + ("…" if len(first) > width or len(lines) > 1 else "")
+
+
+def _clip(text: str, limit: int = 300) -> str:
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+def _kv(tool_input: dict) -> str:
+    """Arguments as "key: value" lines; nested values stay compact JSON."""
+    out = []
+    for k in sorted(tool_input):
+        v = tool_input[k]
+        out.append(f"{k}: {v if isinstance(v, str) else json.dumps(v)}")
+    return "\n".join(out)
+
+
+def _changed_lines(diff: str) -> str:
+    rows = diff.splitlines()
+    plus = sum(1 for l in rows if l.startswith("+") and not l.startswith("+++"))
+    minus = sum(1 for l in rows if l.startswith("-") and not l.startswith("---"))
+    return f"+{plus} −{minus} lines"
+
+
+def _question_text(questions: list) -> str:
+    parts = []
+    for q in questions:
+        opts = "\n".join(f"  • {o.get('label', '')}" + (f": {o['description']}" if o.get("description") else "")
+                         for o in q.get("options", []))
+        parts.append(f"{q.get('question', '')}\n{opts}")
+    return "\n\n".join(parts)
+
+
 def card_for(tool_name: str, tool_input: dict, tool_notes: dict[str, str], root_tools: set[str]) -> Card:
     path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-    note = ""
+    note, questions = "", []
     if tool_name == "Bash":
         detail = tool_input.get("command", "")
-        first = detail.strip().splitlines()[0] if detail.strip() else ""
-        title = f"Run: {first[:80]}{'…' if len(first) > 80 or len(detail.strip().splitlines()) > 1 else ''}"
+        title, summary, preview = "The agent wants to run a command", _one_line(detail), _clip(detail.strip())
         note = tool_input.get("description", "")
-    elif tool_name == "Edit":
-        title = f"Edit {path}"
-        detail = _diff(path, tool_input.get("old_string", ""), tool_input.get("new_string", ""))
-    elif tool_name == "MultiEdit":
-        title = f"Edit {path}"
-        detail = "\n".join(_diff(path, e.get("old_string", ""), e.get("new_string", ""))
-                           for e in tool_input.get("edits", []))
+    elif tool_name in ("Edit", "MultiEdit"):
+        edits = [tool_input] if tool_name == "Edit" else tool_input.get("edits", [])
+        detail = "\n".join(_diff(path, e.get("old_string", ""), e.get("new_string", "")) for e in edits)
+        title, summary, preview = "The agent wants to edit a file", path, f"{path} ({_changed_lines(detail)})"
     elif tool_name == "Write":
-        title = f"{'Overwrite' if os.path.exists(path) else 'Create'} {path}"
-        detail = "".join(tool_input.get("content", "").splitlines(keepends=True)[:40])
+        content = tool_input.get("content", "")
+        detail = "".join(content.splitlines(keepends=True)[:40])
+        verb = "overwrite" if os.path.exists(path) else "create"
+        title, summary, preview = f"The agent wants to {verb} a file", path, f"{path} ({len(content.splitlines())} lines)"
+    elif tool_name == "AskUserQuestion":
+        questions = list(tool_input.get("questions", []))
+        detail = _question_text(questions)
+        first = questions[0] if questions else {}
+        title, summary = "The agent has a question", _one_line(first.get("question", ""))
+        labels = " · ".join(o.get("label", "") for o in first.get("options", []))
+        preview = _clip(first.get("question", "")) + (f"\n\nOptions: {labels}" if labels else "")
     elif tool_name.startswith("mcp__"):
         _, server, tool = tool_name.split("__", 2)
-        title = f"{server}: {tool.replace('_', ' ')}"
-        detail = json.dumps(tool_input, indent=2, sort_keys=True)
+        detail = _kv(tool_input)
+        title, summary, preview = f"The agent wants to use {server}: {tool.replace('_', ' ')}", _one_line(detail), _clip(detail)
     else:
-        title = tool_name
-        detail = json.dumps(tool_input, indent=2, sort_keys=True)
-    return Card(title=title, detail=detail, undo=undo_note(tool_name, tool_input, tool_notes),
-                rule=always_rule(tool_name, tool_input, root_tools), note=note)
+        detail = _kv(tool_input)
+        title, summary, preview = f"The agent wants to use {tool_name}", _one_line(detail), _clip(detail)
+    undo = "" if questions else undo_note(tool_name, tool_input, tool_notes)
+    return Card(title=title, detail=detail, undo=undo, rule=None if questions else always_rule(tool_name, tool_input, root_tools),
+                note=note, summary=summary, preview=preview, questions=questions)

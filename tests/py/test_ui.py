@@ -98,6 +98,63 @@ class UiTest(unittest.TestCase):
         body = ui.card_body({"detail": "rm x", "undo": "u", "note": "tidy up"})
         self.assertIn("Agent's note: tidy up", body)
 
+    def test_card_body_uses_preview(self):
+        body = ui.card_body({"detail": "--- a\n+++ b\n", "preview": "/h/a.conf (+1 −1 lines)", "undo": "u"})
+        self.assertTrue(body.startswith("/h/a.conf (+1 −1 lines)"))
+        self.assertNotIn("+++", body)
+        self.assertIn("Click to answer (or Super+Y).", body)
+
+    def test_details_text_says_who_does_what(self):
+        text = ui.details_text({"title": "The agent wants to run a command", "summary": "id",
+                                "detail": "id", "undo": "Can't be undone automatically.", "note": "check"})
+        self.assertTrue(text.startswith("The agent wants to run a command"))
+        self.assertIn("Allow lets the agent do this now. Deny blocks it", text)
+        self.assertIn("Agent's note: check", text)
+
+    def question_card(self):
+        q = {"question": "Which service?", "header": "Service", "multiSelect": False,
+             "options": [{"label": "waybar", "description": "The bar"}, {"label": "mako", "description": ""}]}
+        return Card(title="The agent has a question", detail="", undo="", rule=None,
+                    summary="Which service?", questions=[q])
+
+    def test_review_question_answers_with_label(self):
+        stub(self.bin, "wofi", f'cat > "{self.root}/menu.txt"; echo "waybar — The bar"')
+        pid = ui.new_pending(self.question_card(), "s1")
+        ui.review(pid)
+        menu = (self.root / "menu.txt").read_text().splitlines()
+        self.assertEqual(menu, ["waybar — The bar", "mako", ui.SKIP])
+        self.assertEqual(json.loads(ui.wait_answer(pid, timeout=1, poll=0.02)),
+                         {"answers": {"Which service?": "waybar"}})
+
+    def test_review_question_skip_denies(self):
+        self.wofi_picks("Skip")
+        pid = ui.new_pending(self.question_card(), "s1")
+        ui.review(pid)
+        self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "deny")
+
+    def test_review_question_escape_leaves_it_pending(self):
+        self.wofi_picks(None)
+        pid = ui.new_pending(self.question_card(), "s1")
+        ui.review(pid)
+        self.assertEqual(ui.oldest_pending(), pid)
+
+    def test_plain_summary(self):
+        md = "**Nothing** is broken. The `terminal` shows:\n\n```\nUnit x not found.\n```\n\n## Next\n- run it"
+        self.assertEqual(ui.plain_summary(md),
+                         "Nothing is broken. The terminal shows:\n\n  Unit x not found.\n\nNext\n- run it")
+        long = "word " * 200
+        out = ui.plain_summary(long, limit=50)
+        self.assertLessEqual(len(out), 51)
+        self.assertTrue(out.endswith("…"))
+
+    def test_choose_view_opens_pager_then_menu_again(self):
+        stub(self.bin, "notify-send", "echo 7; echo default")
+        picks, shown = iter(["Read the full answer", "Fix it"]), []
+        key = ui.choose("Agent", "short", [("read", "Read the full answer"), ("fix", "Fix it")],
+                        menu=lambda prompt, lines: next(picks), views={"read": "the whole answer"},
+                        pager=shown.append)
+        self.assertEqual((key, shown), ("fix", ["the whole answer"]))
+
     def test_show_card_records_id_while_open(self):
         # I1: notify-send -p prints the id at once and keeps running until the card is answered.
         stub(self.bin, "notify-send", "echo 77; sleep 2")

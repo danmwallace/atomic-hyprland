@@ -185,6 +185,13 @@ def finalize_screenshot(ctx: Context, shot: Path, sdir: Path) -> Context:
     return replace(ctx, screenshot=kept)
 
 
+def answer_card(answer: str) -> tuple[str, list[tuple[str, str]], dict[str, str]]:
+    """The answer card: plain text up front, the whole answer one click away."""
+    body = ui.plain_summary(answer) + "\n\nClick for: full answer · Fix it · chat"
+    choices = [("read", "Read the full answer"), ("fix", "Fix it"), ("chat", "Open chat"), ("dismiss", "Dismiss")]
+    return body, choices, {"read": answer}
+
+
 def cmd_ask() -> int:
     sid = str(uuid.uuid4())
     sdir = paths.session_dir(sid)
@@ -217,8 +224,8 @@ def cmd_ask() -> int:
         signal_bar()
     answer = _result(cp)
     (sdir / "answer.md").write_text(answer)
-    short = answer if len(answer) <= 300 else answer[:300] + "…"
-    pick = ui.choose("Agent", short, [("fix", "Fix it"), ("chat", "Open chat"), ("dismiss", "Dismiss")])
+    body, choices, views = answer_card(answer)
+    pick = ui.choose("Agent", body, choices, views=views)
     if pick == "fix":
         return dispatch(["fix", sid])
     if pick == "chat":
@@ -257,11 +264,12 @@ def run_fix(sid: str) -> int:
     save_meta(sid, mode="done")
     signal_bar()
     changed = _changes(sid)
-    body = result if len(result) <= 300 else result[:300] + "…"
+    body = ui.plain_summary(result, limit=300)
     if changed:
         body += "\n\nChanged (undo restores them):\n" + "\n".join(changed[:8])
-    choices = ([("undo", "Undo the changes")] if changed else []) + [("chat", "Open chat"), ("dismiss", "Dismiss")]
-    pick = ui.choose("Agent: done", body, choices)
+    choices = ([("undo", "Undo the changes")] if changed else []) + [
+        ("read", "Read the full result"), ("chat", "Open chat"), ("dismiss", "Dismiss")]
+    pick = ui.choose("Agent: done", body, choices, views={"read": result})
     if pick == "undo":
         return dispatch(["undo", sid])
     if pick == "chat":
