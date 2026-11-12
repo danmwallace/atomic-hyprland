@@ -12,6 +12,11 @@ class RuleTest(unittest.TestCase):
         # A prefix rule would also allow `find . -name x -delete` after approving `find . -name x`.
         self.assertEqual(policy.always_rule("Bash", {"command": "find . -name x"}), "Bash(find . -name x)")
 
+    def test_rule_none_for_wildcards(self):
+        # Claude Code reads * in a Bash rule as a wildcard: never put one in a saved rule.
+        for cmd in ("ls *", "ls:*", "cat a?", "echo [x]", "echo {a,b}", "echo (x)"):
+            self.assertIsNone(policy.always_rule("Bash", {"command": cmd}), cmd)
+
     def test_rule_none_for_background_and(self):
         self.assertIsNone(policy.always_rule("Bash", {"command": "sleep 1 & rm -rf x"}))
 
@@ -42,10 +47,23 @@ class RuleTest(unittest.TestCase):
                       ".ssh/authorized_keys", ".config/atomic-hyprland/agent/permissions.json",
                       ".config/atomic-hyprland/mcp.d/x.json", ".claude/settings.json",
                       ".config/systemd/user/evil.service", ".config/autostart/x.desktop",
-                      ".config/uwsm/env-hyprland"):
+                      ".config/uwsm/env-hyprland", ".config/hypr/local.lua", ".config/waybar/local.jsonc",
+                      ".config/mako/local", ".gitconfig", ".config/git/config", ".local/share/applications/x.desktop",
+                      ".zshenv", ".config/fish/config.fish", ".config/atomic-hyprland/hooks/theme.sh"):
                 self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{home}/{p}"}), p)
-            self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/.config/waybar/local.css"}),
-                             f"Edit(/{home}/.config/waybar/local.css)")
+            self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/.config/btop/btop.conf"}),
+                             f"Edit(/{home}/.config/btop/btop.conf)")
+
+    def test_rule_edit_refuses_git_and_claude_anywhere(self):
+        for p in ("/srv/repo/.git/hooks/pre-commit", "/srv/repo/.claude/settings.json",
+                  "/srv/repo/.mcp.json", "/srv/repo/sub/.claude.json"):
+            self.assertIsNone(policy.always_rule("Write", {"file_path": p, "content": "x"}), p)
+
+    def test_rule_edit_refuses_runtime_dir(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": "/run/user/9"}):
+            self.assertIsNone(policy.always_rule("Write", {"file_path": "/run/user/9/hypr-agent/pending/x.answer", "content": "allow"}))
 
     def test_rule_none_for_root_tool(self):
         self.assertIsNone(policy.always_rule("mcp__system__restart_unit", {}, {"mcp__system__restart_unit"}))
@@ -110,7 +128,9 @@ class CardTest(unittest.TestCase):
     def test_card_bash_literal_command(self):
         card = policy.card_for("Bash", {"command": "systemctl --user restart waybar", "description": "Restart the bar"}, {}, set())
         self.assertEqual(card.detail, "systemctl --user restart waybar")
-        self.assertIn("Restart the bar", card.title)
+        # The title shows what will run, not what the model says it does.
+        self.assertEqual(card.title, "Run: systemctl --user restart waybar")
+        self.assertEqual(card.note, "Restart the bar")
 
     def test_card_write_head(self):
         content = "".join(f"line{i}\n" for i in range(100))

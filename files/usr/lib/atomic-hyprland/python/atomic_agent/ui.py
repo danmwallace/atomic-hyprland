@@ -77,7 +77,9 @@ def wait_answer(pid: str, timeout: float = 600.0, poll: float = 0.25) -> str:
 
 
 def _wofi(prompt: str, lines: list[str]) -> str | None:
-    out = subprocess.run(["wofi", "--dmenu", "--prompt", prompt, "--lines", str(len(lines) + 1)],
+    # No markup: a crafted title or rule must not be able to hide what it says.
+    out = subprocess.run(["wofi", "--dmenu", "-D", "allow_markup=false", "--prompt", prompt,
+                          "--lines", str(len(lines) + 1)],
                          input="\n".join(lines) + "\n", capture_output=True, text=True)
     pick = out.stdout.strip()
     return pick if out.returncode == 0 and pick else None
@@ -125,7 +127,8 @@ def _await_action(proc: subprocess.Popen) -> tuple[str | None, str | None]:
 
 def card_body(card: dict) -> str:
     detail = card["detail"] if len(card["detail"]) <= 300 else card["detail"][:300] + "…"
-    return f"{detail}\n\n{card['undo']}\nClick to answer (or Super+Y)."
+    note = f"Agent's note: {card['note']}\n" if card.get("note") else ""
+    return f"{detail}\n\n{note}{card['undo']}\nClick to answer (or Super+Y)."
 
 
 def show_card(pid: str, notify=_notify) -> threading.Thread:

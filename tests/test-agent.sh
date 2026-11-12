@@ -31,4 +31,6 @@ check xmllint --noout $pol
 check grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/atomic-hyprland/agent-root</annotate>' $pol
 check bash -c "grep -c '>auth_admin_keep<' $pol | grep -qx 3"
 check bash -c '! grep -qE "^(from|import) atomic_agent|sys.path" files/usr/libexec/atomic-hyprland/agent-root'
+# agent cards are plain text: no markup that could hide the real command
+check bash -c "grep -A1 -x '\[app-name=hypr-agent\]' files/usr/share/atomic-hyprland/mako/core.ini | grep -qx markup=0"
 exit "$fail"

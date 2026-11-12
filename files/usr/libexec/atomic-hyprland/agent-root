@@ -23,7 +23,12 @@ import sys
 import tempfile
 
 ETC = "/etc"
-UNIT = re.compile(r"[A-Za-z0-9@._:\-]+\.(service|timer|socket|path|target|mount)")
+UNIT = re.compile(r"[A-Za-z0-9@._:\-]+\.(service|timer|socket|path)")
+# Units the whole system leans on: never started, stopped or restarted by the agent.
+DENIED_UNIT = re.compile(r"(systemd-|dbus|polkit|debug-shell|emergency|rescue|getty|serial-getty|autovt)")
+# /etc files that guard accounts, privilege and trust: never read or written here.
+PROTECTED = ("shadow", "gshadow", "passwd", "group", "sudoers", "sudoers.d", "polkit-1", "pam.d",
+             "security", "ssh", "pki", "containers", "crypttab", "machine-id", "subuid", "subgid")
 
 
 class Refused(Exception):
@@ -40,7 +45,9 @@ def _under(path: str, root: str) -> bool:
 
 def validate_unit(unit: str) -> str:
     if not UNIT.fullmatch(unit):
-        raise Refused(f"not a unit name: {unit!r}")
+        raise Refused(f"not a service, timer, socket or path unit: {unit!r}")
+    if DENIED_UNIT.match(unit):
+        raise Refused(f"protected unit: {unit!r}")
     return unit
 
 
@@ -56,6 +63,12 @@ def validate_etc_path(path: str) -> str:
     final = os.path.join(real_parent, name)
     if os.path.islink(final):
         raise Refused(f"refusing to write through a symlink: {path!r}")
+    first = os.path.relpath(final, ETC).split("/")[0]
+    if first.rstrip("-") in PROTECTED or first.split("-")[0] in ("shadow", "gshadow", "passwd", "group"):
+        raise Refused(f"protected file: {path!r}")
+    if os.path.exists(final) and not os.stat(final).st_mode & 0o004:
+        # Snapshots land in the user's folder; never copy out what the user cannot read.
+        raise Refused(f"not world-readable: {path!r}")
     return final
 
 
@@ -73,6 +86,20 @@ def validate_user_path(path: str, uid: int, want_dir: bool) -> str:
     if want_dir != os.path.isdir(real):
         raise Refused(f"{'not a folder' if want_dir else 'not a file'}: {path!r}")
     return real
+
+
+def read_user_file(path: str, uid: int) -> bytes:
+    """Read a snapshot copy without following a symlink swapped in after the check."""
+    import stat
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != uid or not stat.S_ISREG(st.st_mode):
+            raise Refused(f"not a regular file owned by uid {uid}: {path!r}")
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read()
+    finally:
+        os.close(fd)
 
 
 def _entries(sdir: str) -> list[dict]:
@@ -145,8 +172,7 @@ def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin, chown=os.cho
                     os.unlink(path)
                 return 0
             copy = validate_user_path(args[1], uid, want_dir=False)
-            with open(copy, "rb") as f:
-                write_file(path, f.read())
+            write_file(path, read_user_file(copy, uid))
             return 0
         raise Refused(f"unknown operation: {' '.join(argv)!r}")
     except Refused as exc:

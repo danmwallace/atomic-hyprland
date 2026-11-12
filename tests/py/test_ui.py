@@ -70,6 +70,7 @@ class UiTest(unittest.TestCase):
         self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "allow")
         argv = self.log.read_text().splitlines()[0]
         self.assertIn("--dmenu", argv)
+        self.assertIn("-D allow_markup=false", argv)
         self.assertIn("Restart the bar", argv)
 
     def test_review_always(self):
@@ -92,6 +93,10 @@ class UiTest(unittest.TestCase):
         menu = (self.root / "menu.txt").read_text().splitlines()
         self.assertEqual(menu[:2], ["Allow", "Deny"])
         self.assertFalse(any(l.startswith("Always") for l in menu))
+
+    def test_card_body_shows_note_as_agents_words(self):
+        body = ui.card_body({"detail": "rm x", "undo": "u", "note": "tidy up"})
+        self.assertIn("Agent's note: tidy up", body)
 
     def test_choose_returns_key(self):
         stub(self.bin, "notify-send", "echo 7; echo default")

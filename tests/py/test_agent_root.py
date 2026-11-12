@@ -59,10 +59,10 @@ class AgentRootTest(unittest.TestCase):
 
     def test_rejects_bad_unit(self):
         self.assertEqual(self.run_main("unit", "restart", "foo;rm"), 2)
-        self.assertEqual(self.run_main("unit", "mask", "sshd.service"), 2)
+        self.assertEqual(self.run_main("unit", "mask", "cups.service"), 2)
         self.assertEqual(self.calls, [])
-        self.assertEqual(self.run_main("unit", "restart", "sshd.service"), 0)
-        self.assertEqual(self.calls, [["systemctl", "restart", "sshd.service"]])
+        self.assertEqual(self.run_main("unit", "restart", "cups.service"), 0)
+        self.assertEqual(self.calls, [["systemctl", "restart", "cups.service"]])
 
     def test_upgrade_never_applies(self):
         self.assertEqual(self.run_main("bootc-upgrade"), 0)
@@ -101,6 +101,37 @@ class AgentRootTest(unittest.TestCase):
         outside = self.root / "outside"
         outside.write_text("x")
         self.assertEqual(self.run_main("etc-restore", str(self.etc / "a"), str(outside)), 2)
+
+    def test_refuses_private_files(self):
+        secret = self.etc / "shadow-like"
+        secret.write_text("hash")
+        secret.chmod(0o600)
+        self.assertEqual(self.run_main("etc-snapshot", str(self.sdir), str(secret)), 2)
+        self.assertFalse((self.sdir / "files").exists())
+
+    def test_refuses_protected_paths(self):
+        for rel in ("shadow", "gshadow", "sudoers", "sudoers.d/x", "polkit-1/rules.d/x.rules", "pam.d/sudo",
+                    "ssh/sshd_config", "containers/policy.json", "passwd", "security/limits.conf"):
+            target = self.etc / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="x"), 2, rel)
+            self.assertFalse(target.exists(), rel)
+
+    def test_restore_copy_symlink_refused(self):
+        (self.sdir / "files").mkdir()
+        (self.sdir / "files/0").symlink_to(self.etc / "elsewhere")
+        (self.etc / "elsewhere").write_text("root data")
+        self.assertEqual(self.run_main("etc-restore", str(self.etc / "a"), str(self.sdir / "files/0")), 2)
+        self.assertFalse((self.etc / "a").exists())
+
+    def test_units_limited(self):
+        for unit in ("poweroff.target", "home.mount", "systemd-logind.service", "debug-shell.service",
+                     "emergency.service", "rescue.service", "dbus-broker.service", "polkit.service",
+                     "getty@tty1.service", "serial-getty@ttyS0.service"):
+            self.assertEqual(self.run_main("unit", "stop", unit), 2, unit)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.run_main("unit", "restart", "tailscaled.service"), 0)
+        self.assertEqual(self.run_main("unit", "start", "bootc-fetch-apply-updates.timer"), 0)
 
     def test_unknown_op_refused(self):
         self.assertEqual(self.run_main("bootc-switch", "quay.io/evil"), 2)
