@@ -168,10 +168,20 @@ class UiTest(unittest.TestCase):
         with mock.patch.object(ui.shutil, "which", return_value="/usr/bin/glow"):
             ui.show_markdown("# Title\n**bold**")
         argv = self.log.read_text().splitlines()[0].split()
-        self.assertEqual(argv[:4], ["hypr-terminal", "-e", "/usr/bin/glow", "-p"])
+        # less -R passes colours only; glow's default pager (less -r) passes every escape.
+        self.assertEqual(argv[:7], ["hypr-terminal", "-e", "env", "PAGER=less", "-R", "/usr/bin/glow", "-p"])
         page = Path(argv[-1])
         self.assertEqual(page.suffix, ".md")
         self.assertEqual(page.read_text(), "# Title\n**bold**")
+
+    def test_answer_escapes_never_reach_the_terminal(self):
+        # Model output can echo the screen or clipboard: an OSC 52 or a title escape in it
+        # must not reach the terminal.
+        stub(self.bin, "hypr-terminal", "")
+        with mock.patch.object(ui.shutil, "which", return_value="/usr/bin/glow"):
+            ui.show_markdown("ok\x1b]52;c;ZXZpbA==\x07 done\r\n\tcode\x9b2J")
+        page = Path(self.log.read_text().splitlines()[0].split()[-1])
+        self.assertEqual(page.read_text(), "ok]52;c;ZXZpbA== done\n\tcode2J")
 
     def test_answers_fall_back_to_plain_text_without_glow(self):
         stub(self.bin, "hypr-terminal", "")

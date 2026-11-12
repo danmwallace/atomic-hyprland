@@ -157,11 +157,18 @@ def _details(text: str) -> None:
     _page("details.txt", text, ["less"])
 
 
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
 def show_markdown(text: str) -> None:
-    """The agent's full answer or result, rendered by glow; plain text if glow is missing."""
+    """The agent's full answer or result, rendered by glow; plain text if glow is missing.
+    Model output can echo the screen or clipboard, so control characters (an OSC 52
+    clipboard write, a title or screen escape) are removed first, and glow pages through
+    less -R (colours only) instead of its default less -r (every escape)."""
+    text = _CONTROL.sub("", text)
     glow = shutil.which("glow")
     if glow:
-        _page("answer.md", text, [glow, "-p"])
+        _page("answer.md", text, ["env", "PAGER=less -R", glow, "-p"])
     else:
         _page("answer.txt", plain_summary(text, limit=len(text) + 1), ["less"])
 
