@@ -32,6 +32,9 @@ class AgentRootTest(unittest.TestCase):
         self.units_file = self.root / "agent-units"
         u = mock.patch.object(self.m, "UNITS_FILE", str(self.units_file))
         u.start(); self.addCleanup(u.stop)
+        self.etc_file = self.root / "agent-etc"
+        f = mock.patch.object(self.m, "ETC_FILE", str(self.etc_file))
+        f.start(); self.addCleanup(f.stop)
         o = mock.patch.object(self.m, "UNITS_FILE_OWNER", os.getuid())
         o.start(); self.addCleanup(o.stop)
         self.aliases = {}
@@ -91,8 +94,7 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(len((self.sdir / "manifest.jsonl").read_text().splitlines()), 1)
 
     def test_etc_write_new_file_records_absent(self):
-        (self.etc / "NetworkManager/conf.d").mkdir(parents=True)
-        target = self.etc / "NetworkManager/conf.d/new.conf"
+        target = self.etc / "hosts"
         self.run_main("etc-write", str(self.sdir), str(target), stdin="x")
         entry = json.loads((self.sdir / "manifest.jsonl").read_text().splitlines()[0])
         self.assertEqual(entry, {"path": str(target), "existed": False, "copy": None})
@@ -113,8 +115,7 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(self.run_main("etc-restore", str(self.etc / "a"), str(outside)), 2)
 
     def test_refuses_private_files(self):
-        (self.etc / "tuned").mkdir()
-        secret = self.etc / "tuned/private.conf"
+        secret = self.etc / "hosts"
         secret.write_text("hash")
         secret.chmod(0o600)
         self.assertEqual(self.run_main("etc-snapshot", str(self.sdir), str(secret)), 2)
@@ -166,9 +167,21 @@ class AgentRootTest(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="x"), 2, rel)
             self.assertFalse(target.exists(), rel)
-        (self.etc / "atomic-hyprland").mkdir(exist_ok=True)
-        for rel in ("hosts", "atomic-hyprland/agent.conf"):
-            self.assertEqual(self.run_main("etc-write", str(self.sdir), str(self.etc / rel), stdin="x\n"), 0, rel)
+        for rel in ("tuned/profile/tuned.conf", "fwupd/fwupd.conf", "NetworkManager/conf.d/x.conf",
+                    "atomic-hyprland/agent.conf", "atomic-hyprland/agent-units", "atomic-hyprland/agent-etc"):
+            target = self.etc / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="x"), 2, rel)
+        self.assertEqual(self.run_main("etc-write", str(self.sdir), str(self.etc / "hosts"), stdin="x\n"), 0)
+
+    def test_etc_file_extends_allowlist(self):
+        (self.etc / "chrony.conf").write_text("pool x\n")
+        self.assertEqual(self.run_main("etc-write", str(self.sdir), str(self.etc / "chrony.conf"), stdin="y"), 2)
+        self.etc_file.write_text("# machine additions\nchrony.conf\n")
+        self.assertEqual(self.run_main("etc-write", str(self.sdir), str(self.etc / "chrony.conf"), stdin="y"), 0)
+        self.etc_file.write_text("atomic-hyprland/agent-etc\n")  # never self-extending
+        target = self.etc / "atomic-hyprland/agent-etc"
+        self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="sudoers\n"), 2)
 
     def test_unknown_op_refused(self):
         self.assertEqual(self.run_main("bootc-switch", "quay.io/evil"), 2)

@@ -44,6 +44,15 @@ class RuleTest(unittest.TestCase):
                       "/home/u/.xprofile", "/home/u/Code/app/.envrc", "/tmp/x", "/opt/app/conf"):
                 self.assertIsNone(policy.always_rule("Edit", {"file_path": p}), p)
 
+    def test_rule_edit_refuses_path_dirs(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"HOME": "/home/u", "PATH": "/home/u/tools:/usr/bin"}):
+            self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/tools/git", "content": "x"}))
+            self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/bin/ls", "content": "x"}))
+            self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/a.py", "content": "x"}),
+                             "Edit(//home/u/Code/a.py)")
+
     def test_rule_none_for_compound_bash(self):
         for cmd in ("make && make install", "ls; id", "cat a | tee b", "echo $(id)", "echo hi > f"):
             self.assertIsNone(policy.always_rule("Bash", {"command": cmd}), cmd)

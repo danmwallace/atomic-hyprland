@@ -36,9 +36,16 @@ ALLOWED_UNITS = {
     "sshd.service", "tuned.service", "avahi-daemon.service", "fwupd.service", "podman.socket",
     "bootc-fetch-apply-updates.service", "bootc-fetch-apply-updates.timer", "ai-images-pull.service",
 }
-# The /etc files an agent may write: a file name, or a folder ending in "/".
-# Everything else is a PR to the image or a command for the user to run.
-ETC_ALLOWED = ("hosts", "atomic-hyprland/agent.conf", "NetworkManager/conf.d/", "tuned/", "fwupd/")
+# The /etc files an agent may write. Kept to files whose content cannot point a
+# root daemon at code or paths the user controls (tuned profiles run scripts,
+# daemon configs choose remotes and plugins). A machine owner adds more, one
+# path relative to /etc per line, in ETC_FILE (root-owned). Everything else is a
+# PR to the image or a command for the user to run.
+ETC_ALLOWED = ("hosts",)
+ETC_FILE = "/etc/atomic-hyprland/agent-etc"
+# Never writable through the helper, whatever ETC_FILE says: the helper's own
+# lists and the agent's config.
+ETC_NEVER = ("atomic-hyprland/",)
 
 
 class Refused(Exception):
@@ -53,16 +60,20 @@ def _under(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip("/") + "/")
 
 
-def allowed_units() -> set[str]:
-    extra: set[str] = set()
+def _root_list(path: str) -> set[str]:
+    """Lines of a root-owned, not group/world-writable list file; empty otherwise."""
     try:
-        st = os.stat(UNITS_FILE)
+        st = os.stat(path)
         if st.st_uid == UNITS_FILE_OWNER and not st.st_mode & 0o022:
-            with open(UNITS_FILE) as f:
-                extra = {l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")}
+            with open(path) as f:
+                return {l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")}
     except OSError:
         pass
-    return ALLOWED_UNITS | extra
+    return set()
+
+
+def allowed_units() -> set[str]:
+    return ALLOWED_UNITS | _root_list(UNITS_FILE)
 
 
 def validate_unit(unit: str, run=subprocess.run) -> str:
@@ -90,9 +101,12 @@ def validate_etc_path(path: str) -> str:
     if os.path.islink(final):
         raise Refused(f"refusing to write through a symlink: {path!r}")
     rel = os.path.relpath(final, ETC)
+    if any(rel == n or (n.endswith("/") and rel.startswith(n)) for n in ETC_NEVER):
+        raise Refused(f"the agent's own configuration: {path!r}")
+    allowed = set(ETC_ALLOWED) | _root_list(ETC_FILE)
     if not any(rel == a or (a.endswith("/") and rel.startswith(a) and "/" not in rel[len(a):])
-               for a in ETC_ALLOWED):
-        raise Refused(f"not on the agent's /etc list: {path!r}")
+               for a in allowed):
+        raise Refused(f"not on the agent's /etc list ({ETC_FILE} adds more): {path!r}")
     if os.path.exists(final) and not os.stat(final).st_mode & 0o004:
         # Snapshots land in the user's folder; never copy out what the user cannot read.
         raise Refused(f"not world-readable: {path!r}")

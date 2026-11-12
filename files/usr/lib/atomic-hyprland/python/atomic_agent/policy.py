@@ -119,6 +119,11 @@ def _edit_rule(path: str) -> str | None:
         return None
     if any(part.startswith(".") for part in real[len(home) + 1:].split("/")):
         return None
+    # Folders on PATH (and ~/bin) hold programs: a file there runs as a command.
+    path_dirs = {os.path.realpath(d) for d in os.environ.get("PATH", "").split(":") if d}
+    path_dirs.add(os.path.join(home, "bin"))
+    if any(real.startswith(d + "/") for d in path_dirs):
+        return None
     # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
     return f"Edit(/{real})"
 
