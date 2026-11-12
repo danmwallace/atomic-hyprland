@@ -71,10 +71,14 @@ holds a codeword, and `--permission-prompts none`:
 - It logs "Processing request …" and a pydantic warning to stderr; harmless
   (stdout carries the protocol). Servers set `log_level="WARNING"`.
 
-## E. polkit from a user unit: open
+## E. polkit from a user unit: confirmed
 
-Needs Dan at a Hyprland session (a password dialog appears). Re-checked in
-Task 7 on hardware.
+On the T430 (image `20261112-81d59fe`, 2026-11-12), from a user unit as Fix it
+runs: `systemd-run --user --wait --pipe -p Type=exec pkexec
+/usr/libexec/atomic-hyprland/agent-root`. hyprpolkitagent showed the
+`org.atomic-hyprland.agent.root` dialog; after the password, agent-root ran and
+exited 2 ("refused: no operation", nothing changed). A second call straight
+after ran in 131 ms with no dialog: `auth_admin_keep` holds.
 
 ## F. Gemini CLI mcpServers: confirmed
 
@@ -84,3 +88,19 @@ optional `headers`, `timeout`, `trust`, `includeTools`, `excludeTools`.
 **Ruling:** `sync_gemini` maps Claude-style `{"type":"http","url":U}` to
 `{"httpUrl":U}` and `{"type":"sse","url":U}` to `{"url":U}`; stdio entries map
 to `{"command":"hypr-mcp","args":["run",name]}`.
+
+## G. On hardware (T430, 2026-11-12): confirmed
+
+- **Window targeting:** the hyprland server's tools, called against the live
+  session with two throwaway windows: `focus_window` focused the addressed
+  window (not the other one), `move_window_to_workspace` moved only it without
+  following, `close_window` closed only it, and a malformed address was
+  refused. So `window = "address:0x…"` is the right key. `resize_window` was
+  not checked (tiled windows don't take an exact size).
+- **Long approvals:** a headless `claude -p` with the image's approvals server
+  and `MCP_TOOL_TIMEOUT=660000`; the card stayed open 300 s, then Allow. Claude
+  ran the command and finished with no denials, and no pending files were
+  left. (A stand-in `notify-send` kept the card open off screen.)
+- **By hand:** Super+A answer card, "Read the full answer" (glow), the
+  `[x]`/`[ ]` context toggles, question and approval cards, Super+Y (answer,
+  Escape, nothing waiting) and Undo of a scratch-file edit.
