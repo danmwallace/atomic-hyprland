@@ -26,6 +26,7 @@ from .policy import Card
 ALLOW, DENY, DETAILS = "Allow", "Deny", "Details…"
 ALWAYS = "Always allow: "
 SKIP = "Skip: let the agent decide"
+MD_READER = "/usr/libexec/atomic-hyprland/md-reader"
 EXPLAIN = "Allow lets the agent do this now. Deny blocks it, and the agent stops that step."
 
 
@@ -163,12 +164,11 @@ _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 def show_markdown(text: str) -> None:
     """The agent's full answer or result, rendered by glow; plain text if glow is missing.
     Model output can echo the screen or clipboard, so control characters (an OSC 52
-    clipboard write, a title or screen escape) are removed first, and glow pages through
-    less -R (colours only) instead of its default less -r (every escape)."""
+    clipboard write, a title or screen escape) are removed first; md-reader pages glow
+    through less -R (colours only) at the window's width."""
     text = _CONTROL.sub("", text)
-    glow = shutil.which("glow")
-    if glow:
-        _page("answer.md", text, ["env", "PAGER=less -R", glow, "-p"])
+    if shutil.which("glow"):
+        _page("answer.md", text, [MD_READER])
     else:
         _page("answer.txt", plain_summary(text, limit=len(text) + 1), ["less"])
 

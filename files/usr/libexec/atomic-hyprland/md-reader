@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+# The agent's full answer, rendered: md-reader FILE.md (hypr-agent opens it in a terminal).
+# glow -p wraps at a fixed 80 columns because it can't see the window through its
+# pager, so the width is read here and passed in, capped at 120 for reading.
+# Hyprland tiles a new window just after it opens: the size is read again after
+# a short wait, once the tiled size has arrived.
+# glow's own pager default is less -r, which hands every escape in the text to the
+# terminal; less -R passes colours only.
+set -u
+cols() { local s; s=$(stty size </dev/tty 2>/dev/null) && [[ -n "$s" ]] && echo "${s#* }"; }
+if c=$(cols); then
+    sleep 0.3
+    c=$(cols) || true
+else
+    c=${COLUMNS:-80}
+fi
+w=$(( c - 4 ))
+(( w > 120 )) && w=120
+(( w < 40 )) && w=40
+PAGER="less -R" exec glow -p -w "$w" "$1"

@@ -229,6 +229,10 @@ check python3 /tests/mcp-smoke.py screen capture
 check python3 /tests/mcp-smoke.py notify notify
 check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
 check test -x /usr/libexec/atomic-hyprland/agent-root
+check test -x /usr/libexec/atomic-hyprland/md-reader
+# login unlocks the keyring: without the PAM module (sddm's "-auth" lines skip it
+# silently) apps make a separate keyring that asks for its password every launch
+check test -f /usr/lib64/security/pam_gnome_keyring.so
 # no polkitd in the test container (pkaction needs it): check the installed action file
 check grep -q '<action id="org.atomic-hyprland.agent.root">' /usr/share/polkit-1/actions/org.atomic-hyprland.agent.policy
 check grep -qx https://github.com/danmwallace/atomic-hyprland /usr/share/atomic-hyprland/image-source
