@@ -3,6 +3,7 @@ import os
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from atomic_agent import ui
@@ -161,6 +162,40 @@ class UiTest(unittest.TestCase):
                         menu=lambda prompt, lines: next(picks), views={"read": "the whole answer"},
                         pager=shown.append)
         self.assertEqual((key, shown), ("fix", ["the whole answer"]))
+
+    def test_answers_open_in_glow(self):
+        stub(self.bin, "hypr-terminal", "")
+        with mock.patch.object(ui.shutil, "which", return_value="/usr/bin/glow"):
+            ui.show_markdown("# Title\n**bold**")
+        argv = self.log.read_text().splitlines()[0].split()
+        self.assertEqual(argv[:4], ["hypr-terminal", "-e", "/usr/bin/glow", "-p"])
+        page = Path(argv[-1])
+        self.assertEqual(page.suffix, ".md")
+        self.assertEqual(page.read_text(), "# Title\n**bold**")
+
+    def test_answers_fall_back_to_plain_text_without_glow(self):
+        stub(self.bin, "hypr-terminal", "")
+        with mock.patch.object(ui.shutil, "which", return_value=None):
+            ui.show_markdown("# Title\n**bold** " + "word " * 200)
+        argv = self.log.read_text().splitlines()[0].split()
+        self.assertEqual(argv[:3], ["hypr-terminal", "-e", "less"])
+        text = Path(argv[-1]).read_text()
+        self.assertTrue(text.startswith("Title\nbold word"))
+        self.assertNotIn("…", text)  # the whole answer, not the card's cut
+
+    def test_approval_details_never_rendered_as_markdown(self):
+        # Details must show the exact command: markdown would eat *, _, # and <tags>.
+        stub(self.bin, "hypr-terminal", "")
+        picks = iter([ui.DETAILS, None])
+        pid = ui.new_pending(Card(title="t", detail="rm *.log  # <b>x</b>", undo="u", rule=None), "s1")
+        with mock.patch.object(ui.shutil, "which", return_value="/usr/bin/glow"):
+            ui.review(pid, menu=lambda prompt, lines: next(picks))
+        argv = self.log.read_text().splitlines()[0].split()
+        self.assertEqual(argv[:3], ["hypr-terminal", "-e", "less"])
+        self.assertIn("rm *.log  # <b>x</b>", Path(argv[-1]).read_text())
+
+    def test_choose_views_open_as_markdown(self):
+        self.assertIs(ui.choose.__defaults__[-1], ui.show_markdown)
 
     def test_show_card_records_id_while_open(self):
         # I1: notify-send -p prints the id at once and keeps running until the card is answered.

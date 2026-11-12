@@ -12,6 +12,7 @@ Ids sort by creation time, so the oldest is the first in name order.
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -143,11 +144,26 @@ def details_text(card: dict) -> str:
     return f"{head}\n\n{EXPLAIN}\n\n{card.get('detail', '')}\n\n{note}{card.get('undo', '')}\n"
 
 
-def _details(text: str) -> None:
-    f = paths.runtime_dir() / "details.txt"
+def _page(name: str, text: str, argv: list[str]) -> None:
+    f = paths.runtime_dir() / name
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(text)
-    subprocess.run(["hypr-terminal", "-e", "less", str(f)])
+    subprocess.run(["hypr-terminal", "-e", *argv, str(f)])
+
+
+def _details(text: str) -> None:
+    # Plain less, never a markdown renderer: an approval's Details must show the exact
+    # command or diff, and markdown would turn *, _ and # into formatting and drop <tags>.
+    _page("details.txt", text, ["less"])
+
+
+def show_markdown(text: str) -> None:
+    """The agent's full answer or result, rendered by glow; plain text if glow is missing."""
+    glow = shutil.which("glow")
+    if glow:
+        _page("answer.md", text, [glow, "-p"])
+    else:
+        _page("answer.txt", plain_summary(text, limit=len(text) + 1), ["less"])
 
 
 def _review_questions(pid: str, card: dict, menu) -> None:
@@ -247,7 +263,7 @@ def close_card(nid: str | None) -> None:
 
 
 def choose(title: str, body: str, choices: list[tuple[str, str]], menu=_wofi, notify=_notify,
-           views: dict[str, str] | None = None, pager=_details) -> str | None:
+           views: dict[str, str] | None = None, pager=show_markdown) -> str | None:
     """A card with a menu of choices; returns the chosen key, or None if dismissed.
     A key in views opens its text in the pager, then the menu comes back."""
     # No expiry: Fix it / Undo live on this card.
