@@ -15,8 +15,17 @@ CANT_UNDO = "Can't be undone automatically."
 FILE_UNDO = "Undo restores the file."
 
 # A rule for a compound command would cover whatever follows the first part.
-_COMPOUND = re.compile(r";|&&|\|\||\||>|<|`|\$\(|\n")
-_SEGMENTS = re.compile(r"\s*(?:;|&&|\|\||\||\n)\s*")
+_COMPOUND = re.compile(r";|&|\||>|<|`|\$\(|\n")
+_SEGMENTS = re.compile(r"\s*(?:;|&&|\|\||\||&|\n)\s*")
+_GIT_OPTS_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+# Files whose "always allow" would let the agent widen its own reach or run code at
+# login: shell startup files, SSH, the agent's permissions and registry, Claude's own
+# config, user units and autostart, the session environment.
+_SENSITIVE = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".zshrc", ".zprofile",
+              ".config/elvish/", ".ssh/", ".gnupg/", ".config/atomic-hyprland/agent/",
+              ".config/atomic-hyprland/mcp.d/", ".claude/", ".claude.json", ".config/systemd/",
+              ".config/autostart/", ".config/uwsm/", ".config/environment.d/", ".local/bin/")
+_GLOB = re.compile(r"[*?\[\]{}]")
 _WRAPPERS = {"env", "command", "exec", "nohup", "time", "nice", "stdbuf"}
 _NEVER_FIRST = {"sudo", "pkexec", "su", "run0", "doas", "bootc", "rm", "rmdir", "shred", "unlink"}
 
@@ -42,6 +51,19 @@ def _words(segment: str) -> list[str]:
     return words
 
 
+def _git_subcommand(words: list[str]) -> str | None:
+    i = 1
+    while i < len(words):
+        w = words[i]
+        if w in _GIT_OPTS_WITH_ARG:
+            i += 2
+        elif w.startswith("-"):
+            i += 1
+        else:
+            return w
+    return None
+
+
 def _bash_never(command: str) -> bool:
     for segment in _SEGMENTS.split(command):
         w = _words(segment)
@@ -49,7 +71,7 @@ def _bash_never(command: str) -> bool:
             continue
         if w[0] in _NEVER_FIRST:
             return True
-        if w[0] == "git" and "push" in w[1:3]:
+        if w[0] == "git" and _git_subcommand(w) == "push":
             return True
         if w[:3] == ["gh", "pr", "create"]:
             return True
@@ -78,12 +100,26 @@ def always_rule(tool_name: str, tool_input: dict, root_tools: set[str] = frozens
         command = tool_input.get("command", "").strip()
         if not command or _COMPOUND.search(command):
             return None
-        return f"Bash({command}:*)"
+        # Exact match, not a prefix: Bash(cmd:*) would also allow cmd plus any
+        # extra arguments (find ... -delete after approving find ...).
+        return f"Bash({command})"
     if tool_name in EDIT_TOOLS:
-        path = tool_input.get("file_path") or tool_input.get("notebook_path")
-        # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
-        return f"Edit(/{path})" if path and path.startswith("/") else None
+        return _edit_rule(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
     return None
+
+
+def _edit_rule(path: str) -> str | None:
+    if not path.startswith("/") or _GLOB.search(path) or "/../" in path + "/" or "/./" in path + "/":
+        return None
+    real = os.path.realpath(path)
+    home = os.path.realpath(os.environ.get("HOME") or os.path.expanduser("~"))
+    if real.startswith(home + "/"):
+        rel = real[len(home) + 1:]
+        for s in _SENSITIVE:
+            if (s.endswith("/") and (rel + "/").startswith(s)) or rel == s:
+                return None
+    # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
+    return f"Edit(/{real})"
 
 
 def undo_note(tool_name: str, tool_input: dict, tool_notes: dict[str, str]) -> str:

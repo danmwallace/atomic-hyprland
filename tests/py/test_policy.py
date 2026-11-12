@@ -6,7 +6,14 @@ from atomic_agent import policy
 class RuleTest(unittest.TestCase):
     def test_rule_bash_prefix(self):
         self.assertEqual(policy.always_rule("Bash", {"command": "systemctl --user restart waybar"}),
-                         "Bash(systemctl --user restart waybar:*)")
+                         "Bash(systemctl --user restart waybar)")
+
+    def test_rule_is_exact_not_prefix(self):
+        # A prefix rule would also allow `find . -name x -delete` after approving `find . -name x`.
+        self.assertEqual(policy.always_rule("Bash", {"command": "find . -name x"}), "Bash(find . -name x)")
+
+    def test_rule_none_for_background_and(self):
+        self.assertIsNone(policy.always_rule("Bash", {"command": "sleep 1 & rm -rf x"}))
 
     def test_rule_mcp_tool(self):
         self.assertEqual(policy.always_rule("mcp__hyprland__focus_window", {"address": "0x1"}),
@@ -22,6 +29,24 @@ class RuleTest(unittest.TestCase):
         for cmd in ("make && make install", "ls; id", "cat a | tee b", "echo $(id)", "echo hi > f"):
             self.assertIsNone(policy.always_rule("Bash", {"command": cmd}), cmd)
 
+    def test_rule_edit_refuses_globs_and_dotdot(self):
+        for p in ("/home/u/*.conf", "/home/u/a?", "/home/u/[ab]", "/home/u/{a,b}", "/home/u/x/../y"):
+            self.assertIsNone(policy.always_rule("Edit", {"file_path": p}), p)
+
+    def test_rule_edit_refuses_sensitive_files(self):
+        home = "/home/u"
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"HOME": home}):
+            for p in (".bashrc", ".bash_profile", ".profile", ".zshrc", ".config/elvish/rc.elv",
+                      ".ssh/authorized_keys", ".config/atomic-hyprland/agent/permissions.json",
+                      ".config/atomic-hyprland/mcp.d/x.json", ".claude/settings.json",
+                      ".config/systemd/user/evil.service", ".config/autostart/x.desktop",
+                      ".config/uwsm/env-hyprland"):
+                self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{home}/{p}"}), p)
+            self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/.config/waybar/local.css"}),
+                             f"Edit(/{home}/.config/waybar/local.css)")
+
     def test_rule_none_for_root_tool(self):
         self.assertIsNone(policy.always_rule("mcp__system__restart_unit", {}, {"mcp__system__restart_unit"}))
 
@@ -34,6 +59,8 @@ class NeverAlwaysTest(unittest.TestCase):
         self.assertTrue(self.never("git push origin agent/fix"))
         self.assertTrue(self.never("gh pr create --fill"))
         self.assertFalse(self.never("git status"))
+        self.assertTrue(self.never("git -C /repo push origin main"))
+        self.assertTrue(self.never("git -c user.name=x --git-dir=/r/.git push"))
 
     def test_never_always_sudo_with_env_prefix(self):
         self.assertTrue(self.never("env FOO=1 sudo systemctl restart x"))
