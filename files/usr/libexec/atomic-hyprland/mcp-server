@@ -1,0 +1,11 @@
+#!/usr/bin/python3 -I
+"""Start one of the image's MCP servers: mcp-server <name> (atomic_agent.servers.<name>)."""
+import importlib
+import os
+import re
+import sys
+
+sys.path.insert(0, os.environ.get("ATOMIC_AGENT_PYLIB", "/usr/lib/atomic-hyprland/python"))
+if len(sys.argv) != 2 or not re.fullmatch(r"[a-z][a-z0-9_]*", sys.argv[1]):
+    sys.exit("usage: mcp-server <name>")
+importlib.import_module(f"atomic_agent.servers.{sys.argv[1]}").main()

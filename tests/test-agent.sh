@@ -22,4 +22,6 @@ check grep -qx 'PathChanged=/etc/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.pat
 check grep -qx 'PathChanged=%h/.config/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
 check test -d files/etc/atomic-hyprland/mcp.d
 check grep -q 'systemctl --global enable hypr-mcp-sync.service hypr-mcp-sync.path' build/40-finalize.sh
+check test -x files/usr/libexec/atomic-hyprland/mcp-server
+check python3 -m py_compile tests/mcp-smoke.py
 exit "$fail"
