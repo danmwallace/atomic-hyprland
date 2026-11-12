@@ -10,6 +10,7 @@ undo. The user's terminal folder is passed with --add-dir.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -24,24 +25,37 @@ from .registry import ServerDef, load_registry
 SHARE = Path(os.environ.get("ATOMIC_AGENT_DATA", "/usr/share/atomic-hyprland/agent"))
 MCP_SERVER = "/usr/libexec/atomic-hyprland/mcp-server"
 HOOK = "hypr-agent hook pre-tool-use"
+POST_HOOK = "hypr-agent hook post-tool-use"
+EDIT_MATCHER = "Edit|Write|MultiEdit|NotebookEdit"
 # Claude Code waits this long for an MCP tool; an approval waits up to 10 minutes.
 MCP_TOOL_TIMEOUT_MS = "660000"
 
 
-def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef]) -> dict:
+def _user_rules(rules_path: Path) -> list[str]:
+    """The saved "always allow" rules; only strings (anything else would make Claude
+    Code drop the whole settings file, hooks and denies included)."""
+    try:
+        allow = json.loads(rules_path.read_text()).get("permissions", {}).get("allow", [])
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [r for r in allow if isinstance(r, str) and r.strip()] if isinstance(allow, list) else []
+
+
+def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef], include_rules: bool = True) -> dict:
+    """include_rules=False for ask mode, which stays read-only whatever was always-allowed."""
     settings = json.loads(json.dumps(base))
     perms = settings.setdefault("permissions", {})
     allow = perms.setdefault("allow", [])
     for d in registry.values():
         allow += [f"mcp__{d.name}__{t}" for t in d.read_only_tools]
-    try:
-        allow += json.loads(rules_path.read_text()).get("permissions", {}).get("allow", [])
-    except (OSError, ValueError):
-        pass
+    if include_rules:
+        allow += _user_rules(rules_path)
     perms["allow"] = list(dict.fromkeys(allow))
     perms["defaultMode"] = "default"
-    settings["hooks"] = {"PreToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit",
-                                          "hooks": [{"type": "command", "command": HOOK}]}]}
+    settings["hooks"] = {
+        "PreToolUse": [{"matcher": EDIT_MATCHER, "hooks": [{"type": "command", "command": HOOK}]}],
+        "PostToolUse": [{"matcher": EDIT_MATCHER, "hooks": [{"type": "command", "command": POST_HOOK}]}],
+    }
     return settings
 
 
@@ -114,14 +128,16 @@ def chat_argv(sid: str, settings_file: Path, mcp_file: Path, prompt_file: Path, 
     return ["claude", "--resume", sid, *_isolation(settings_file, mcp_file, prompt_file, work_dir)]
 
 
-def prepare_session(sid: str) -> tuple[Path, Path, Path]:
-    """Write the session's settings, MCP config and system prompt; return their paths."""
+def prepare_session(sid: str, mode: str = "fix") -> tuple[Path, Path, Path]:
+    """Write the session's settings, MCP config and system prompt; return their paths.
+    mode "ask" leaves out the user's "always allow" rules."""
     sdir = paths.session_dir(sid)
     sdir.mkdir(parents=True, exist_ok=True)
     registry = load_registry(paths.registry_dirs())
     base = json.loads((SHARE / "settings.json").read_text())
     settings_file, mcp_file = sdir / "settings.json", sdir / "mcp.json"
-    settings_file.write_text(json.dumps(build_settings(base, paths.rules_file(), registry), indent=2))
+    settings = build_settings(base, paths.rules_file(), registry, include_rules=(mode != "ask"))
+    settings_file.write_text(json.dumps(settings, indent=2))
     mcp_file.write_text(json.dumps(mcp_config(registry), indent=2))
     return settings_file, mcp_file, system_prompt_file(sid)
 
@@ -155,15 +171,36 @@ def _result(cp: subprocess.CompletedProcess) -> str:
         return (cp.stderr or cp.stdout or "the agent did not answer").strip()[-500:]
 
 
+def finalize_screenshot(ctx: Context, shot: Path, sdir: Path) -> Context:
+    """Keep the screenshot only if its chip survived the prompt; otherwise delete it,
+    so it is never readable in the agent's folder."""
+    from dataclasses import replace
+    if ctx.screenshot is None:
+        shot.unlink(missing_ok=True)
+        return ctx
+    (sdir / "screens").mkdir(parents=True, exist_ok=True)
+    kept = sdir / "screens" / shot.name
+    os.replace(shot, kept)
+    return replace(ctx, screenshot=kept)
+
+
 def cmd_ask() -> int:
     sid = str(uuid.uuid4())
     sdir = paths.session_dir(sid)
-    sdir.mkdir(parents=True, exist_ok=True)
-    asked = prompt(capture(sdir))
+    shot_dir = paths.runtime_dir() / f"ask-{sid}"
+    captured = capture(shot_dir)
+    asked = prompt(captured)
     if asked is None:
+        if captured.screenshot:
+            captured.screenshot.unlink(missing_ok=True)
+        shutil.rmtree(shot_dir, ignore_errors=True)
         return 0
     text, ctx = asked
-    settings_file, mcp_file, prompt_file = prepare_session(sid)
+    sdir.mkdir(parents=True, exist_ok=True)
+    if captured.screenshot:
+        ctx = finalize_screenshot(ctx, captured.screenshot, sdir)
+    shutil.rmtree(shot_dir, ignore_errors=True)
+    settings_file, mcp_file, prompt_file = prepare_session(sid, mode="ask")
     cwd = str(ctx.cwd) if ctx.cwd else None
     save_meta(sid, cwd=cwd, mode="ask", question=text)
     pidfile = paths.runtime_dir() / "ask.pid"
@@ -200,13 +237,11 @@ def start_fix(sid: str, run=subprocess.run) -> str:
 
 
 def _changes(sid: str) -> list[str]:
-    m = paths.session_dir(sid) / "manifest.jsonl"
-    if not m.exists():
+    from .snapshots import changed
+    try:
+        return changed(paths.session_dir(sid))
+    except (OSError, ValueError):
         return []
-    entries = [json.loads(l) for l in m.read_text().splitlines() if l.strip()]
-    if {"event": "undone"} in entries:
-        return []
-    return [e["path"] for e in entries if "path" in e]
 
 
 def run_fix(sid: str) -> int:
@@ -242,7 +277,13 @@ def open_chat(sid: str, run=subprocess.run) -> int:
     return run(["uwsm-app", "--", "hypr-terminal", "-e", *env_prefix, *argv]).returncode
 
 
-def stop_all(run=subprocess.run) -> None:
+def stop_all(run=subprocess.run, settle: float = 0.6) -> None:
+    # Deny first, so a waiting approvals server answers Claude and cleans up its own
+    # card; then stop the units; then clear whatever a killed server left behind.
+    for pid_ in ui.list_pending():
+        ui.answer(pid_, "deny")
+    if ui.list_pending():
+        time.sleep(settle)
     run(["systemctl", "--user", "stop", "hypr-agent-*.service"], capture_output=True)
     pidfile = paths.runtime_dir() / "ask.pid"
     try:
@@ -258,9 +299,12 @@ def stop_all(run=subprocess.run) -> None:
         pidfile.unlink(missing_ok=True)
     for pid_ in ui.list_pending():
         data = ui.read_pending(pid_) or {}
-        ui.answer(pid_, "deny")
+        for ext in ("answer", "json"):
+            (paths.pending_dir() / f"{pid_}.{ext}").unlink(missing_ok=True)
         if data.get("notification"):
             run(["makoctl", "dismiss", "-n", str(data["notification"])], capture_output=True)
+    for stray in paths.pending_dir().glob("*.answer") if paths.pending_dir().is_dir() else []:
+        stray.unlink(missing_ok=True)
     signal_bar()
 
 
@@ -270,15 +314,6 @@ def _helper_restore(run):
         if cp.returncode != 0:
             raise OSError(f"agent-root etc-restore {path}: exit {cp.returncode}")
     return restore
-
-
-def _helper_snapshot(run):
-    def snap(sdir: Path, path: str) -> None:
-        sdir.mkdir(parents=True, exist_ok=True)
-        cp = run(["pkexec", HELPER, "etc-snapshot", str(sdir), path], capture_output=True, text=True)
-        if cp.returncode != 0:
-            raise OSError(f"agent-root etc-snapshot {path}: exit {cp.returncode}")
-    return snap
 
 
 def undo_session(sid: str, run=subprocess.run) -> list[str]:
@@ -307,14 +342,15 @@ def cmd_review() -> int:
 
 
 def cmd_hook(args: list[str]) -> int:
-    from .snapshots import hook_pre_tool_use
-    if args != ["pre-tool-use"]:
+    from .snapshots import hook_post_tool_use, hook_pre_tool_use
+    if args not in (["pre-tool-use"], ["post-tool-use"]):
         return 2
     try:
         event = json.load(sys.stdin)
-    except ValueError:
-        return 0
-    return hook_pre_tool_use(event, snapshot_etc=_helper_snapshot(subprocess.run))
+    except ValueError as exc:
+        print(f"hypr-agent: unreadable hook input ({exc}); blocking", file=sys.stderr)
+        return 2 if args == ["pre-tool-use"] else 0
+    return hook_pre_tool_use(event) if args == ["pre-tool-use"] else hook_post_tool_use(event)
 
 
 def cmd_sessions() -> int:

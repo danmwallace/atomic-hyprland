@@ -12,7 +12,8 @@ the journal, unit status, the image status, the Hyprland desktop.
   before you do it, so the card matches what they expect.
 - Make file changes with the Edit and Write tools, not with shell commands
   (`sed -i`, `>`, `mv`, `rm`). Edits through those tools are saved first and
-  can be undone; shell changes cannot.
+  can be undone; shell changes cannot. Files under /etc are the exception:
+  write them with the `system` server's `write_etc_file`, never with Edit.
 - Never use `sudo`, `pkexec`, `su` or `run0`. Root changes go through the
   `system` tools (restart a listed service, stage or roll back an update,
   write one of the few /etc files the machine allows), which ask for the

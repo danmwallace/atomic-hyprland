@@ -26,11 +26,7 @@ def _registry_maps() -> tuple[dict[str, str], set[str]]:
 def _ask(card, session: str) -> str:
     pid = ui.new_pending(card, session)
     ui.show_card(pid)
-    try:
-        return ui.wait_answer(pid)
-    finally:
-        data = ui.read_pending(pid)
-        ui.close_card((data or {}).get("notification"))
+    return ui.wait_answer(pid)  # closes the card once answered
 
 
 def save_rule(rule: str) -> None:

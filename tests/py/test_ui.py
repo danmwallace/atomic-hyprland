@@ -98,6 +98,34 @@ class UiTest(unittest.TestCase):
         body = ui.card_body({"detail": "rm x", "undo": "u", "note": "tidy up"})
         self.assertIn("Agent's note: tidy up", body)
 
+    def test_show_card_records_id_while_open(self):
+        # I1: notify-send -p prints the id at once and keeps running until the card is answered.
+        stub(self.bin, "notify-send", "echo 77; sleep 2")
+        pid = ui.new_pending(CARD, "s1")
+        ui.show_card(pid)
+        deadline = time.time() + 1.5
+        while time.time() < deadline and (ui.read_pending(pid) or {}).get("notification") != "77":
+            time.sleep(0.02)
+        self.assertEqual(ui.read_pending(pid)["notification"], "77")
+        closed = []
+        with mock.patch.object(ui, "close_card", side_effect=closed.append):
+            ui.answer(pid, "allow")
+            self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "allow")
+        self.assertEqual(closed, ["77"])
+
+    def test_late_worker_write_does_not_recreate_pending(self):
+        pid = ui.new_pending(CARD, "s1")
+        ui.answer(pid, "deny")
+        ui.wait_answer(pid, timeout=1, poll=0.02)
+        ui._record_notification(pid, "5")
+        self.assertEqual(list(ui.paths.pending_dir().iterdir()), [])
+
+    def test_choose_card_does_not_expire(self):
+        # I2: the answer and done cards stay until acted on (Fix it / Undo live there).
+        stub(self.bin, "notify-send", "echo 7")
+        ui.choose("Agent", "x", [("fix", "Fix it")])
+        self.assertIn(" -t 0 ", " " + self.log.read_text() + " ")
+
     def test_choose_returns_key(self):
         stub(self.bin, "notify-send", "echo 7; echo default")
         self.wofi_picks("Fix it")

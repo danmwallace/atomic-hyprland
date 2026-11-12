@@ -13,6 +13,7 @@
       "Bash(run0:*)",
       "Bash(doas:*)",
       "Bash(bootc switch:*)",
+      "Edit(//etc/**)",
       "Edit(~/.config/atomic-hyprland/agent/**)",
       "Edit(~/.config/atomic-hyprland/mcp.d/**)",
       "Edit(~/.local/state/atomic-hyprland/**)",

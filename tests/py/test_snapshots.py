@@ -28,10 +28,24 @@ class SnapshotTest(unittest.TestCase):
         self.assertTrue(entries[0]["existed"])
         self.assertEqual((self.sdir / entries[0]["copy"]).read_text(), "v1")
 
+    def test_undo_skips_unapplied(self):
+        # I6: the hook runs before the decision; a denied edit must not be undone later.
+        new = self.root / "home" / "denied.txt"
+        snapshots.snapshot(self.sdir, new)
+        new.write_text("the user made this later")
+        self.f.write_text("v1")
+        snapshots.snapshot(self.sdir, self.f)
+        self.f.write_text("user edit")
+        self.assertEqual(snapshots.undo(self.sdir), [])
+        self.assertTrue(new.exists())
+        self.assertEqual(self.f.read_text(), "user edit")
+        self.assertEqual(snapshots.changed(self.sdir), [])
+
     def test_undo_created_file_removed(self):
         new = self.root / "home" / "new.txt"
         snapshots.snapshot(self.sdir, new)
         new.write_text("created by the agent")
+        snapshots.mark_applied(self.sdir, new)
         self.assertEqual(snapshots.undo(self.sdir), [str(new)])
         self.assertFalse(new.exists())
 
@@ -41,6 +55,7 @@ class SnapshotTest(unittest.TestCase):
         self.f.write_text("v2")
         snapshots.snapshot(self.sdir, self.f)
         self.f.write_text("v3")
+        snapshots.mark_applied(self.sdir, self.f)
         snapshots.undo(self.sdir)
         self.assertEqual(self.f.read_text(), "v1")
 
@@ -49,12 +64,16 @@ class SnapshotTest(unittest.TestCase):
         self.f.write_text("a1"); b.write_text("b1")
         snapshots.snapshot(self.sdir, self.f)
         snapshots.snapshot(self.sdir, b)
+        snapshots.mark_applied(self.sdir, self.f)
+        snapshots.mark_applied(self.sdir, b)
+        self.assertEqual(snapshots.changed(self.sdir), [str(self.f), str(b)])
         self.assertEqual(snapshots.undo(self.sdir), [str(b), str(self.f)])
 
     def test_undo_twice_is_noop(self):
         self.f.write_text("v1")
         snapshots.snapshot(self.sdir, self.f)
         self.f.write_text("v2")
+        snapshots.mark_applied(self.sdir, self.f)
         snapshots.undo(self.sdir)
         self.f.write_text("later, by hand")
         self.assertEqual(snapshots.undo(self.sdir), [])
@@ -64,6 +83,7 @@ class SnapshotTest(unittest.TestCase):
         calls = []
         with open(self.sdir.mkdir(parents=True) or self.sdir / "manifest.jsonl", "w") as m:
             m.write(json.dumps({"path": "/etc/x.conf", "existed": True, "copy": "files/0"}) + "\n")
+            m.write(json.dumps({"event": "applied", "path": "/etc/x.conf"}) + "\n")
         snapshots.undo(self.sdir, restore_etc=lambda p, c: calls.append((p, c)))
         self.assertEqual(calls, [("/etc/x.conf", str(self.sdir / "files/0"))])
 
@@ -95,16 +115,36 @@ class HookTest(unittest.TestCase):
         self.assertEqual(snapshots.hook_pre_tool_use(ev), 0)
         self.assertFalse((self.root / "state").exists())
 
-    def test_hook_routes_etc(self):
-        calls = []
-        rc = snapshots.hook_pre_tool_use(self.event("Edit", "/etc/hosts"), snapshot_etc=lambda s, p: calls.append((s, p)))
-        self.assertEqual(rc, 0)
-        self.assertEqual(calls[0][1], "/etc/hosts")
+    def test_hook_refuses_etc(self):
+        # I3: Edit cannot write /etc as the user anyway; the system tool asks after the card.
+        import io, contextlib
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(snapshots.hook_pre_tool_use(self.event("Edit", "/etc/hosts")), 2)
+        self.assertIn("write_etc_file", err.getvalue())
+        self.assertFalse((self.root / "state").exists())
 
-    def test_hook_etc_failure_blocks(self):
-        def boom(s, p):
-            raise OSError("pkexec refused")
-        self.assertEqual(snapshots.hook_pre_tool_use(self.event("Edit", "/etc/hosts"), snapshot_etc=boom), 2)
+    def test_hook_fails_closed(self):
+        # I7: any error blocks the edit, so nothing changes without an undo copy.
+        import io, contextlib
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(snapshots.hook_pre_tool_use({"tool_name": "Edit", "tool_input": {"file_path": "/h/x"}}), 2)
+            sdir = self.root / "state/atomic-hyprland/agent/s1"
+            sdir.mkdir(parents=True)
+            (sdir / "manifest.jsonl").write_text("{not json\n")
+            f = self.root / "x"; f.write_text("a")
+            self.assertEqual(snapshots.hook_pre_tool_use(self.event("Edit", f)), 2)
+
+    def test_post_hook_marks_applied(self):
+        f = self.root / "x"; f.write_text("orig")
+        snapshots.hook_pre_tool_use(self.event("Edit", f))
+        sdir = self.root / "state/atomic-hyprland/agent/s1"
+        self.assertEqual(snapshots.changed(sdir), [])
+        ev = dict(self.event("Edit", f), hook_event_name="PostToolUse")
+        self.assertEqual(snapshots.hook_post_tool_use(ev), 0)
+        self.assertEqual(snapshots.changed(sdir), [str(f)])
+        snapshots.hook_post_tool_use(ev)
+        self.assertEqual(snapshots.changed(sdir), [str(f)])
 
 
 if __name__ == "__main__":

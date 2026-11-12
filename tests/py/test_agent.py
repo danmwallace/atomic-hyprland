@@ -36,11 +36,29 @@ class AgentTest(unittest.TestCase):
         hook = s["hooks"]["PreToolUse"][0]
         self.assertEqual(hook["matcher"], "Edit|Write|MultiEdit|NotebookEdit")
         self.assertEqual(hook["hooks"][0]["command"], "hypr-agent hook pre-tool-use")
+        self.assertEqual(s["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "hypr-agent hook post-tool-use")
 
     def test_build_settings_includes_user_rules(self):
         rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
         s = agent.build_settings(BASE, rules, registry())
         self.assertIn("Bash(make)", s["permissions"]["allow"])
+
+    def test_ask_settings_ignore_always_rules(self):
+        # I4: ask mode stays read-only even after the user saved "always allow" rules.
+        rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
+        s = agent.build_settings(BASE, rules, registry(), include_rules=False)
+        self.assertNotIn("Bash(make)", s["permissions"]["allow"])
+        self.assertIn("mcp__system__journal", s["permissions"]["allow"])
+
+    def test_build_settings_drops_malformed_rules(self):
+        # A non-string rule would make Claude Code ignore the whole settings file (hooks, denies).
+        rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)", 5, {"x": 1}, null]}}')
+        allow = agent.build_settings(BASE, rules, registry())["permissions"]["allow"]
+        self.assertTrue(all(isinstance(r, str) for r in allow))
+        self.assertIn("Bash(make)", allow)
+        bad = write_json(self.root / "bad.json", '{"permissions": {"allow": "Bash(make)"}}')
+        allow = agent.build_settings(BASE, bad, registry())["permissions"]["allow"]
+        self.assertTrue(all(isinstance(r, str) for r in allow))
 
     def test_base_settings_no_free_network(self):
         # Reading is free, sending is not: a prompt injection must not be able to Read a
@@ -62,6 +80,7 @@ class AgentTest(unittest.TestCase):
                      "Edit(~/.local/state/atomic-hyprland/**)"):
             self.assertIn(rule, deny)
         self.assertEqual(BASE["permissions"]["disableBypassPermissionsMode"], "disable")
+        self.assertIn("Edit(//etc/**)", deny)
 
     def test_mcp_config(self):
         cfg = agent.mcp_config(registry())["mcpServers"]
@@ -161,6 +180,35 @@ class FixStopUndoTest(unittest.TestCase):
         self.assertEqual(result["answer"], "deny")
         self.assertIn(["systemctl", "--user", "stop", "hypr-agent-*.service"], self.calls)
 
+    def test_stop_cleans_orphan_pending(self):
+        # C2: when stop kills the approvals server, nothing is left waiting forever.
+        from atomic_agent import paths, ui
+        from atomic_agent.policy import Card
+        pid = ui.new_pending(Card("t", "d", "u", None), "s1")
+        ui._record_notification(pid, "9")
+        with mock.patch("time.sleep"):
+            agent.stop_all(run=self.fake_run)
+        self.assertEqual(list(paths.pending_dir().iterdir()), [])
+        self.assertIn(["makoctl", "dismiss", "-n", "9"], self.calls)
+
+    def test_finalize_screenshot(self):
+        # I5: a removed (or cancelled) screenshot is deleted, not left where the agent can Read it.
+        shot = self.root / "run/ask.png"
+        shot.parent.mkdir(parents=True)
+        shot.write_bytes(b"png")
+        ctx = agent.finalize_screenshot(Context(None, None, None), shot, self.root / "sess")
+        self.assertIsNone(ctx.screenshot)
+        self.assertFalse(shot.exists())
+        shot.write_bytes(b"png")
+        ctx = agent.finalize_screenshot(Context(shot, None, None), shot, self.root / "sess")
+        self.assertEqual(ctx.screenshot, self.root / "sess/screens/ask.png")
+        self.assertTrue(ctx.screenshot.exists())
+        self.assertFalse(shot.exists())
+
+    def test_hook_cli_bad_stdin_blocks(self):
+        with mock.patch("sys.stdin", self.io.StringIO("not json")), mock.patch("sys.stderr", self.io.StringIO()):
+            self.assertEqual(agent.dispatch(["hook", "pre-tool-use"]), 2)
+
     def test_stop_kills_ask_and_dismisses_cards(self):
         from atomic_agent import paths, ui
         from atomic_agent.policy import Card
@@ -189,7 +237,9 @@ class FixStopUndoTest(unittest.TestCase):
         (sdir / "files/0").write_text("orig")
         (sdir / "manifest.jsonl").write_text(
             '{"path": "/etc/hosts", "existed": true, "copy": "files/0"}\n'
-            '{"path": "/etc/new.conf", "existed": false, "copy": null}\n')
+            '{"event": "applied", "path": "/etc/hosts"}\n'
+            '{"path": "/etc/new.conf", "existed": false, "copy": null}\n'
+            '{"event": "applied", "path": "/etc/new.conf"}\n')
         restored = agent.undo_session("s1", run=self.fake_run)
         self.assertEqual(restored, ["/etc/new.conf", "/etc/hosts"])
         helper = "/usr/libexec/atomic-hyprland/agent-root"
@@ -211,7 +261,8 @@ class FixStopUndoTest(unittest.TestCase):
     def test_sessions_lists_changes(self):
         from atomic_agent import paths
         agent.save_meta("s1", mode="fix", cwd="/h")
-        (paths.session_dir("s1") / "manifest.jsonl").write_text('{"path": "/h/a", "existed": true, "copy": "files/0"}\n')
+        (paths.session_dir("s1") / "manifest.jsonl").write_text(
+            '{"path": "/h/a", "existed": true, "copy": "files/0"}\n{"event": "applied", "path": "/h/a"}\n')
         with mock.patch("sys.stdout", self.io.StringIO()) as out:
             agent.dispatch(["sessions"])
         self.assertIn("s1", out.getvalue())

@@ -60,6 +60,28 @@ def oldest_pending() -> str | None:
     return pending[0] if pending else None
 
 
+def _record_notification(pid: str, nid: str) -> None:
+    """Store the card's notification id; never recreates a pending entry already gone."""
+    data = read_pending(pid)
+    if data is None:
+        return
+    data["notification"] = nid
+    try:
+        fd = os.open(_pending(pid, "json"), os.O_WRONLY | os.O_TRUNC)
+    except FileNotFoundError:
+        return
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(data))
+
+
+def discard_pending(pid: str) -> None:
+    """Remove a pending entry and close its card (after it was answered, or on stop)."""
+    data = read_pending(pid) or {}
+    for ext in ("answer", "json"):
+        _pending(pid, ext).unlink(missing_ok=True)
+    close_card(data.get("notification"))
+
+
 def wait_answer(pid: str, timeout: float = 600.0, poll: float = 0.25) -> str:
     card, ans = _pending(pid, "json"), _pending(pid, "answer")
     deadline = time.monotonic() + timeout
@@ -71,8 +93,7 @@ def wait_answer(pid: str, timeout: float = 600.0, poll: float = 0.25) -> str:
         if not card.exists():
             break
         time.sleep(poll)
-    for p in (ans, card):
-        p.unlink(missing_ok=True)
+    discard_pending(pid)
     return choice
 
 
@@ -113,16 +134,22 @@ def review(pid: str, menu=_wofi) -> None:
         return
 
 
-def _notify(title: str, body: str, urgency: str = "normal") -> subprocess.Popen:
-    return subprocess.Popen(["notify-send", "-a", "hypr-agent", "-u", urgency, "-p", "-A", "default=Open",
-                             "--wait", title, body], stdout=subprocess.PIPE, text=True)
+def _notify(title: str, body: str, urgency: str = "normal", timeout_ms: int | None = None) -> subprocess.Popen:
+    argv = ["notify-send", "-a", "hypr-agent", "-u", urgency, "-p", "-A", "default=Open", "--wait"]
+    if timeout_ms is not None:
+        argv += ["-t", str(timeout_ms)]
+    return subprocess.Popen(argv + [title, body], stdout=subprocess.PIPE, text=True)
 
 
-def _await_action(proc: subprocess.Popen) -> tuple[str | None, str | None]:
-    """notify-send -p --wait prints the notification id, then the chosen action (if any)."""
-    out, _ = proc.communicate()
-    lines = [l.strip() for l in out.splitlines() if l.strip()]
-    return (lines[0] if lines else None), (lines[1] if len(lines) > 1 else None)
+def _await_action(proc: subprocess.Popen, on_id=None) -> tuple[str | None, str | None]:
+    """notify-send -p --wait prints the notification id at once, then the chosen action
+    (if any) when the card is clicked or closed."""
+    nid = (proc.stdout.readline() or "").strip() or None
+    if nid and on_id:
+        on_id(nid)
+    rest, _ = proc.communicate()
+    lines = [l.strip() for l in rest.splitlines() if l.strip()]
+    return nid, (lines[0] if lines else None)
 
 
 def card_body(card: dict) -> str:
@@ -137,12 +164,7 @@ def show_card(pid: str, notify=_notify) -> threading.Thread:
 
     def worker():
         proc = notify(card["title"], card_body(card), "critical")
-        nid, action = _await_action(proc)
-        if nid:
-            data = read_pending(pid)
-            if data is not None:
-                data["notification"] = nid
-                _pending(pid, "json").write_text(json.dumps(data))
+        _, action = _await_action(proc, on_id=lambda nid: _record_notification(pid, nid))
         if action == "default":
             review(pid)
         else:
@@ -160,7 +182,8 @@ def close_card(nid: str | None) -> None:
 
 def choose(title: str, body: str, choices: list[tuple[str, str]], menu=_wofi, notify=_notify) -> str | None:
     """A card with a menu of choices; returns the chosen key, or None if dismissed."""
-    _, action = _await_action(notify(title, body))
+    # No expiry: Fix it / Undo live on this card.
+    _, action = _await_action(notify(title, body, "normal", 0))
     if action != "default":
         return None
     labels = {label: key for key, label in choices}

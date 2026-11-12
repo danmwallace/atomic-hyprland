@@ -74,7 +74,8 @@ def clipboard_text(run=subprocess.run, limit: int = 4000) -> str | None:
     return text[:limit] if text.strip() else None
 
 
-def capture(session_dir: Path, run=subprocess.run) -> Context:
+def capture(shot_dir: Path, run=subprocess.run) -> Context:
+    """shot_dir holds the screenshot until the user decides to keep it (not the agent's folder)."""
     active = {}
     try:
         active = json.loads(run(["hyprctl", "-j", "activewindow"], capture_output=True, text=True, timeout=5).stdout)
@@ -82,8 +83,8 @@ def capture(session_dir: Path, run=subprocess.run) -> Context:
         pass
     shot = None
     if active.get("at") and active.get("size"):
-        (session_dir / "screens").mkdir(parents=True, exist_ok=True)
-        path = session_dir / "screens" / "ask.png"
+        shot_dir.mkdir(parents=True, exist_ok=True)
+        path = shot_dir / "ask.png"
         if run(["grim", "-g", window_geometry(active), str(path)], capture_output=True, timeout=10).returncode == 0:
             shot = path
     cwd = terminal_cwd(int(active["pid"])) if active.get("class") in TERMINAL_CLASSES and active.get("pid") else None
