@@ -168,8 +168,7 @@ class UiTest(unittest.TestCase):
         with mock.patch.object(ui.shutil, "which", return_value="/usr/bin/glow"):
             ui.show_markdown("# Title\n**bold**")
         argv = self.log.read_text().splitlines()[0].split()
-        # less -R passes colours only; glow's default pager (less -r) passes every escape.
-        self.assertEqual(argv[:7], ["hypr-terminal", "-e", "env", "PAGER=less", "-R", "/usr/bin/glow", "-p"])
+        self.assertEqual(argv[:3], ["hypr-terminal", "-e", "/usr/libexec/atomic-hyprland/md-reader"])
         page = Path(argv[-1])
         self.assertEqual(page.suffix, ".md")
         self.assertEqual(page.read_text(), "# Title\n**bold**")

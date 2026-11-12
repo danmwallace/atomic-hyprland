@@ -34,6 +34,7 @@ check bash -c '! grep -qE "^(from|import) atomic_agent|sys.path" files/usr/libex
 # agent cards are plain text: no markup that could hide the real command
 check bash -c "grep -A1 -x '\[app-name=hypr-agent\]' files/usr/share/atomic-hyprland/mako/core.ini | grep -qx markup=0"
 check bash -c "awk '/^\\[app-name=hypr-agent\\]/{s=1;next} /^\\[/{s=0} s && /^height=320$/{f=1} END{exit !f}' files/usr/share/atomic-hyprland/mako/core.ini"
+check test -x files/usr/libexec/atomic-hyprland/md-reader
 # the image's source repo is set once and feeds both the label and the PR target
 check grep -qx 'ARG IMAGE_SOURCE=https://github.com/danmwallace/atomic-hyprland' Containerfile
 check grep -q 'org.opencontainers.image.source="${IMAGE_SOURCE}"' Containerfile

@@ -73,6 +73,8 @@ NetworkManager-wifi
 NetworkManager-tui
 nm-connection-editor-desktop
 gnome-keyring
+# the PAM module: login unlocks the keyring (sddm's PAM file loads it if present)
+gnome-keyring-pam
 qt5-qtwayland
 qt6-qtwayland
 cups-pk-helper
