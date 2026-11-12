@@ -180,7 +180,8 @@ def finalize_screenshot(ctx: Context, shot: Path, sdir: Path) -> Context:
         return ctx
     (sdir / "screens").mkdir(parents=True, exist_ok=True)
     kept = sdir / "screens" / shot.name
-    os.replace(shot, kept)
+    # shutil.move, not os.replace: the runtime dir is tmpfs and the state dir is not (EXDEV).
+    shutil.move(shot, kept)
     return replace(ctx, screenshot=kept)
 
 
@@ -403,4 +404,15 @@ def dispatch(argv: list[str]) -> int:
 
 
 def main(argv: list[str]) -> int:
-    return dispatch(argv)
+    if argv[:1] == ["hook"]:
+        return dispatch(argv)  # hooks fail closed with their own exit codes
+    try:
+        return dispatch(argv)
+    except Exception as e:
+        # Run from a keybind there is no terminal: say so on screen, keep the traceback for the journal.
+        import traceback
+        traceback.print_exc()
+        cmd = argv[0] if argv else ""
+        subprocess.run(["notify-send", "-a", "hypr-agent", "-u", "critical",
+                        f"hypr-agent {cmd} failed", f"{type(e).__name__}: {e}"], capture_output=True)
+        return 1

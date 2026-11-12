@@ -205,6 +205,37 @@ class FixStopUndoTest(unittest.TestCase):
         self.assertTrue(ctx.screenshot.exists())
         self.assertFalse(shot.exists())
 
+    def test_finalize_screenshot_across_filesystems(self):
+        # The screenshot waits in $XDG_RUNTIME_DIR (tmpfs) and is kept under ~/.local/state
+        # (btrfs on real installs): a rename across them fails with EXDEV.
+        import errno
+        shot = self.root / "run/ask.png"
+        shot.parent.mkdir(parents=True)
+        shot.write_bytes(b"png")
+
+        def exdev(*a, **k):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        with mock.patch("os.replace", exdev), mock.patch("os.rename", exdev):
+            ctx = agent.finalize_screenshot(Context(shot, None, None), shot, self.root / "sess")
+        self.assertEqual(ctx.screenshot.read_bytes(), b"png")
+        self.assertFalse(shot.exists())
+
+    def test_main_reports_a_crash_as_a_notification(self):
+        # Super+A runs from a keybind with no terminal: a crash must reach the screen.
+        calls = []
+        with mock.patch.dict(agent.COMMANDS, {"ask": mock.Mock(side_effect=RuntimeError("boom"))}), \
+                mock.patch.object(agent.subprocess, "run", lambda argv, **k: calls.append(argv)), \
+                mock.patch("sys.stderr", self.io.StringIO()):
+            self.assertEqual(agent.main(["ask"]), 1)
+        self.assertEqual(calls[0][:4], ["notify-send", "-a", "hypr-agent", "-u"])
+        self.assertIn("boom", calls[0][-1])
+
+    def test_main_leaves_hook_errors_to_the_hook(self):
+        # Hooks fail closed with their own exit codes; main must not turn them into 1.
+        with mock.patch.dict(agent.COMMANDS, {"hook": mock.Mock(side_effect=RuntimeError("boom"))}):
+            with self.assertRaises(RuntimeError):
+                agent.main(["hook", "pre-tool-use"])
+
     def test_hook_cli_bad_stdin_blocks(self):
         with mock.patch("sys.stdin", self.io.StringIO("not json")), mock.patch("sys.stderr", self.io.StringIO()):
             self.assertEqual(agent.dispatch(["hook", "pre-tool-use"]), 2)
