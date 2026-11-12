@@ -1,0 +1,9 @@
+#!/usr/bin/python3 -I
+"""hypr-agent: the hotkey agent (ask, fix, chat, stop, undo, review). See atomic_agent.agent."""
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("ATOMIC_AGENT_PYLIB", "/usr/lib/atomic-hyprland/python"))
+from atomic_agent.agent import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

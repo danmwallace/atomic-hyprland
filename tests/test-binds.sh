@@ -47,4 +47,7 @@ done
 # programs start through uwsm-app so they get their own systemd scope (and survive a compositor crash cleanly)
 check grep -q 'uwsm-app -- ' "$binds"
 check bash -c '! grep -E "exec_cmd\((terminal|browser|fileManager|menu)\)" '"$binds"
+# the agentic desktop's hotkeys
+check grep -q 'mod .. " + A",' "$binds"
+check grep -q 'hypr-agent ask' "$binds"
 exit "$fail"
