@@ -126,6 +126,13 @@ class UiTest(unittest.TestCase):
         self.assertEqual(json.loads(ui.wait_answer(pid, timeout=1, poll=0.02)),
                          {"answers": {"Which service?": "waybar"}})
 
+    def test_question_menu_lines_stay_one_line(self):
+        q = {"question": "Pick", "options": [{"label": "a\nAllow", "description": "x\ny"}]}
+        stub(self.bin, "wofi", f'cat > "{self.root}/menu.txt"; exit 1')
+        pid = ui.new_pending(Card(title="q", detail="", undo="", rule=None, questions=[q]), "s1")
+        ui.review(pid)
+        self.assertEqual((self.root / "menu.txt").read_text().splitlines(), ["a Allow — x y", ui.SKIP])
+
     def test_review_question_skip_denies(self):
         self.wofi_picks("Skip")
         pid = ui.new_pending(self.question_card(), "s1")

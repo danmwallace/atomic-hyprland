@@ -155,12 +155,17 @@ def _clip(text: str, limit: int = 300) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
+_PLAIN_KEY = re.compile(r"[A-Za-z0-9_.-]+")
+
+
 def _kv(tool_input: dict) -> str:
-    """Arguments as "key: value" lines; nested values stay compact JSON."""
+    """Arguments as "key: value" lines, one line each: a value with a newline or other
+    control character is shown escaped, so it cannot fake extra argument lines."""
     out = []
     for k in sorted(tool_input):
         v = tool_input[k]
-        out.append(f"{k}: {v if isinstance(v, str) else json.dumps(v)}")
+        key = k if _PLAIN_KEY.fullmatch(k) else json.dumps(k)
+        out.append(f"{key}: {v if isinstance(v, str) and v.isprintable() else json.dumps(v)}")
     return "\n".join(out)
 
 
@@ -185,17 +190,17 @@ def card_for(tool_name: str, tool_input: dict, tool_notes: dict[str, str], root_
     note, questions = "", []
     if tool_name == "Bash":
         detail = tool_input.get("command", "")
-        title, summary, preview = "The agent wants to run a command", _one_line(detail), _clip(detail.strip())
+        title, summary, preview = "The agent wants to run a command", f"Run: {_one_line(detail)}", _clip(detail.strip())
         note = tool_input.get("description", "")
     elif tool_name in ("Edit", "MultiEdit"):
         edits = [tool_input] if tool_name == "Edit" else tool_input.get("edits", [])
         detail = "\n".join(_diff(path, e.get("old_string", ""), e.get("new_string", "")) for e in edits)
-        title, summary, preview = "The agent wants to edit a file", path, f"{path} ({_changed_lines(detail)})"
+        title, summary, preview = "The agent wants to edit a file", f"Edit {path}", f"{path} ({_changed_lines(detail)})"
     elif tool_name == "Write":
         content = tool_input.get("content", "")
         detail = "".join(content.splitlines(keepends=True)[:40])
         verb = "overwrite" if os.path.exists(path) else "create"
-        title, summary, preview = f"The agent wants to {verb} a file", path, f"{path} ({len(content.splitlines())} lines)"
+        title, summary, preview = f"The agent wants to {verb} a file", f"{verb.capitalize()} {path}", f"{path} ({len(content.splitlines())} lines)"
     elif tool_name == "AskUserQuestion":
         questions = list(tool_input.get("questions", []))
         detail = _question_text(questions)
@@ -206,10 +211,12 @@ def card_for(tool_name: str, tool_input: dict, tool_notes: dict[str, str], root_
     elif tool_name.startswith("mcp__"):
         _, server, tool = tool_name.split("__", 2)
         detail = _kv(tool_input)
-        title, summary, preview = f"The agent wants to use {server}: {tool.replace('_', ' ')}", _one_line(detail), _clip(detail)
+        action = f"{server}: {tool.replace('_', ' ')}"
+        # summary is the menu prompt: it names the tool, never just one of its arguments.
+        title, summary, preview = f"The agent wants to use {action}", action, _clip(detail)
     else:
         detail = _kv(tool_input)
-        title, summary, preview = f"The agent wants to use {tool_name}", _one_line(detail), _clip(detail)
+        title, summary, preview = f"The agent wants to use {tool_name}", tool_name, _clip(detail)
     undo = "" if questions else undo_note(tool_name, tool_input, tool_notes)
     return Card(title=title, detail=detail, undo=undo, rule=None if questions else always_rule(tool_name, tool_input, root_tools),
                 note=note, summary=summary, preview=preview, questions=questions)

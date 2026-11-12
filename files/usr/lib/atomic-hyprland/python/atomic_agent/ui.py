@@ -153,7 +153,7 @@ def _details(text: str) -> None:
 def _review_questions(pid: str, card: dict, menu) -> None:
     answers = {}
     for q in card["questions"]:
-        lines = {(f"{o.get('label', '')} — {o['description']}" if o.get("description") else o.get("label", "")):
+        lines = {_flat(f"{o.get('label', '')} — {o['description']}" if o.get("description") else o.get("label", "")):
                  o.get("label", "") for o in q.get("options", [])}
         pick = menu(_one(q.get("question", "") or card.get("summary", "")), [*lines, SKIP])
         if pick is None:
@@ -163,6 +163,11 @@ def _review_questions(pid: str, card: dict, menu) -> None:
             return
         answers[q.get("question", "")] = lines[pick]
     answer_questions(pid, answers)
+
+
+def _flat(text: str) -> str:
+    """One menu line: a newline in an option must not become a line of its own."""
+    return " ".join("".join(c if c.isprintable() else " " for c in text).split())
 
 
 def _one(text: str, width: int = 80) -> str:
