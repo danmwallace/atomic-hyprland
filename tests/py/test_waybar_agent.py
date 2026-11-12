@@ -57,6 +57,12 @@ class WaybarAgentTest(unittest.TestCase):
         self.assertEqual(out["text"], "󱚥 2")
         self.assertIn("Run: x", out["tooltip"])
 
+    def test_tooltip_escapes_markup(self):
+        ui.new_pending(Card('<span size="1">hidden</span> Run: rm -rf ~', "x", "u", None), "s1")
+        tip = self.m.status(run=self.run_stub)["tooltip"]
+        self.assertNotIn("<span", tip)
+        self.assertIn("&lt;span", tip)
+
     def test_main_prints_json(self):
         with mock.patch("sys.stdout") as stdout, mock.patch.object(self.m, "status", return_value={"text": ""}):
             self.m.main()

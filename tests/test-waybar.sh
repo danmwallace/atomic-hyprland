@@ -22,7 +22,7 @@ libexec=files/usr/libexec/atomic-hyprland
 
 check jq -e . "$cfg"
 check bash -c 'jq -e ".\"modules-left\" == [\"hyprland/workspaces\",\"hyprland/window\"] and .\"modules-center\" == [\"clock\"]" '"$cfg"
-check bash -c 'jq -e ".\"modules-right\" == [\"group/tray-drawer\",\"bluetooth\",\"network\",\"pulseaudio\",\"cpu\",\"memory\",\"custom/gpu\",\"custom/agent\",\"custom/claude\",\"battery\",\"idle_inhibitor\",\"custom/notifications\",\"custom/power\"]" '"$cfg"
+check bash -c 'jq -e ".\"modules-right\" == [\"group/tray-drawer\",\"bluetooth\",\"network\",\"pulseaudio\",\"cpu\",\"memory\",\"custom/gpu\",\"custom/claude\",\"custom/agent\",\"battery\",\"idle_inhibitor\",\"custom/notifications\",\"custom/power\"]" '"$cfg"
 check bash -c 'jq -e ".layer == \"top\" and .position == \"top\" and .height == 30 and .\"margin-top\" == 8 and .\"margin-left\" == 8 and .\"margin-right\" == 8 and .reload_style_on_change == true" '"$cfg"
 # waybar: the FIRST definition wins across includes, so the skel file is thin and
 # names the local file before the shipped config
