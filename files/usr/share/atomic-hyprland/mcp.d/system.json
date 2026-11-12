@@ -1,7 +1,8 @@
 {
   "command": "/usr/libexec/atomic-hyprland/mcp-server",
   "args": ["system"],
-  "readOnlyTools": ["journal", "unit_status", "failed_units", "bootc_status"],
+  "readOnlyTools": ["journal", "unit_status", "failed_units", "bootc_status", "list_units",
+                    "list_unit_files", "unit_file", "list_timers", "inspect", "package"],
   "rootTools": ["restart_unit", "start_unit", "stop_unit", "bootc_upgrade", "bootc_rollback", "write_etc_file"],
   "toolNotes": {
     "restart_unit": "A restart can't be undone, but the service keeps its config.",

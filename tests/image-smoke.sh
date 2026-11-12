@@ -227,7 +227,7 @@ check python3 /tests/mcp-smoke.py --text-only approvals prompt
 check python3 /tests/mcp-smoke.py hyprland list_windows list_workspaces list_monitors active_window list_binds focus_window move_window_to_workspace resize_window close_window switch_workspace launch reload_config
 check python3 /tests/mcp-smoke.py screen capture
 check python3 /tests/mcp-smoke.py notify notify
-check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
+check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status list_units list_unit_files unit_file list_timers inspect package restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
 check test -x /usr/libexec/atomic-hyprland/agent-root
 check test -x /usr/libexec/atomic-hyprland/md-reader
 # login unlocks the keyring: without the PAM module (sddm's "-auth" lines skip it

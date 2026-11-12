@@ -83,11 +83,65 @@ class SystemServerTest(unittest.TestCase):
         system.bootc_status()
         self.assertEqual(self.argv(), ["rpm-ostree", "status", "--json"])
 
+    def test_list_units_argv(self):
+        system.list_units(user=True, pattern="way*", state="failed")
+        self.assertEqual(self.argv(), ["systemctl", "--user", "--no-pager", "list-units", "--all",
+                                       "--state=failed", "--", "way*"])
+        system.list_units()
+        self.assertEqual(self.argv(), ["systemctl", "--no-pager", "list-units", "--all"])
+
+    def test_list_unit_files_and_timers(self):
+        system.list_unit_files(user=True, pattern="nonexist*")
+        self.assertEqual(self.argv(), ["systemctl", "--user", "--no-pager", "list-unit-files", "--", "nonexist*"])
+        system.list_timers()
+        self.assertEqual(self.argv(), ["systemctl", "--no-pager", "list-timers", "--all"])
+
+    def test_unit_file_shows_unit_and_dropins(self):
+        system.unit_file("waybar.service", user=True)
+        self.assertEqual(self.argv(), ["systemctl", "--user", "--no-pager", "cat", "waybar.service"])
+
+    def test_listing_refuses_options_and_shell(self):
+        for bad in ("--now", "-a", "x;rm", "$(id)", "a b", "x>y"):
+            self.assertIn("refused", system.list_units(pattern=bad), bad)
+            self.assertIn("refused", system.list_unit_files(pattern=bad), bad)
+        self.assertIn("refused", system.list_units(state="--failed"))
+        self.assertIn("refused", system.unit_file("--force"))
+        self.assertEqual(self.calls, [])
+
+    def test_inspect_runs_only_its_fixed_commands(self):
+        system.inspect("disks")
+        self.assertEqual([c[0][0] for c in self.calls], ["lsblk", "df", "findmnt"])
+        self.assertIn("refused", system.inspect("rm -rf /"))
+        self.assertEqual(set(system.INSPECT), {"disks", "network", "memory", "processes", "hardware",
+                                               "battery", "flatpaks"})
+
+    def test_inspect_labels_each_command(self):
+        out = system.inspect("memory")
+        self.assertIn("$ free -h\nout", out)
+        self.assertIn("$ swapon --show\nout", out)
+
+    def test_inspect_survives_a_missing_command(self):
+        def missing(argv, input=None):
+            raise FileNotFoundError(argv[0])
+        with mock.patch.object(system, "_run", missing):
+            self.assertIn("lspci: not installed", system.inspect("hardware"))
+
+    def test_processes_keeps_the_top(self):
+        many = "".join(f"{i} p\n" for i in range(200))
+        with mock.patch.object(system, "_run", lambda argv, input=None: subprocess.CompletedProcess(argv, 0, many, "")):
+            self.assertEqual(system.inspect("processes").count("\n"), 32)  # the "$ ps" label, the ps header and 30 processes
+
+    def test_package(self):
+        system.package("glow")
+        self.assertEqual(self.argv(), ["rpm", "-q", "--", "glow"])
+        for bad in ("-a", "--eval=%(id)", "a b", ""):
+            self.assertIn("refused", system.package(bad), bad)
+
     def test_registry_file(self):
         reg = load_registry([REPO / "files/usr/share/atomic-hyprland/mcp.d"])
         d = reg["system"]
         self.assertEqual(d.spec, {"command": "/usr/libexec/atomic-hyprland/mcp-server", "args": ["system"]})
-        self.assertEqual(sorted(d.read_only_tools), ["bootc_status", "failed_units", "journal", "unit_status"])
+        self.assertEqual(sorted(d.read_only_tools), sorted(system.READ_TOOLS))
         self.assertEqual(sorted(d.root_tools), sorted(system.CHANGE_TOOLS))
         self.assertEqual(set(d.tool_notes), set(system.CHANGE_TOOLS))
 
