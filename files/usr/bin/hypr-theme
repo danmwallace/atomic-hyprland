@@ -234,7 +234,9 @@ apply() {
     local name="$1"
     want_apply || return 0
     have hyprctl && hyprctl reload >/dev/null 2>&1 || true
-    have systemctl && systemctl --user try-restart waybar.service mako.service swaybg.service >/dev/null 2>&1 || true
+    have systemctl && systemctl --user try-restart waybar.service swaybg.service >/dev/null 2>&1 || true
+    # a reload re-reads the CSS and keeps the notifications; a restart would drop them
+    have systemctl && systemctl --user try-reload-or-restart swaync.service >/dev/null 2>&1 || true
     have pkill && pkill -SIGUSR2 -x ghostty >/dev/null 2>&1 || true
     [[ -f "${HOME}/.config/alacritty/alacritty.toml" ]] && touch "${HOME}/.config/alacritty/alacritty.toml"
     apply_settings "${name}"

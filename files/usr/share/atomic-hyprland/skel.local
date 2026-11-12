@@ -3,7 +3,7 @@
 .config/hypr/local.lua
 .config/waybar/local.jsonc
 .config/waybar/local.css
-.config/mako/local
+.config/swaync/local.css
 .config/hypr/hypridle.local.conf
 .config/wofi/local.css
 .config/hypr/hyprlock.local.conf

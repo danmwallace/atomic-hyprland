@@ -1,14 +1,17 @@
 """Cards: approval requests and the agent's answer/done cards.
 
-mako draws no buttons, so a card is a notification whose default action
-(a left click) opens a one-key wofi menu; Super+Y (`hypr-agent review`) opens
-the menu for the oldest pending approval. A right click dismisses: Deny.
+A card is a notification with buttons for its main choices; its default action
+(a left click) opens a one-key wofi menu with all of them; Super+Y
+(`hypr-agent review`) opens the menu for the oldest pending approval. Closing an approval card without answering it is Deny. A card that
+merely times out stays answerable: swaync hides it into its panel without
+closing it.
 
 Pending approvals are files in $XDG_RUNTIME_DIR/hypr-agent/pending:
 <id>.json holds the card, <id>.answer the choice (allow | deny | always), or for
 a question card {"answers": {question: label}}.
 Ids sort by creation time, so the oldest is the first in name order.
 """
+import functools
 import json
 import os
 import re
@@ -222,11 +225,45 @@ def review(pid: str, menu=_wofi) -> None:
         return
 
 
-def _notify(title: str, body: str, urgency: str = "normal", timeout_ms: int | None = None) -> subprocess.Popen:
+_BUS = ["gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
+        "--object-path", "/org/freedesktop/Notifications", "--method"]
+
+
+@functools.lru_cache(maxsize=1)
+def server_renders_markup() -> bool:
+    """Whether the notification server parses the body as markup (swaync always does).
+    Unknown counts as yes: escaping on a plain-text server only looks odd, while not
+    escaping on a markup server lets <span size="1"> hide part of a command."""
+    try:
+        cp = subprocess.run(_BUS + ["org.freedesktop.Notifications.GetCapabilities"],
+                            capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    if cp.returncode != 0 or not cp.stdout.strip():
+        return True
+    return "'body-markup'" in cp.stdout
+
+
+def notify_body(text: str) -> str:
+    """The body as the server will show it literally."""
+    if not server_renders_markup():
+        return text
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def close_argv(nid: str) -> list[str]:
+    return _BUS + ["org.freedesktop.Notifications.CloseNotification", str(nid)]
+
+
+def _notify(title: str, body: str, urgency: str = "normal", timeout_ms: int | None = None,
+            buttons: list[tuple[str, str]] = ()) -> subprocess.Popen:
+    """A click on the card is the "default" action; buttons are extra actions (swaync draws them)."""
     argv = ["notify-send", "-a", "hypr-agent", "-u", urgency, "-p", "-A", "default=Open", "--wait"]
+    for key, label in buttons:
+        argv += ["-A", f"{key}={label}"]
     if timeout_ms is not None:
         argv += ["-t", str(timeout_ms)]
-    return subprocess.Popen(argv + [title, body], stdout=subprocess.PIPE, text=True)
+    return subprocess.Popen(argv + [title, notify_body(body)], stdout=subprocess.PIPE, text=True)
 
 
 def _await_action(proc: subprocess.Popen, on_id=None) -> tuple[str | None, str | None]:
@@ -244,18 +281,23 @@ def card_body(card: dict) -> str:
     detail = card.get("preview") or (card["detail"] if len(card["detail"]) <= 300 else card["detail"][:300] + "…")
     note = f"Agent's note: {card['note']}\n" if card.get("note") else ""
     undo = f"{card['undo']}\n" if card.get("undo") else ""
-    return f"{detail}\n\n{note}{undo}Click to answer (or Super+Y)."
+    return f"{detail}\n\n{note}{undo}Click for details (or Super+Y)."
 
 
 def show_card(pid: str, notify=_notify) -> threading.Thread:
-    """Show the approval card in the background; a click opens the menu, a dismissal denies."""
+    """Show the approval card in the background. Its Allow / Deny buttons answer it; a
+    click opens the menu (Always allow, Details); closing it denies. A question card has
+    no buttons: its options are in the menu."""
     card = read_pending(pid)
+    buttons = [] if card.get("questions") else [("allow", ALLOW), ("deny", DENY)]
 
     def worker():
-        proc = notify(card["title"], card_body(card), "critical")
+        proc = notify(card["title"], card_body(card), "critical", buttons=buttons)
         _, action = _await_action(proc, on_id=lambda nid: _record_notification(pid, nid))
         if action == "default":
             review(pid)
+        elif action == "allow" and buttons:
+            answer(pid, "allow")
         else:
             answer(pid, "deny")
 
@@ -266,22 +308,29 @@ def show_card(pid: str, notify=_notify) -> threading.Thread:
 
 def close_card(nid: str | None) -> None:
     if nid:
-        subprocess.run(["makoctl", "dismiss", "-n", str(nid)], capture_output=True)
+        subprocess.run(close_argv(nid), capture_output=True)
 
 
 def choose(title: str, body: str, choices: list[tuple[str, str]], menu=_wofi, notify=_notify,
            views: dict[str, str] | None = None, pager=show_markdown) -> str | None:
     """A card with a menu of choices; returns the chosen key, or None if dismissed.
-    A key in views opens its text in the pager, then the menu comes back."""
-    # No expiry: Fix it / Undo live on this card.
-    _, action = _await_action(notify(title, body, "normal", 0))
-    if action != "default":
+    Every choice but dismiss is also a button on the card. Clicking the card opens the
+    menu; a key in views opens its text in the pager, then the menu comes back."""
+    # No expiry: Fix it / Undo live on this card (swaync only hides it into its panel).
+    buttons = [(k, label) for k, label in choices if k != "dismiss"]
+    _, action = _await_action(notify(title, body, "normal", 0, buttons=buttons))
+    keys = {k for k, _ in choices}
+    if action != "default" and action not in keys:
         return None
     labels = {label: key for key, label in choices}
     views = views or {}
+    first = action if action in keys else None
     while True:
-        pick = menu(title, [label for _, label in choices])
-        key = labels.get(pick) if pick else None
+        if first is not None:
+            key, first = first, None
+        else:
+            pick = menu(title, [label for _, label in choices])
+            key = labels.get(pick) if pick else None
         if key in views:
             pager(views[key])
             continue

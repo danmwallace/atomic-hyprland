@@ -185,9 +185,15 @@ def finalize_screenshot(ctx: Context, shot: Path, sdir: Path) -> Context:
     return replace(ctx, screenshot=kept)
 
 
+# A popup shows 5 body lines (~45 characters each at 480 px), so cards stay short:
+# the whole text is one button away.
+CARD_SUMMARY = 220
+DONE_SUMMARY = 160
+
+
 def answer_card(answer: str) -> tuple[str, list[tuple[str, str]], dict[str, str]]:
     """The answer card: plain text up front, the whole answer one click away."""
-    body = ui.plain_summary(answer) + "\n\nClick for: full answer · Fix it · chat"
+    body = ui.plain_summary(answer, limit=CARD_SUMMARY)
     choices = [("read", "Read the full answer"), ("fix", "Fix it"), ("chat", "Open chat"), ("dismiss", "Dismiss")]
     return body, choices, {"read": answer}
 
@@ -252,6 +258,16 @@ def _changes(sid: str) -> list[str]:
         return []
 
 
+def done_body(result: str, changed: list[str]) -> str:
+    """The done card: a short summary and one line naming the changed files."""
+    body = ui.plain_summary(result, limit=DONE_SUMMARY)
+    if not changed:
+        return body
+    names = [Path(p).name for p in changed[:3]]
+    more = f" and {len(changed) - 3} more" if len(changed) > 3 else ""
+    return f"{body}\n\nChanged {', '.join(names)}{more}. Undo restores them."
+
+
 def run_fix(sid: str) -> int:
     settings_file, mcp_file, prompt_file = prepare_session(sid)
     meta = load_meta(sid)
@@ -264,9 +280,7 @@ def run_fix(sid: str) -> int:
     save_meta(sid, mode="done")
     signal_bar()
     changed = _changes(sid)
-    body = ui.plain_summary(result, limit=300)
-    if changed:
-        body += "\n\nChanged (undo restores them):\n" + "\n".join(changed[:8])
+    body = done_body(result, changed)
     choices = ([("undo", "Undo the changes")] if changed else []) + [
         ("read", "Read the full result"), ("chat", "Open chat"), ("dismiss", "Dismiss")]
     pick = ui.choose("Agent: done", body, choices, views={"read": result})
@@ -311,7 +325,7 @@ def stop_all(run=subprocess.run, settle: float = 0.6) -> None:
         for ext in ("answer", "json"):
             (paths.pending_dir() / f"{pid_}.{ext}").unlink(missing_ok=True)
         if data.get("notification"):
-            run(["makoctl", "dismiss", "-n", str(data["notification"])], capture_output=True)
+            run(ui.close_argv(data["notification"]), capture_output=True)
     for stray in paths.pending_dir().glob("*.answer") if paths.pending_dir().is_dir() else []:
         stray.unlink(missing_ok=True)
     signal_bar()

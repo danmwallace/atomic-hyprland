@@ -37,11 +37,19 @@ numbers in tooltips; accent for charging / idle-inhibit / do-not-disturb,
 red for a hot GPU, low battery, muted audio, no network). The greeter is a
 small SDDM theme in the same palette with no virtual keyboard.
 
+**Notifications** are SwayNotificationCenter (swaync). Popups hide after 6 s
+(4 s for low priority) into a panel; critical ones, like the agent's approval
+cards, stay up until answered. The bar's bell shows unread notifications and
+do-not-disturb: click opens the panel, right-click toggles do-not-disturb,
+middle-click clears them. Settings are in `/etc/xdg/swaync/config.json`; copy
+it to `~/.config/swaync/config.json` to change them, and put style changes in
+`~/.config/swaync/local.css`.
+
 **One palette, every app.** A theme is a directory with `colors.toml`,
 `backgrounds/` and `icons.theme`. `hypr-theme` renders the templates in
 `/usr/share/atomic-hyprland/themed/*.tpl` into
 `~/.config/atomic-hyprland/current/theme/`; each app's config carries one
-include line pointing there (Hyprland, waybar, mako, wofi, hyprlock, Ghostty,
+include line pointing there (Hyprland, waybar, swaync, wofi, hyprlock, Ghostty,
 Alacritty, btop, GTK's `gtk.css`). GTK gets Adwaita-dark + Papirus-Dark through
 `gsettings`, Qt goes through Kvantum, Flatpaks follow through the settings
 portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
@@ -49,7 +57,7 @@ build from the default palette (Linux Chromium reads only system-wide policy).
 
 ```bash
 hypr-theme list                 # 17 shipped (below) + yours
-hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland, restarts bar/mako/swaybg, pushes gsettings
+hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland and swaync, restarts bar/swaybg, pushes gsettings
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
 hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
@@ -115,7 +123,7 @@ bottom of Claude Code. Cache: `~/.cache/atomic-hyprland/claude-usage.json`.
 - `managed-files.txt`: overwritten on every image update. Do not edit these;
   the thin `~/.config/hypr/hyprland.lua` is one of them.
 - `skel.local`: created once if absent, never written again. Yours:
-  `hypr/local.lua`, `waybar/local.jsonc`, `waybar/local.css`, `mako/local`,
+  `hypr/local.lua`, `waybar/local.jsonc`, `waybar/local.css`, `swaync/local.css`,
   `wofi/local.css`, `ghostty/local`, `alacritty/local.toml`,
   `hypr/hyprlock.local.conf`, `hypr/hypridle.local.conf`. Each is included
   by its image-managed counterpart in the order that makes yours win: waybar
@@ -129,7 +137,7 @@ bottom of Claude Code. Cache: `~/.cache/atomic-hyprland/claude-usage.json`.
 
 The theme is rendered before the compositor starts (`atomic-hyprland-theme@.service`,
 a template enabled against uwsm's `wayland-session-pre@.target`); `hyprland.lua`
-also carries a built-in fallback palette. Waybar, mako and hypridle run from the
+also carries a built-in fallback palette. Waybar, swaync and hypridle run from the
 user units their packages ship; the image adds `swaybg.service` and a two-minute
 battery warning timer, all bound to `graphical-session.target`.
 
@@ -174,8 +182,9 @@ and the focused terminal's folder, each shown as a `[x]` line you can select
 to leave out (and select again to put back) before sending. Ask mode is
 read-only. The answer card opens the full answer rendered by `glow`, and offers
 **Fix it**, which works
-in the background: every change shows an approval card first (click it, or
-Super+Y, then Allow / Deny / Always allow), file edits are saved so the done
+in the background: every change shows an approval card first (its Allow /
+Deny buttons, or click it or press Super+Y for Always allow and Details), file
+edits are saved so the done
 card's **Undo** restores them, and root changes (a listed service, a staged
 update or rollback, `/etc/hosts`) ask for your password through polkit.
 Super+Shift+A, or clicking the bar's agent icon, stops everything and denies

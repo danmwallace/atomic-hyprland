@@ -31,9 +31,10 @@ check python3 -c "import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1]
 check grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/atomic-hyprland/agent-root</annotate>' $pol
 check bash -c "grep -c '>auth_admin_keep<' $pol | grep -qx 3"
 check bash -c '! grep -qE "^(from|import) atomic_agent|sys.path" files/usr/libexec/atomic-hyprland/agent-root'
-# agent cards are plain text: no markup that could hide the real command
-check bash -c "grep -A1 -x '\[app-name=hypr-agent\]' files/usr/share/atomic-hyprland/mako/core.ini | grep -qx markup=0"
-check bash -c "awk '/^\\[app-name=hypr-agent\\]/{s=1;next} /^\\[/{s=0} s && /^height=320$/{f=1} END{exit !f}' files/usr/share/atomic-hyprland/mako/core.ini"
+# approval cards are critical: swaync keeps them on screen until answered (a timed-out
+# normal card only hides into the panel, still answerable); bodies are escaped in ui.py
+check jq -e '."timeout-critical" == 0' files/etc/xdg/swaync/config.json
+check grep -q 'notify_body(body)' files/usr/lib/atomic-hyprland/python/atomic_agent/ui.py
 check test -x files/usr/libexec/atomic-hyprland/md-reader
 # the image's source repo is set once and feeds both the label and the PR target
 check grep -qx 'ARG IMAGE_SOURCE=https://github.com/danmwallace/atomic-hyprland' Containerfile

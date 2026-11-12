@@ -87,7 +87,8 @@ gvfs-mtp
 # `file` is used by the smoke test to check the rendered wallpapers
 file
 # notifications
-mako
+# notifications: popups that time out into a panel the bar's bell opens
+SwayNotificationCenter
 libnotify
 # system monitor (themed through hypr-theme)
 btop

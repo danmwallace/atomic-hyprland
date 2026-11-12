@@ -1,8 +1,0 @@
-#!/usr/bin/bash
-# waybar custom/notifications: bell glyph, class dnd when mako is in do-not-disturb mode.
-set -uo pipefail
-if command -v makoctl >/dev/null 2>&1 && makoctl mode 2>/dev/null | grep -qx do-not-disturb; then
-    printf '{"text":"󰂛","tooltip":"notifications: do not disturb","class":"dnd"}\n'
-else
-    printf '{"text":"󰂚","tooltip":"notifications","class":"normal"}\n'
-fi

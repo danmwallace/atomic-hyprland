@@ -41,4 +41,4 @@ systemctl --global enable atomic-hyprland-theme@.service
 # MCP registry: written into each agent's config at login and when a registry folder changes.
 systemctl --global enable hypr-mcp-sync.service hypr-mcp-sync.path
 # Session services: uwsm starts graphical-session.target, which pulls these in.
-systemctl --global enable waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer
+systemctl --global enable waybar.service swaync.service swaybg.service hypridle.service atomic-hyprland-battery.timer

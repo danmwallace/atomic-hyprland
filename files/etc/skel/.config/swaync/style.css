@@ -1,0 +1,3 @@
+/* Image-managed. Colours come from the theme import; put your own rules in local.css. */
+@import url("../atomic-hyprland/current/theme/swaync.css");
+@import url("local.css");

@@ -40,7 +40,6 @@ check bash -c 'jq -er ".memory.\"tooltip-format\"" '"$cfg"' | grep -q "{used"'
 check bash -c 'jq -er ".battery.\"tooltip-format\"" '"$cfg"' | grep -q "{capacity}"'
 check bash -c 'jq -er ".\"custom/gpu\".exec" '"$cfg"' | grep -q "/usr/libexec/atomic-hyprland/waybar/gpu"'
 check bash -c 'jq -e ".\"custom/gpu\".\"return-type\" == \"json\"" '"$cfg"
-check bash -c 'jq -er ".\"custom/notifications\".exec" '"$cfg"' | grep -q "/usr/libexec/atomic-hyprland/waybar/notifications"'
 check bash -c 'jq -e ".battery.states.critical == 15 and .battery.states.warning == 30" '"$cfg"
 check bash -c 'jq -er ".\"custom/power\".\"on-click\"" '"$cfg"' | grep -qx hypr-power'
 # the agent indicator: visible only while an agent works; click stops every session
@@ -91,32 +90,37 @@ printf '#!/bin/sh\necho woke > %s/woke; echo 71\n' "$bin" > "$bin/nvidia-smi"; r
 check bash -c 'PATH="'"$bin"':$PATH" GPU_PROC_ROOT="'"$fakeproc"'" PCI_ROOT="'"$pci"'" HWMON_ROOT="'"$fakesys"'" '"$libexec"'/waybar/gpu | jq -e ".percentage == 45 and (.tooltip | test(\"cpu\"))" && ! test -e '"$bin"'/woke'
 echo active > "$pci/0000:01:00.0/power/runtime_status"
 check bash -c 'PATH="'"$bin"':$PATH" GPU_PROC_ROOT="'"$fakeproc"'" PCI_ROOT="'"$pci"'" HWMON_ROOT="'"$fakesys"'" '"$libexec"'/waybar/gpu | jq -e ".percentage == 71" && test -e '"$bin"'/woke'
-# notifications: makoctl mode output drives the class
-printf '#!/bin/sh\necho default\n' > "$bin/makoctl"; chmod +x "$bin/makoctl"
-check bash -c 'PATH="'"$bin"':$PATH" '"$libexec"'/waybar/notifications | jq -e ".class == \"normal\" and .text == \"󰂚\""'
-printf '#!/bin/sh\nprintf "default\\ndo-not-disturb\\n"\n' > "$bin/makoctl"
-check bash -c 'PATH="'"$bin"':$PATH" '"$libexec"'/waybar/notifications | jq -e ".class == \"dnd\" and .text == \"󰂛\""'
-check bash -c 'PATH="$(mktemp -d)" '"$libexec"'/waybar/notifications | jq -e ".text"'   # no makoctl: still JSON
+# notifications: swaync's own client feeds the bell (unread, do-not-disturb) and opens its panel
+check bash -c 'jq -e ".\"custom/notifications\" | .exec == \"swaync-client -swb\" and .\"return-type\" == \"json\" and .\"restart-interval\" > 0" '"$cfg"
+check bash -c 'jq -e ".\"custom/notifications\" | .\"on-click\" == \"swaync-client -t -sw\" and .\"on-click-right\" == \"swaync-client -d -sw\" and .\"on-click-middle\" == \"swaync-client -C -sw\"" '"$cfg"
+check bash -c 'jq -e ".\"custom/notifications\".\"format-icons\" | has(\"none\") and has(\"notification\") and has(\"dnd-none\") and has(\"dnd-notification\")" '"$cfg"
+check bash -c '! test -e '"$libexec"'/waybar/notifications'
+check bash -c '! grep -rq makoctl files/ build/'
 
-# mako
-check bash -c 'head -1 files/usr/share/atomic-hyprland/themed/mako.ini.tpl | grep -qx "include=/usr/share/atomic-hyprland/mako/core.ini"'
-# mako accepts include= only in the global section: the local include must come before the first [section]
-check bash -c 'awk "/^\\[/{exit} /^include=~\/.config\/mako\/local/{found=1} END{exit !found}" files/usr/share/atomic-hyprland/themed/mako.ini.tpl'
-check awk '/^\[/{s=1} s && /^include=/{bad=1} END{exit bad}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
-check grep -q '^border-radius=3' files/usr/share/atomic-hyprland/mako/core.ini
-check grep -q '^margin=46,12,0,0' files/usr/share/atomic-hyprland/mako/core.ini
-# do-not-disturb is a mode mako must be told about, or the bell toggle does nothing
-check grep -q '^\[mode=do-not-disturb\]' files/usr/share/atomic-hyprland/mako/core.ini
-check bash -c 'awk "/^\\[mode=do-not-disturb\\]/{s=1;next} /^\\[/{s=0} s && /^invisible=1/{f=1} END{exit !f}" files/usr/share/atomic-hyprland/mako/core.ini'
-check grep -q '^default-timeout=6000' files/usr/share/atomic-hyprland/mako/core.ini
-check grep -q 'border-color={{ accent }}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
-check grep -q 'border-color={{ critical }}' files/usr/share/atomic-hyprland/themed/mako.ini.tpl
-check test "$(readlink $skel/mako/config)" = ../atomic-hyprland/current/theme/mako.ini
-check test -f $skel/mako/local
+# swaync: popups time out into the panel; critical ones (approval cards) stay up
+conf=files/etc/xdg/swaync/config.json
+check jq -e '.timeout == 6 and ."timeout-low" == 4 and ."timeout-critical" == 0' $conf
+check jq -e '.positionX == "right" and .positionY == "top"' $conf
+check jq -e '.widgets == ["title", "dnd", "notifications"]' $conf
+check jq -e '."notification-2fa-action" == false' $conf   # no COPY "1234" buttons on cards that quote PIDs
+check test "$(sed -n 2p $skel/swaync/style.css)" = '@import url("../atomic-hyprland/current/theme/swaync.css");'
+check test "$(tail -1 $skel/swaync/style.css)" = '@import url("local.css");'
+check test -f $skel/swaync/local.css
+tpl=files/usr/share/atomic-hyprland/themed/swaync.css.tpl
+check grep -q -- '--noti-border-color: {{ accent }};' $tpl
+check grep -q 'border-color: {{ critical }};' $tpl
+check grep -q 'border-radius: 3px' $tpl
+# mako is gone; its theme link retires from existing homes, the user's local file stays
+check bash -c '! test -e files/usr/share/atomic-hyprland/themed/mako.ini.tpl && ! test -e files/usr/share/atomic-hyprland/mako && ! test -e '"$skel"'/mako'
+check grep -qx .config/mako/config files/usr/share/atomic-hyprland/skel.retired
+check bash -c '! grep -qx .config/mako/local files/usr/share/atomic-hyprland/skel.retired'
+# a theme switch reloads swaync's CSS instead of restarting it (which would drop the notifications)
+check grep -q 'try-reload-or-restart swaync.service' files/usr/bin/hypr-theme
+check bash -c '! grep -q mako files/usr/bin/hypr-theme'
 
-# session units: waybar, mako and hypridle ship their own graphical-session units in
+# session units: waybar, swaync and hypridle ship their own graphical-session units in
 # their RPMs (checked in the image smoke test); the repo adds swaybg and the battery timer.
-check bash -c '! test -e '"$units"'/waybar.service && ! test -e '"$units"'/mako.service && ! test -e '"$units"'/hypridle.service'
+check bash -c '! test -e '"$units"'/waybar.service && ! test -e '"$units"'/swaync.service && ! test -e '"$units"'/hypridle.service'
 check grep -q '^WantedBy=graphical-session.target' $units/swaybg.service
 check grep -q '^PartOf=graphical-session.target' $units/swaybg.service
 check grep -q '^After=graphical-session.target' $units/swaybg.service
@@ -132,7 +136,7 @@ printf '#!/bin/sh\necho "$@" >> %s/notify.log\n' "$bin" > "$bin/notify-send"; ch
 check bash -c 'PATH="'"$bin"':$PATH" POWER_SUPPLY_ROOT="'"$fakebat"'" BATTERY_WARN_STATE="'"$fakebat"'/state" '"$libexec"'/battery-warn; grep -q -- "-u critical" '"$bin"'/notify.log'
 check bash -c 'PATH="'"$bin"':$PATH" POWER_SUPPLY_ROOT="'"$fakebat"'" BATTERY_WARN_STATE="'"$fakebat"'/state" '"$libexec"'/battery-warn; test "$(grep -c critical '"$bin"'/notify.log)" = 1'   # not twice
 check bash -c 'echo Charging > '"$fakebat"'/BAT1/status; PATH="'"$bin"':$PATH" POWER_SUPPLY_ROOT="'"$fakebat"'" BATTERY_WARN_STATE="'"$fakebat"'/state" '"$libexec"'/battery-warn; ! test -e '"$fakebat"'/state'
-check bash -c '! grep -qE "waybar|swaybg|hypridle|mako" files/usr/share/atomic-hyprland/hypr/autostart.lua'
+check bash -c '! grep -qE "waybar|swaybg|hypridle|mako|swaync" files/usr/share/atomic-hyprland/hypr/autostart.lua'
 # hypridle: lock at 5 min, dpms at 10, battery-only suspend at 20, locks before sleep, local include
 check grep -q 'timeout = 300' $skel/hypr/hypridle.conf
 check grep -q 'timeout = 600' $skel/hypr/hypridle.conf
@@ -151,9 +155,9 @@ check bash -c 'jq -er ".\"hyprland/workspaces\".\"on-scroll-up\"" '"$cfg"' | gre
 check bash -c 'jq -er ".\"hyprland/workspaces\".\"on-scroll-down\"" '"$cfg"' | grep -qF "hyprctl dispatch '"'"'hl.dsp.focus({ workspace = \"e+1\" })'"'"'"'
 check test -f $skel/hypr/hypridle.local.conf
 # ownership lists
-check bash -c 'for f in .config/waybar/local.jsonc .config/waybar/local.css .config/mako/local .config/hypr/hypridle.local.conf; do grep -qx "$f" files/usr/share/atomic-hyprland/skel.local || exit 1; done'
+check bash -c 'for f in .config/waybar/local.jsonc .config/waybar/local.css .config/swaync/local.css .config/hypr/hypridle.local.conf; do grep -qx "$f" files/usr/share/atomic-hyprland/skel.local || exit 1; done'
 check bash -c 'for f in .config/waybar/config .config/waybar/mediaplayer.py; do grep -qx "$f" files/usr/share/atomic-hyprland/skel.retired || exit 1; done'
-check grep -q 'waybar.service mako.service swaybg.service hypridle.service atomic-hyprland-battery.timer' build/40-finalize.sh
-check bash -c 'grep -qx mako build/packages.txt && grep -qx libnotify build/packages.txt'
+check grep -q 'waybar.service swaync.service swaybg.service hypridle.service atomic-hyprland-battery.timer' build/40-finalize.sh
+check bash -c 'grep -qx SwayNotificationCenter build/packages.txt && ! grep -qx mako build/packages.txt && grep -qx libnotify build/packages.txt'
 
 exit "$fail"

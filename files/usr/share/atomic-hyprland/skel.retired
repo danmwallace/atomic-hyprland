@@ -12,3 +12,5 @@
 .config/hypr/conf/
 .config/nwg-drawer/
 .config/nwg-dock-hyprland/
+# mako's theme link; swaync replaced mako (your .config/mako/local is left alone).
+.config/mako/config

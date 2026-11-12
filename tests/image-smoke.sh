@@ -50,8 +50,9 @@ check test -f /usr/share/atomic-hyprland/backgrounds/oled-black.png   # hypr-the
 # RGB lighting follows the theme's led colour where OpenRGB exists (Alienware)
 check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/50-openrgb
 # The quiet bar, notifications, wallpaper and idle daemon as session units.
-check rpm -q mako libnotify
-for u in waybar mako swaybg hypridle; do
+check rpm -q SwayNotificationCenter libnotify
+check bash -c '! rpm -q mako'
+for u in waybar swaync swaybg hypridle; do
     check test -f /usr/lib/systemd/user/$u.service
     check test -L /etc/systemd/user/graphical-session.target.wants/$u.service
 done
@@ -59,11 +60,12 @@ check test -L /etc/systemd/user/graphical-session.target.wants/atomic-hyprland-b
 check test -f /etc/skel/.config/waybar/config.jsonc
 check bash -c '! test -e /etc/skel/.config/waybar/config'
 check jq -e . /etc/skel/.config/waybar/config.jsonc
-check test -L /etc/skel/.config/mako/config
-check test "$(readlink /etc/skel/.config/mako/config)" = ../atomic-hyprland/current/theme/mako.ini
+check grep -qx '@import url("../atomic-hyprland/current/theme/swaync.css");' /etc/skel/.config/swaync/style.css
+# the image's swaync config replaces the package's and uses only keys its schema knows
+check python3 -c 'import json; c = json.load(open("/etc/xdg/swaync/config.json")); s = json.load(open("/etc/xdg/swaync/configSchema.json")); bad = set(c) - set(s["properties"]); assert not bad, bad'
+check jq -e '."timeout-critical" == 0' /etc/xdg/swaync/config.json
 check test -x /usr/libexec/atomic-hyprland/waybar/gpu
 check bash -c '/usr/libexec/atomic-hyprland/waybar/gpu | jq -e .text'
-check bash -c '/usr/libexec/atomic-hyprland/waybar/notifications | jq -e .text'
 # Claude usage widget: hides with no cache, renders one, and the status line that feeds it is offered at login
 check bash -c 'XDG_CACHE_HOME=$(mktemp -d) /usr/libexec/atomic-hyprland/waybar/claude | jq -e ".text == \"\""'
 check bash -c 'c=$(mktemp -d); echo "{\"model\":{\"display_name\":\"Opus\"},\"rate_limits\":{\"five_hour\":{\"used_percentage\":10,\"resets_at\":4102444800}}}" | XDG_CACHE_HOME=$c /usr/libexec/atomic-hyprland/claude-statusline | grep -qx "Opus · 5h 10%" && XDG_CACHE_HOME=$c /usr/libexec/atomic-hyprland/waybar/claude | jq -e ".text == \"󰚩 10% · –\""'
@@ -121,8 +123,9 @@ check jq -e '.ExtensionInstallForcelist | length == 1' /etc/chromium/policies/ma
 check test -f /usr/lib/systemd/user/atomic-hyprland-theme@.service
 check test -L /etc/systemd/user/wayland-session-pre@.target.wants/atomic-hyprland-theme@.service
 check bash -c '! test -e /usr/lib/systemd/user/atomic-hyprland-theme.service'
-# symlinks in skel are image-managed too (mako config, gtk.css, btop theme)
-check grep -qx .config/mako/config /usr/share/atomic-hyprland/managed-files.txt
+# skel files the image manages (swaync style, gtk.css, btop theme); the user's local.css is not one
+check grep -qx .config/swaync/style.css /usr/share/atomic-hyprland/managed-files.txt
+check bash -c '! grep -qx .config/swaync/local.css /usr/share/atomic-hyprland/managed-files.txt'
 check grep -qx .config/gtk-4.0/gtk.css /usr/share/atomic-hyprland/managed-files.txt
 check grep -qx .config/btop/themes/current.theme /usr/share/atomic-hyprland/managed-files.txt
 # Hyprland's own parser on the skel tree plus a rendered theme, without --config so
@@ -176,9 +179,7 @@ done
 out="$(verify_hypr)"
 # The render that verify_hypr just did must have produced every app's theme file.
 check grep -q "@define-color accent #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/waybar.css
-check grep -q "^border-color=#39ff14" /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini
-# mako parses the rendered config (it only fails later, on the missing display/bus)
-check bash -c '! HOME=/tmp/hv mako --config /tmp/hv/.config/atomic-hyprland/current/theme/mako.ini 2>&1 | grep -q "Failed to parse"'
+check grep -q -- "--noti-border-color: #39ff14;" /tmp/hv/.config/atomic-hyprland/current/theme/swaync.css
 check test -L /tmp/hv/.config/atomic-hyprland/current/background
 for f in wofi.css hyprlock.conf ghostty.conf alacritty.toml btop.theme hyprland.lua gtk.css; do
     check test -s /tmp/hv/.config/atomic-hyprland/current/theme/$f

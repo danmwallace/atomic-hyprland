@@ -23,6 +23,9 @@ class UiTest(unittest.TestCase):
                "PATH": f"{self.bin}:/usr/bin:/bin", "ARGV_LOG": str(self.log)}
         p = mock.patch.dict(os.environ, env, clear=True)
         p.start(); self.addCleanup(p.stop)
+        stub(self.bin, "gdbus", "exit 1")  # no notification server: never the real session bus
+        ui.server_renders_markup.cache_clear()
+        self.addCleanup(ui.server_renders_markup.cache_clear)
 
     def wofi_picks(self, line_prefix):
         # wofi stub: print the first stdin line starting with the prefix (empty = Escape).
@@ -103,7 +106,7 @@ class UiTest(unittest.TestCase):
         body = ui.card_body({"detail": "--- a\n+++ b\n", "preview": "/h/a.conf (+1 −1 lines)", "undo": "u"})
         self.assertTrue(body.startswith("/h/a.conf (+1 −1 lines)"))
         self.assertNotIn("+++", body)
-        self.assertIn("Click to answer (or Super+Y).", body)
+        self.assertIn("Click for details (or Super+Y).", body)
 
     def test_details_text_says_who_does_what(self):
         text = ui.details_text({"title": "The agent wants to run a command", "summary": "id",
@@ -206,6 +209,64 @@ class UiTest(unittest.TestCase):
     def test_choose_views_open_as_markdown(self):
         self.assertIs(ui.choose.__defaults__[-1], ui.show_markdown)
 
+    def caps(self, *caps):
+        stub(self.bin, "gdbus", "echo \"(%s,)\"" % repr(list(caps)).replace('"', ''))
+        ui.server_renders_markup.cache_clear()
+        self.addCleanup(ui.server_renders_markup.cache_clear)
+
+    def test_card_body_escaped_when_the_server_renders_markup(self):
+        # swaync always parses the body as Pango markup: <span size="1"> could hide a command.
+        self.caps("actions", "body", "body-markup")
+        stub(self.bin, "notify-send", "echo 5")
+        ui._notify("Run a command", 'rm <span size="1">x</span> & y').wait()
+        argv = self.log.read_text().splitlines()[-1]
+        self.assertTrue(argv.endswith('Run a command rm &lt;span size="1"&gt;x&lt;/span&gt; &amp; y'), argv)
+
+    def test_card_body_literal_when_the_server_shows_plain_text(self):
+        self.caps("actions", "body")
+        stub(self.bin, "notify-send", "echo 5")
+        ui._notify("t", "a <b>x</b> & y").wait()
+        self.assertTrue(self.log.read_text().splitlines()[-1].endswith("t a <b>x</b> & y"))
+
+    def test_unknown_server_is_treated_as_markup(self):
+        stub(self.bin, "gdbus", "exit 1")
+        ui.server_renders_markup.cache_clear()
+        self.addCleanup(ui.server_renders_markup.cache_clear)
+        self.assertTrue(ui.server_renders_markup())
+
+    def test_close_card_uses_the_standard_close_call(self):
+        stub(self.bin, "gdbus", "")
+        ui.close_card("77")
+        self.assertEqual(self.log.read_text().splitlines()[-1].split(),
+                         ["gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
+                          "--object-path", "/org/freedesktop/Notifications",
+                          "--method", "org.freedesktop.Notifications.CloseNotification", "77"])
+
+    def shown_card(self, notify_body, card=CARD):
+        stub(self.bin, "notify-send", notify_body)
+        pid = ui.new_pending(card, "s1")
+        ui.show_card(pid).join(timeout=5)
+        return pid
+
+    def test_approval_card_has_allow_and_deny_buttons(self):
+        pid = self.shown_card("echo 5")
+        argv = self.log.read_text()
+        self.assertIn("-A allow=Allow", argv)
+        self.assertIn("-A deny=Deny", argv)
+        self.assertNotIn("always", argv)  # Always allow stays in the menu, next to the rule it saves
+
+    def test_allow_button_allows(self):
+        pid = self.shown_card("echo 5; echo allow")
+        self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "allow")
+
+    def test_deny_button_denies(self):
+        pid = self.shown_card("echo 5; echo deny")
+        self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "deny")
+
+    def test_question_card_has_no_allow_button(self):
+        self.shown_card("echo 5", card=self.question_card())
+        self.assertNotIn("allow=Allow", self.log.read_text())
+
     def test_show_card_records_id_while_open(self):
         # I1: notify-send -p prints the id at once and keeps running until the card is answered.
         stub(self.bin, "notify-send", "echo 77; sleep 2")
@@ -233,6 +294,28 @@ class UiTest(unittest.TestCase):
         stub(self.bin, "notify-send", "echo 7")
         ui.choose("Agent", "x", [("fix", "Fix it")])
         self.assertIn(" -t 0 ", " " + self.log.read_text() + " ")
+
+    def test_choose_offers_choices_as_buttons(self):
+        stub(self.bin, "notify-send", "echo 7")
+        ui.choose("Agent", "x", [("fix", "Fix it"), ("chat", "Open chat"), ("dismiss", "Dismiss")])
+        argv = self.log.read_text()
+        self.assertIn("-A default=Open", argv)
+        self.assertIn("-A fix=Fix it", argv)
+        self.assertIn("-A chat=Open chat", argv)
+        self.assertNotIn("dismiss=", argv)  # the card's own close button does that
+
+    def test_choose_button_returns_its_key_without_the_menu(self):
+        stub(self.bin, "notify-send", "echo 7; echo fix")
+        def no_menu(prompt, lines):
+            raise AssertionError("menu opened")
+        self.assertEqual(ui.choose("Agent", "x", [("fix", "Fix it")], menu=no_menu), "fix")
+
+    def test_choose_view_button_opens_pager_then_menu(self):
+        stub(self.bin, "notify-send", "echo 7; echo read")
+        shown = []
+        key = ui.choose("Agent", "x", [("read", "Read the full answer"), ("fix", "Fix it")],
+                        menu=lambda prompt, lines: "Fix it", views={"read": "whole"}, pager=shown.append)
+        self.assertEqual((key, shown), ("fix", ["whole"]))
 
     def test_choose_returns_key(self):
         stub(self.bin, "notify-send", "echo 7; echo default")
