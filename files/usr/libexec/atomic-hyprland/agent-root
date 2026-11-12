@@ -1,0 +1,161 @@
+#!/usr/bin/python3 -I
+"""Root helper for hypr-agent: a fixed set of operations, run via pkexec.
+
+  agent-root unit {start|stop|restart} <unit>
+  agent-root bootc-upgrade                      stage only, never --apply
+  agent-root bootc-rollback
+  agent-root etc-snapshot <session-dir> <path>  save /etc/<path> for undo
+  agent-root etc-write <session-dir> <path>     snapshot, then write stdin
+  agent-root etc-restore <path> <copy|->        undo: restore (or remove)
+
+Paths must stay under /etc (no '..', no symlinks out); session folders and
+snapshot copies must belong to the user who ran pkexec (PKEXEC_UID).
+Exit 0 ok, 1 the operation failed, 2 refused. Standalone on purpose: it
+imports nothing from the user-side atomic_agent package.
+"""
+import json
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ETC = "/etc"
+UNIT = re.compile(r"[A-Za-z0-9@._:\-]+\.(service|timer|socket|path|target|mount)")
+
+
+class Refused(Exception):
+    pass
+
+
+def home_of(uid: int) -> str:
+    return pwd.getpwuid(uid).pw_dir
+
+
+def _under(path: str, root: str) -> bool:
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def validate_unit(unit: str) -> str:
+    if not UNIT.fullmatch(unit):
+        raise Refused(f"not a unit name: {unit!r}")
+    return unit
+
+
+def validate_etc_path(path: str) -> str:
+    if not os.path.isabs(path) or "\0" in path:
+        raise Refused(f"not an absolute path: {path!r}")
+    parent, name = os.path.split(path)
+    if name in ("", ".", ".."):
+        raise Refused(f"not a file path: {path!r}")
+    real_parent = os.path.realpath(parent)
+    if not _under(real_parent, ETC):
+        raise Refused(f"outside {ETC}: {path!r}")
+    final = os.path.join(real_parent, name)
+    if os.path.islink(final):
+        raise Refused(f"refusing to write through a symlink: {path!r}")
+    return final
+
+
+def validate_user_path(path: str, uid: int, want_dir: bool) -> str:
+    real = os.path.realpath(path)
+    home = os.path.realpath(home_of(uid))
+    if not _under(real, home) or real == home:
+        raise Refused(f"not in the user's home: {path!r}")
+    try:
+        st = os.stat(real)
+    except OSError as exc:
+        raise Refused(f"{path!r}: {exc}") from exc
+    if st.st_uid != uid:
+        raise Refused(f"not owned by uid {uid}: {path!r}")
+    if want_dir != os.path.isdir(real):
+        raise Refused(f"{'not a folder' if want_dir else 'not a file'}: {path!r}")
+    return real
+
+
+def _entries(sdir: str) -> list[dict]:
+    m = os.path.join(sdir, "manifest.jsonl")
+    if not os.path.exists(m):
+        return []
+    with open(m) as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def snapshot(sdir: str, path: str, uid: int, chown=os.chown) -> None:
+    """Same manifest format as atomic_agent.snapshots.snapshot."""
+    entries = _entries(sdir)
+    if any(e.get("path") == path for e in entries):
+        return
+    files = os.path.join(sdir, "files")
+    os.makedirs(files, exist_ok=True)
+    chown(files, uid, -1)
+    if os.path.exists(path):
+        copy = f"files/{sum(1 for e in entries if 'path' in e)}"
+        shutil.copy2(path, os.path.join(sdir, copy))
+        chown(os.path.join(sdir, copy), uid, -1)
+        entry = {"path": path, "existed": True, "copy": copy}
+    else:
+        entry = {"path": path, "existed": False, "copy": None}
+    manifest = os.path.join(sdir, "manifest.jsonl")
+    with open(manifest, "a") as m:
+        m.write(json.dumps(entry) + "\n")
+    chown(manifest, uid, -1)
+
+
+def write_file(path: str, data: bytes) -> None:
+    mode = os.stat(path).st_mode & 0o7777 if os.path.exists(path) else 0o644
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".agent-root.")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin, chown=os.chown) -> int:
+    try:
+        if not argv:
+            raise Refused("no operation")
+        op, args = argv[0], argv[1:]
+        if op == "unit" and len(args) == 2 and args[0] in ("start", "stop", "restart"):
+            return run(["systemctl", args[0], validate_unit(args[1])]).returncode and 1
+        if op == "bootc-upgrade" and not args:
+            return run(["bootc", "upgrade"]).returncode and 1
+        if op == "bootc-rollback" and not args:
+            return run(["bootc", "rollback"]).returncode and 1
+        uid = int(env.get("PKEXEC_UID", "-1"))
+        if uid < 0:
+            raise Refused("PKEXEC_UID is not set")
+        if op in ("etc-snapshot", "etc-write") and len(args) == 2:
+            sdir = validate_user_path(args[0], uid, want_dir=True)
+            path = validate_etc_path(args[1])
+            snapshot(sdir, path, uid, chown)
+            if op == "etc-write":
+                write_file(path, stdin.read().encode())
+            return 0
+        if op == "etc-restore" and len(args) == 2:
+            path = validate_etc_path(args[0])
+            if args[1] == "-":
+                if os.path.lexists(path):
+                    os.unlink(path)
+                return 0
+            copy = validate_user_path(args[1], uid, want_dir=False)
+            with open(copy, "rb") as f:
+                write_file(path, f.read())
+            return 0
+        raise Refused(f"unknown operation: {' '.join(argv)!r}")
+    except Refused as exc:
+        print(f"agent-root: refused: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"agent-root: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
