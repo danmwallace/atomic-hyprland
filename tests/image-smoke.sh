@@ -51,6 +51,10 @@ check test -f /usr/share/atomic-hyprland/backgrounds/oled-black.png   # hypr-the
 check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/50-openrgb
 # The quiet bar, notifications, wallpaper and idle daemon as session units.
 check rpm -q SwayNotificationCenter libnotify
+# Syncthing ships its user unit; each user opts in, so it isn't enabled for everyone
+check rpm -q syncthing
+check test -f /usr/lib/systemd/user/syncthing.service
+check bash -c '! test -e /etc/systemd/user/default.target.wants/syncthing.service'
 check bash -c '! rpm -q mako'
 for u in waybar swaync swaybg hypridle; do
     check test -f /usr/lib/systemd/user/$u.service
