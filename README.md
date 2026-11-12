@@ -182,8 +182,9 @@ and the focused terminal's folder, each shown as a `[x]` line you can select
 to leave out (and select again to put back) before sending. Ask mode is
 read-only. The answer card opens the full answer rendered by `glow`, and offers
 **Fix it**, which works
-in the background: every change shows an approval card first (click it, or
-Super+Y, then Allow / Deny / Always allow), file edits are saved so the done
+in the background: every change shows an approval card first (its Allow /
+Deny buttons, or click it or press Super+Y for Always allow and Details), file
+edits are saved so the done
 card's **Undo** restores them, and root changes (a listed service, a staged
 update or rollback, `/etc/hosts`) ask for your password through polkit.
 Super+Shift+A, or clicking the bar's agent icon, stops everything and denies

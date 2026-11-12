@@ -106,7 +106,7 @@ class UiTest(unittest.TestCase):
         body = ui.card_body({"detail": "--- a\n+++ b\n", "preview": "/h/a.conf (+1 −1 lines)", "undo": "u"})
         self.assertTrue(body.startswith("/h/a.conf (+1 −1 lines)"))
         self.assertNotIn("+++", body)
-        self.assertIn("Click to answer (or Super+Y).", body)
+        self.assertIn("Click for details (or Super+Y).", body)
 
     def test_details_text_says_who_does_what(self):
         text = ui.details_text({"title": "The agent wants to run a command", "summary": "id",
@@ -241,6 +241,31 @@ class UiTest(unittest.TestCase):
                          ["gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
                           "--object-path", "/org/freedesktop/Notifications",
                           "--method", "org.freedesktop.Notifications.CloseNotification", "77"])
+
+    def shown_card(self, notify_body, card=CARD):
+        stub(self.bin, "notify-send", notify_body)
+        pid = ui.new_pending(card, "s1")
+        ui.show_card(pid).join(timeout=5)
+        return pid
+
+    def test_approval_card_has_allow_and_deny_buttons(self):
+        pid = self.shown_card("echo 5")
+        argv = self.log.read_text()
+        self.assertIn("-A allow=Allow", argv)
+        self.assertIn("-A deny=Deny", argv)
+        self.assertNotIn("always", argv)  # Always allow stays in the menu, next to the rule it saves
+
+    def test_allow_button_allows(self):
+        pid = self.shown_card("echo 5; echo allow")
+        self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "allow")
+
+    def test_deny_button_denies(self):
+        pid = self.shown_card("echo 5; echo deny")
+        self.assertEqual(ui.wait_answer(pid, timeout=1, poll=0.02), "deny")
+
+    def test_question_card_has_no_allow_button(self):
+        self.shown_card("echo 5", card=self.question_card())
+        self.assertNotIn("allow=Allow", self.log.read_text())
 
     def test_show_card_records_id_while_open(self):
         # I1: notify-send -p prints the id at once and keeps running until the card is answered.

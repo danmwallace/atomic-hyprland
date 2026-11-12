@@ -1,8 +1,8 @@
 """Cards: approval requests and the agent's answer/done cards.
 
-A card is a notification whose default action (a left click) opens a one-key
-wofi menu; Super+Y (`hypr-agent review`) opens the menu for the oldest pending
-approval. Closing an approval card without answering it is Deny. A card that
+A card is a notification with buttons for its main choices; its default action
+(a left click) opens a one-key wofi menu with all of them; Super+Y
+(`hypr-agent review`) opens the menu for the oldest pending approval. Closing an approval card without answering it is Deny. A card that
 merely times out stays answerable: swaync hides it into its panel without
 closing it.
 
@@ -281,18 +281,23 @@ def card_body(card: dict) -> str:
     detail = card.get("preview") or (card["detail"] if len(card["detail"]) <= 300 else card["detail"][:300] + "…")
     note = f"Agent's note: {card['note']}\n" if card.get("note") else ""
     undo = f"{card['undo']}\n" if card.get("undo") else ""
-    return f"{detail}\n\n{note}{undo}Click to answer (or Super+Y)."
+    return f"{detail}\n\n{note}{undo}Click for details (or Super+Y)."
 
 
 def show_card(pid: str, notify=_notify) -> threading.Thread:
-    """Show the approval card in the background; a click opens the menu, a dismissal denies."""
+    """Show the approval card in the background. Its Allow / Deny buttons answer it; a
+    click opens the menu (Always allow, Details); closing it denies. A question card has
+    no buttons: its options are in the menu."""
     card = read_pending(pid)
+    buttons = [] if card.get("questions") else [("allow", ALLOW), ("deny", DENY)]
 
     def worker():
-        proc = notify(card["title"], card_body(card), "critical")
+        proc = notify(card["title"], card_body(card), "critical", buttons=buttons)
         _, action = _await_action(proc, on_id=lambda nid: _record_notification(pid, nid))
         if action == "default":
             review(pid)
+        elif action == "allow" and buttons:
+            answer(pid, "allow")
         else:
             answer(pid, "deny")
 
