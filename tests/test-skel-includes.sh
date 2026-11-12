@@ -30,7 +30,7 @@ check test -f $skel/wofi/local.css
 check grep -q 'background-color: rgba({{ background_alt_rgb }}, 0.7' $share/themed/wofi.css.tpl
 check grep -q 'hl.layer_rule({ match = { namespace = "^wofi$" }, blur = true, ignore_alpha = ' $share/hypr/rules.lua
 check bash -c 'grep -A3 "blur = {" '"$share"'/hypr/look.lua | grep -q "enabled = true"'
-check grep -qx 'term=ghostty' $skel/wofi/config
+check grep -qx 'term=hypr-terminal' $skel/wofi/config
 check grep -qx 'width=600' $skel/wofi/config
 check grep -qx 'lines=8' $skel/wofi/config
 check grep -q 'border-radius: 3px' $share/themed/wofi.css.tpl
@@ -151,13 +151,16 @@ check grep -qx chromium build/packages.txt
 check grep -qx fuse-libs build/packages.txt
 # Hermes v0.23.0 stages its own Node.js build, which links libatomic.so.1
 check grep -qx libatomic build/packages.txt
+# hypr-terminal probes the GPU's GLSL version with eglinfo; waybar's network click runs nmtui
+check grep -qx egl-utils build/packages.txt
+check grep -qx NetworkManager-tui build/packages.txt
 # Dan's tool list (2026-11-08): Fedora packages in the image
 check bash -c 'for p in mosh wireshark nmap arp-scan tcpdump mtr iperf3 nmap-ncat socat bind-utils tio minicom pandoc-cli flameshot azure-cli awscli2 opentofu ansible cava helix git-delta ShellCheck direnv glow age virt-viewer; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
 check bash -c '! grep -qxE "wtype|ydotool|netcat" build/packages.txt'   # declined / nmap-ncat provides nc
 # session env for everything uwsm starts (D-Bus services, uwsm-app launches), not just Hyprland's children
 uenv=files/etc/xdg/uwsm/env-hyprland
 check sh -n $uenv
-for v in QT_STYLE_OVERRIDE=kvantum QT_QPA_PLATFORM= XCURSOR_THEME=breeze_cursors XCURSOR_SIZE=24 TERMINAL=ghostty BROWSER=chromium-browser; do
+for v in QT_STYLE_OVERRIDE=kvantum QT_QPA_PLATFORM= XCURSOR_THEME=breeze_cursors XCURSOR_SIZE=24 TERMINAL=hypr-terminal BROWSER=chromium-browser; do
     check grep -qE "^export ${v}" $uenv
 done
 # dconf system defaults: dark from the very first moment of a new home

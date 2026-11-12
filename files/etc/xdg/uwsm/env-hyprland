@@ -14,5 +14,5 @@ export ELECTRON_OZONE_PLATFORM_HINT=auto
 export XCURSOR_THEME=breeze_cursors
 export XCURSOR_SIZE=24
 export HYPRCURSOR_SIZE=24
-export TERMINAL=ghostty
+export TERMINAL=hypr-terminal
 export BROWSER=chromium-browser

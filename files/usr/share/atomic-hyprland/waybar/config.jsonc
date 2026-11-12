@@ -87,7 +87,7 @@
     "format-connected": "󰂱",
     "tooltip-format": "bluetooth {status}",
     "tooltip-format-connected": "bluetooth {device_alias}",
-    "on-click": "ghostty -e bluetoothctl"
+    "on-click": "hypr-terminal -e bluetoothctl"
   },
   "network": {
     "interval": 5,
@@ -105,7 +105,7 @@
     "tooltip-format-wifi": "wifi {essid} {signalStrength}%  {ipaddr}",
     "tooltip-format-ethernet": "ethernet {ifname}  {ipaddr}/{cidr}",
     "tooltip-format-disconnected": "network disconnected",
-    "on-click": "nm-connection-editor"
+    "on-click": "hypr-terminal -e nmtui"
   },
   "pulseaudio": {
     "scroll-step": 5,
@@ -128,13 +128,13 @@
     "interval": 2,
     "format": "󰍛",
     "tooltip-format": "cpu {usage}%  {avg_frequency} GHz  load {load}",
-    "on-click": "ghostty -e btop"
+    "on-click": "hypr-terminal -e btop"
   },
   "memory": {
     "interval": 5,
     "format": "󰘚",
     "tooltip-format": "memory {used:0.1f}G / {total:0.1f}G  swap {swapUsed:0.1f}G",
-    "on-click": "ghostty -e btop"
+    "on-click": "hypr-terminal -e btop"
   },
   "custom/gpu": {
     "exec": "/usr/libexec/atomic-hyprland/waybar/gpu",
