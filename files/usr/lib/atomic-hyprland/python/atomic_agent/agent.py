@@ -2,9 +2,11 @@
 work in the background behind approval cards. See the design in
 docs/superpowers/specs/2026-11-11-agentic-desktop-design.md.
 
-Every session runs Claude Code headless with its own settings
-(--setting-sources project,local, so ~/.claude/settings.json permissions never
-apply), its own MCP servers (--strict-mcp-config) and a snapshot hook for undo.
+Every session runs Claude Code headless from its own session folder with no
+setting sources (--setting-sources "": neither ~/.claude/settings.json nor a
+repo's .claude/settings.json can add hooks or allow rules), only its own
+settings file, its own MCP servers (--strict-mcp-config) and a snapshot hook for
+undo. The user's terminal folder is passed with --add-dir.
 """
 import json
 import os
@@ -67,10 +69,13 @@ def system_prompt_file(sid: str, instructions: Path | None = None) -> Path:
     return f
 
 
-def _isolation(settings_file: Path, mcp_file: Path, prompt_file: Path) -> list[str]:
-    return ["--setting-sources", "project,local", "--settings", str(settings_file),
+def _isolation(settings_file: Path, mcp_file: Path, prompt_file: Path, work_dir: str | None = None) -> list[str]:
+    argv = ["--setting-sources", "", "--settings", str(settings_file),
             "--mcp-config", str(mcp_file), "--strict-mcp-config",
             "--append-system-prompt-file", str(prompt_file)]
+    if work_dir:
+        argv += ["--add-dir", work_dir]
+    return argv
 
 
 def ask_prompt(text: str, ctx: Context) -> str:
@@ -88,8 +93,25 @@ def ask_prompt(text: str, ctx: Context) -> str:
 
 def ask_argv(sid: str, text: str, ctx: Context, settings_file: Path, mcp_file: Path, prompt_file: Path) -> list[str]:
     return ["claude", "-p", "--session-id", sid, "--output-format", "json",
-            *_isolation(settings_file, mcp_file, prompt_file),
+            *_isolation(settings_file, mcp_file, prompt_file, str(ctx.cwd) if ctx.cwd else None),
             "--permission-prompts", "none", ask_prompt(text, ctx)]
+
+
+FIX_PROMPT = ("Fix the problem now. Say what you will change before each step; every change shows "
+              "the user an approval card. Prefer Edit/Write for files. When done, summarise what you "
+              "changed and how to check it.")
+
+
+def fix_argv(sid: str, settings_file: Path, mcp_file: Path, prompt_file: Path, work_dir: str | None = None) -> list[str]:
+    return ["claude", "-p", "--resume", sid, "--output-format", "json",
+            *_isolation(settings_file, mcp_file, prompt_file, work_dir),
+            "--permission-prompt-tool", "mcp__approvals__prompt", FIX_PROMPT]
+
+
+def chat_argv(sid: str, settings_file: Path, mcp_file: Path, prompt_file: Path, work_dir: str | None = None) -> list[str]:
+    # Interactive: Claude Code's own terminal prompts answer permissions (the
+    # permission-prompt tool is --print only); settings and the undo hook are the same.
+    return ["claude", "--resume", sid, *_isolation(settings_file, mcp_file, prompt_file, work_dir)]
 
 
 def prepare_session(sid: str) -> tuple[Path, Path, Path]:
@@ -106,6 +128,7 @@ def prepare_session(sid: str) -> tuple[Path, Path, Path]:
 
 def save_meta(sid: str, **fields) -> None:
     f = paths.session_dir(sid) / "meta.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
     try:
         meta = json.loads(f.read_text())
     except (OSError, ValueError):
@@ -141,15 +164,16 @@ def cmd_ask() -> int:
         return 0
     text, ctx = asked
     settings_file, mcp_file, prompt_file = prepare_session(sid)
-    cwd = str(ctx.cwd or Path(os.environ.get("HOME", "/")))
+    cwd = str(ctx.cwd) if ctx.cwd else None
     save_meta(sid, cwd=cwd, mode="ask", question=text)
     pidfile = paths.runtime_dir() / "ask.pid"
     pidfile.parent.mkdir(parents=True, exist_ok=True)
     pidfile.write_text(str(os.getpid()))
     signal_bar()
     try:
+        # Run from the session folder, never from the user's (possibly untrusted) project.
         cp = subprocess.run(ask_argv(sid, text, ctx, settings_file, mcp_file, prompt_file),
-                            cwd=cwd, env=agent_env(sid), capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                            cwd=sdir, env=agent_env(sid), capture_output=True, text=True, stdin=subprocess.DEVNULL)
     finally:
         pidfile.unlink(missing_ok=True)
         signal_bar()
@@ -164,7 +188,162 @@ def cmd_ask() -> int:
     return 0
 
 
-COMMANDS = {"ask": lambda args: cmd_ask()}
+HELPER = "/usr/libexec/atomic-hyprland/agent-root"
+
+
+def start_fix(sid: str, run=subprocess.run) -> str:
+    unit = f"hypr-agent-{sid[:8]}"
+    run(["systemd-run", "--user", f"--unit={unit}", "--collect", "-p", "Type=exec",
+         "--", "hypr-agent", "run-fix", sid], capture_output=True, text=True)
+    signal_bar()
+    return unit
+
+
+def _changes(sid: str) -> list[str]:
+    m = paths.session_dir(sid) / "manifest.jsonl"
+    if not m.exists():
+        return []
+    entries = [json.loads(l) for l in m.read_text().splitlines() if l.strip()]
+    if {"event": "undone"} in entries:
+        return []
+    return [e["path"] for e in entries if "path" in e]
+
+
+def run_fix(sid: str) -> int:
+    settings_file, mcp_file, prompt_file = prepare_session(sid)
+    meta = load_meta(sid)
+    save_meta(sid, mode="fix")
+    sdir = paths.session_dir(sid)
+    cp = subprocess.run(fix_argv(sid, settings_file, mcp_file, prompt_file, meta.get("cwd")),
+                        cwd=sdir, env=agent_env(sid), capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    result = _result(cp)
+    (sdir / "result.md").write_text(result)
+    save_meta(sid, mode="done")
+    signal_bar()
+    changed = _changes(sid)
+    body = result if len(result) <= 300 else result[:300] + "…"
+    if changed:
+        body += "\n\nChanged (undo restores them):\n" + "\n".join(changed[:8])
+    choices = ([("undo", "Undo the changes")] if changed else []) + [("chat", "Open chat"), ("dismiss", "Dismiss")]
+    pick = ui.choose("Agent: done", body, choices)
+    if pick == "undo":
+        return dispatch(["undo", sid])
+    if pick == "chat":
+        return dispatch(["chat", sid])
+    return 0
+
+
+def open_chat(sid: str, run=subprocess.run) -> int:
+    settings_file, mcp_file, prompt_file = prepare_session(sid)
+    argv = chat_argv(sid, settings_file, mcp_file, prompt_file, load_meta(sid).get("cwd"))
+    # The terminal starts in the session folder; the user's folder is an --add-dir.
+    env_prefix = ["env", "-C", str(paths.session_dir(sid)), "-u", "CLAUDECODE",
+                  f"HYPR_AGENT_SESSION={sid}", f"MCP_TOOL_TIMEOUT={MCP_TOOL_TIMEOUT_MS}"]
+    return run(["uwsm-app", "--", "hypr-terminal", "-e", *env_prefix, *argv]).returncode
+
+
+def stop_all(run=subprocess.run) -> None:
+    run(["systemctl", "--user", "stop", "hypr-agent-*.service"], capture_output=True)
+    pidfile = paths.runtime_dir() / "ask.pid"
+    try:
+        pid = int(pidfile.read_text())
+    except (OSError, ValueError):
+        pid = None
+    if pid:
+        run(["pkill", "-TERM", "-P", str(pid)], capture_output=True)
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            pass
+        pidfile.unlink(missing_ok=True)
+    for pid_ in ui.list_pending():
+        data = ui.read_pending(pid_) or {}
+        ui.answer(pid_, "deny")
+        if data.get("notification"):
+            run(["makoctl", "dismiss", "-n", str(data["notification"])], capture_output=True)
+    signal_bar()
+
+
+def _helper_restore(run):
+    def restore(path: str, copy: str | None) -> None:
+        cp = run(["pkexec", HELPER, "etc-restore", path, copy or "-"], capture_output=True, text=True)
+        if cp.returncode != 0:
+            raise OSError(f"agent-root etc-restore {path}: exit {cp.returncode}")
+    return restore
+
+
+def _helper_snapshot(run):
+    def snap(sdir: Path, path: str) -> None:
+        sdir.mkdir(parents=True, exist_ok=True)
+        cp = run(["pkexec", HELPER, "etc-snapshot", str(sdir), path], capture_output=True, text=True)
+        if cp.returncode != 0:
+            raise OSError(f"agent-root etc-snapshot {path}: exit {cp.returncode}")
+    return snap
+
+
+def undo_session(sid: str, run=subprocess.run) -> list[str]:
+    from .snapshots import undo
+    return undo(paths.session_dir(sid), restore_etc=_helper_restore(run))
+
+
+def cmd_undo(sid: str) -> int:
+    try:
+        restored = undo_session(sid)
+    except OSError as exc:
+        subprocess.run(["notify-send", "-a", "hypr-agent", "-u", "critical", "Agent: undo failed", str(exc)])
+        return 1
+    msg = "\n".join(restored) if restored else "Nothing to undo."
+    subprocess.run(["notify-send", "-a", "hypr-agent", "Agent: undone", msg])
+    return 0
+
+
+def cmd_review() -> int:
+    pid = ui.oldest_pending()
+    if pid is None:
+        subprocess.run(["notify-send", "-a", "hypr-agent", "Agent", "No approvals waiting."])
+        return 0
+    ui.review(pid)
+    return 0
+
+
+def cmd_hook(args: list[str]) -> int:
+    from .snapshots import hook_pre_tool_use
+    if args != ["pre-tool-use"]:
+        return 2
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    return hook_pre_tool_use(event, snapshot_etc=_helper_snapshot(subprocess.run))
+
+
+def cmd_sessions() -> int:
+    d = paths.state_dir()
+    for sdir in sorted(d.iterdir() if d.is_dir() else [], key=lambda p: p.stat().st_mtime):
+        meta = load_meta(sdir.name)
+        n = len(_changes(sdir.name))
+        print(f"{sdir.name}\t{meta.get('mode', '?')}\t{meta.get('created', '?')}\t{n} change{'s' if n != 1 else ''}")
+    return 0
+
+
+def _one(args: list[str], fn) -> int:
+    if len(args) != 1:
+        print("needs a session id (see: hypr-agent sessions)", file=sys.stderr)
+        return 2
+    return fn(args[0])
+
+
+COMMANDS = {
+    "ask": lambda args: cmd_ask(),
+    "fix": lambda args: _one(args, lambda sid: (start_fix(sid), 0)[1]),
+    "run-fix": lambda args: _one(args, run_fix),
+    "chat": lambda args: _one(args, open_chat),
+    "stop": lambda args: (stop_all(), 0)[1],
+    "undo": lambda args: _one(args, cmd_undo),
+    "review": lambda args: cmd_review(),
+    "hook": cmd_hook,
+    "sessions": lambda args: cmd_sessions(),
+}
 
 
 def dispatch(argv: list[str]) -> int:

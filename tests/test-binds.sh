@@ -50,4 +50,8 @@ check bash -c '! grep -E "exec_cmd\((terminal|browser|fileManager|menu)\)" '"$bi
 # the agentic desktop's hotkeys
 check grep -q 'mod .. " + A",' "$binds"
 check grep -q 'hypr-agent ask' "$binds"
+check grep -q 'mod .. " + SHIFT + A",' "$binds"
+check grep -q 'hypr-agent stop' "$binds"
+check grep -q 'mod .. " + Y",' "$binds"
+check grep -q 'hypr-agent review' "$binds"
 exit "$fail"
