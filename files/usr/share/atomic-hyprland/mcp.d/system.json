@@ -1,0 +1,14 @@
+{
+  "command": "/usr/libexec/atomic-hyprland/mcp-server",
+  "args": ["system"],
+  "readOnlyTools": ["journal", "unit_status", "failed_units", "bootc_status"],
+  "rootTools": ["restart_unit", "start_unit", "stop_unit", "bootc_upgrade", "bootc_rollback", "write_etc_file"],
+  "toolNotes": {
+    "restart_unit": "A restart can't be undone, but the service keeps its config.",
+    "start_unit": "Undo by stopping the unit again.",
+    "stop_unit": "Undo by starting the unit again.",
+    "bootc_upgrade": "Staged only; after the reboot, bootc rollback returns to this image.",
+    "bootc_rollback": "Undo with another bootc rollback.",
+    "write_etc_file": "Undo restores the file."
+  }
+}

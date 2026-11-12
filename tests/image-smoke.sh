@@ -213,6 +213,7 @@ check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.path
 check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.service
 check bash -c 'hypr-mcp list >/dev/null'
 check python3 /tests/mcp-smoke.py approvals prompt
+check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
 check test -x /usr/libexec/atomic-hyprland/agent-root
 check pkaction --action-id org.atomic-hyprland.agent.root
 check test -x /usr/bin/tuios
