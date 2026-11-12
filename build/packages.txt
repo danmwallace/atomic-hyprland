@@ -48,6 +48,9 @@ sddm
 sddm-x11
 waybar
 alacritty
+# hypr-terminal reads the GPU's GLSL version from eglinfo: Ghostty needs 4.30,
+# older GPUs (Intel HD 4000) get Alacritty
+egl-utils
 wofi
 swaybg
 cliphist
@@ -64,6 +67,8 @@ tuned
 tuned-ppd
 network-manager-applet
 NetworkManager-wifi
+# nmtui: the waybar network click, which scans and joins WiFi
+NetworkManager-tui
 nm-connection-editor-desktop
 gnome-keyring
 qt5-qtwayland

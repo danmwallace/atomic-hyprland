@@ -1,0 +1,28 @@
+#!/usr/bin/bash
+# The session's terminal: hypr-terminal [-e COMMAND ARGS...]
+# Ghostty renders with OpenGL 4.3 shaders (GLSL 4.30). Older GPUs stop short of
+# that (Intel HD 4000 / Ivy Bridge reports 4.20) and Ghostty exits without a
+# window, so there Alacritty runs instead; it needs only OpenGL 3.3. Both take
+# -e the same way, so arguments pass through untouched.
+# The probe asks EGL on the Wayland display (the path Ghostty itself uses, not
+# XWayland) and takes ~70 ms. If it gives no answer, Ghostty runs: guessing
+# "old GPU" would hide a broken probe on every machine that is fine.
+# Only bash builtins here, so the choice never depends on what else is on PATH.
+
+glsl_ok() {
+    local line ver major minor
+    while IFS= read -r line; do
+        [[ "$line" == "OpenGL core profile shading language version: "* ]] || continue
+        ver="${line##*: }"
+        [[ "$ver" =~ ^([0-9]+)\.([0-9]+) ]] || return 0
+        major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}"
+        (( 10#$major > 4 || (10#$major == 4 && 10#$minor >= 30) ))
+        return
+    done < <(eglinfo -B -p wayland 2>/dev/null)
+    return 0
+}
+
+if command -v eglinfo >/dev/null && ! glsl_ok; then
+    exec alacritty "$@"
+fi
+exec ghostty "$@"

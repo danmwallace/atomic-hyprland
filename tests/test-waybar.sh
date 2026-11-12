@@ -43,6 +43,11 @@ check bash -c 'jq -e ".\"custom/gpu\".\"return-type\" == \"json\"" '"$cfg"
 check bash -c 'jq -er ".\"custom/notifications\".exec" '"$cfg"' | grep -q "/usr/libexec/atomic-hyprland/waybar/notifications"'
 check bash -c 'jq -e ".battery.states.critical == 15 and .battery.states.warning == 30" '"$cfg"
 check bash -c 'jq -er ".\"custom/power\".\"on-click\"" '"$cfg"' | grep -qx hypr-power'
+# Terminal popups go through hypr-terminal (Ghostty, or Alacritty on GPUs Ghostty cannot run).
+# The network click opens nmtui, which scans and joins WiFi; nm-connection-editor cannot scan.
+check bash -c 'jq -er ".network.\"on-click\"" '"$cfg"' | grep -qx "hypr-terminal -e nmtui"'
+check bash -c 'jq -er ".bluetooth.\"on-click\"" '"$cfg"' | grep -qx "hypr-terminal -e bluetoothctl"'
+check bash -c 'jq -er ".cpu.\"on-click\", .memory.\"on-click\"" '"$cfg"' | grep -vqx "hypr-terminal -e btop" && exit 1 || exit 0'
 check bash -c 'jq -e ".\"hyprland/workspaces\".\"persistent-workspaces\".\"*\" == 5" '"$cfg"
 check bash -c 'jq -e ".\"group/tray-drawer\".modules[0] == \"custom/tray-toggle\" and (.\"group/tray-drawer\".modules | index(\"tray\")) != null" '"$cfg"
 check bash -c '! jq -e ".\"custom/media\" or .\"custom/updates\" or .backlight or .\"hyprland/submap\"" '"$cfg"' >/dev/null'

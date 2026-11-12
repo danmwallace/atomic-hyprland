@@ -203,6 +203,10 @@ check rpm -q hyprland-guiutils
 # packaged for Fedora, so it is upstream's release binary under /usr/bin.
 check rpm -q ghostty
 check bash -c 'ghostty +version | grep -qi "^ghostty "'
+# hypr-terminal picks Ghostty or Alacritty from the GLSL version eglinfo reports
+check test -x /usr/bin/hypr-terminal
+check test -x /usr/bin/eglinfo
+check test -x /usr/bin/nmtui
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE

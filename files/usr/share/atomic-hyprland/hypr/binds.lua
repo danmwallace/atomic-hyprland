@@ -1,6 +1,6 @@
 -- Key bindings. SUPER is the modifier; programs are the image's defaults.
 local mod = "SUPER"
-local terminal = "ghostty"
+local terminal = "hypr-terminal"
 local fileManager = "nautilus"
 local menu = "wofi --show drun"
 local browser = "chromium-browser"
