@@ -1,0 +1,14 @@
+{
+  "command": "/usr/libexec/atomic-hyprland/mcp-server",
+  "args": ["hyprland"],
+  "readOnlyTools": ["list_windows", "list_workspaces", "list_monitors", "active_window", "list_binds"],
+  "toolNotes": {
+    "focus_window": "Focus back on the window you were using.",
+    "move_window_to_workspace": "Move the window back by hand (Super+Shift+<number>).",
+    "resize_window": "Resize it back by hand (Super+drag).",
+    "close_window": "Can't be undone automatically: reopen the app.",
+    "switch_workspace": "Switch back with Super+<number>.",
+    "launch": "Close the app to undo.",
+    "reload_config": "Harmless: reloads the current config."
+  }
+}

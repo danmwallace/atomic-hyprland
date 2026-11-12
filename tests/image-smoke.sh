@@ -198,6 +198,17 @@ expect_out "an unknown hl.config key is detected by the probe" present 'PROBE un
 out="$(verify_hypr 'hl.bind("SUPER + Z", hl.dsp.nonexistent())')"
 expect_out "broken module is reported by name" present 'extra_binds.lua'
 expect_out "broken module does not fail hyprland.lua" absent 'hyprland.lua:'
+# The agent's Hyprland dispatchers are valid Lua that Hyprland accepts as binds.
+exprs="$(python3 -I -c 'import sys; sys.path.insert(0, "/usr/lib/atomic-hyprland/python")
+from atomic_agent.servers.hyprland import dispatch_expr
+for t, a in (("focus_window", {"address": "0xabc"}), ("move_window_to_workspace", {"address": "0xabc", "workspace": 3}),
+             ("resize_window", {"address": "0xabc", "width": 800, "height": 600}), ("close_window", {"address": "0xabc"}),
+             ("switch_workspace", {"workspace": "special:magic"}), ("launch", {"command": "true"}), ("reload_config", {})):
+    print(dispatch_expr(t, **a))')"
+n=0; binds=""
+while IFS= read -r e; do n=$((n + 1)); binds+="hl.bind(\"SUPER + CTRL + ALT + F$n\", $e)"$'\n'; done <<< "$exprs"
+out="$(verify_hypr "$binds")"
+expect_out "agent dispatchers ($n) are accepted by Hyprland" absent 'attempt to|stack traceback|Config error|extra_binds.lua'
 check rpm -q hyprland-guiutils
 # Extra terminals: Ghostty from the scottames/ghostty COPR; tuios is not
 # packaged for Fedora, so it is upstream's release binary under /usr/bin.
@@ -213,6 +224,9 @@ check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.path
 check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.service
 check bash -c 'hypr-mcp list >/dev/null'
 check python3 /tests/mcp-smoke.py approvals prompt
+check python3 /tests/mcp-smoke.py hyprland list_windows list_workspaces list_monitors active_window list_binds focus_window move_window_to_workspace resize_window close_window switch_workspace launch reload_config
+check python3 /tests/mcp-smoke.py screen capture
+check python3 /tests/mcp-smoke.py notify notify
 check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
 check test -x /usr/libexec/atomic-hyprland/agent-root
 check pkaction --action-id org.atomic-hyprland.agent.root

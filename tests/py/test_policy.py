@@ -97,6 +97,11 @@ class NeverAlwaysTest(unittest.TestCase):
     def test_never_always_screen(self):
         self.assertTrue(policy.never_always("mcp__screen__capture", {}, set()))
 
+    def test_never_always_launch(self):
+        # launch runs any command: an "always" rule for it would be a Bash(*) by another name.
+        self.assertTrue(policy.never_always("mcp__hyprland__launch", {"command": "x"}, set()))
+        self.assertIsNone(policy.always_rule("mcp__hyprland__launch", {"command": "x"}))
+
     def test_never_always_root_tools(self):
         self.assertTrue(policy.never_always("mcp__system__bootc_rollback", {}, {"mcp__system__bootc_rollback"}))
         self.assertFalse(policy.never_always("mcp__hyprland__focus_window", {}, {"mcp__system__bootc_rollback"}))

@@ -1,0 +1,8 @@
+{
+  "command": "/usr/libexec/atomic-hyprland/mcp-server",
+  "args": ["notify"],
+  "readOnlyTools": [],
+  "toolNotes": {
+    "notify": "Shows a notification; dismiss it to undo."
+  }
+}

@@ -11,6 +11,8 @@ import shlex
 from dataclasses import dataclass
 
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+# Tools that can run anything: an "always allow" rule would cover every command.
+NEVER_ALWAYS_TOOLS = {"mcp__hyprland__launch"}
 CANT_UNDO = "Can't be undone automatically."
 FILE_UNDO = "Undo restores the file."
 
@@ -91,7 +93,7 @@ def _bash_never(command: str) -> bool:
 
 
 def never_always(tool_name: str, tool_input: dict, root_tools: set[str]) -> bool:
-    if tool_name in root_tools or tool_name.startswith("mcp__screen__"):
+    if tool_name in root_tools or tool_name in NEVER_ALWAYS_TOOLS or tool_name.startswith("mcp__screen__"):
         return True
     if tool_name == "Bash":
         return _bash_never(tool_input.get("command", ""))
