@@ -48,7 +48,7 @@ class AgentRootTest(unittest.TestCase):
             self.calls.append(cmd)
             return subprocess.CompletedProcess(cmd, 0, "", "")
         with mock.patch("sys.stderr", io.StringIO()):
-            return self.m.main(list(argv), self.env, run=run, stdin=io.StringIO(stdin), chown=lambda *a: None)
+            return self.m.main(list(argv), self.env, run=run, stdin=io.StringIO(stdin))
 
     def test_rejects_traversal(self):
         self.assertEqual(self.run_main("etc-write", str(self.sdir), f"{self.etc}/../usr/bin/x", stdin="x"), 2)
@@ -86,18 +86,64 @@ class AgentRootTest(unittest.TestCase):
         target.write_text("old\n")
         self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="new\n"), 0)
         self.assertEqual(target.read_text(), "new\n")
-        entry = json.loads((self.sdir / "manifest.jsonl").read_text().splitlines()[0])
-        self.assertEqual(entry, {"path": str(target), "existed": True, "copy": "files/0"})
+        lines = [json.loads(l) for l in (self.sdir / "manifest.jsonl").read_text().splitlines()]
+        self.assertEqual(lines[0], {"path": str(target), "existed": True, "copy": "files/0"})
+        self.assertEqual(lines[1], {"event": "applied", "path": str(target)})
         self.assertEqual((self.sdir / "files/0").read_text(), "old\n")
-        # second write: no second snapshot
+        # second write: no second snapshot (one more applied marker at most)
         self.run_main("etc-write", str(self.sdir), str(target), stdin="newer\n")
-        self.assertEqual(len((self.sdir / "manifest.jsonl").read_text().splitlines()), 1)
+        lines = [json.loads(l) for l in (self.sdir / "manifest.jsonl").read_text().splitlines()]
+        self.assertEqual(sum(1 for e in lines if "existed" in e), 1)
 
     def test_etc_write_new_file_records_absent(self):
         target = self.etc / "hosts"
         self.run_main("etc-write", str(self.sdir), str(target), stdin="x")
         entry = json.loads((self.sdir / "manifest.jsonl").read_text().splitlines()[0])
         self.assertEqual(entry, {"path": str(target), "existed": False, "copy": None})
+
+    def test_snapshot_refuses_symlinked_files_dir(self):
+        # C1: as root, a symlinked files/ (or manifest) would chown or overwrite /etc.
+        victim = self.root / "victim"
+        victim.mkdir()
+        (self.sdir / "files").symlink_to(victim)
+        self.assertNotEqual(self.run_main("etc-snapshot", str(self.sdir), str(self.etc / "hosts")), 0)
+        self.assertEqual(list(victim.iterdir()), [])
+
+    def test_snapshot_refuses_symlinked_manifest(self):
+        victim = self.root / "victim.txt"
+        victim.write_text("keep")
+        (self.sdir / "manifest.jsonl").symlink_to(victim)
+        self.assertNotEqual(self.run_main("etc-snapshot", str(self.sdir), str(self.etc / "hosts")), 0)
+        self.assertEqual(victim.read_text(), "keep")
+
+    def test_user_side_writes_drop_privileges(self):
+        calls = []
+        with mock.patch("os.setresuid", side_effect=lambda *a: calls.append(("uid",) + a)), \
+             mock.patch("os.setresgid", side_effect=lambda *a: calls.append(("gid",) + a)), \
+             mock.patch("os.fork", return_value=0), mock.patch("os._exit", side_effect=SystemExit):
+            with self.assertRaises(SystemExit):
+                self.m.as_user(os.getuid(), os.getgid(), lambda: None)
+        self.assertIn(("uid", os.getuid(), os.getuid(), os.getuid()), calls)
+        self.assertIn(("gid", os.getgid(), os.getgid(), os.getgid()), calls)
+
+    def test_write_keeps_label_owner_and_mode(self):
+        target = self.etc / "hosts"
+        target.write_text("old")
+        target.chmod(0o640)
+        seen = {}
+        real_get = os.getxattr
+        def get(path, name, *a, **k):
+            if name == "security.selinux":
+                return b"system_u:object_r:net_conf_t:s0"
+            return real_get(path, name, *a, **k)
+        with mock.patch("os.getxattr", side_effect=get), \
+             mock.patch("os.setxattr", side_effect=lambda p, n, v, *a, **k: seen.update({n: v})), \
+             mock.patch("os.chown", side_effect=lambda p, u, g, *a, **k: seen.update(owner=(u, g))):
+            self.m.write_file(str(target), b"new")
+        self.assertEqual(target.read_text(), "new")
+        self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(seen["security.selinux"], b"system_u:object_r:net_conf_t:s0")
+        self.assertEqual(seen["owner"], (os.getuid(), os.getgid()))
 
     def test_etc_restore(self):
         target = self.etc / "hosts"

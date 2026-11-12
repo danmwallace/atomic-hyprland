@@ -20,7 +20,6 @@ import json
 import os
 import pwd
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -143,49 +142,109 @@ def read_user_file(path: str, uid: int) -> bytes:
         os.close(fd)
 
 
+def as_user(uid: int, gid: int, fn) -> int:
+    """Run fn in a child process with the user's uid/gid, so nothing written into the
+    user's folder (copies, manifest) can follow a symlink with root's rights."""
+    pid = os.fork()
+    if pid == 0:
+        code = 1
+        try:
+            if os.geteuid() == 0:
+                os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+            fn()
+            code = 0
+        except Refused as exc:
+            print(f"agent-root: refused: {exc}", file=sys.stderr)
+            code = 2
+        except BaseException as exc:  # noqa: BLE001 - the child must always exit
+            print(f"agent-root: {exc}", file=sys.stderr)
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(status)
+
+
+def _no_symlink(path: str) -> None:
+    if os.path.islink(path):
+        raise Refused(f"symlink in the session folder: {path!r}")
+
+
 def _entries(sdir: str) -> list[dict]:
     m = os.path.join(sdir, "manifest.jsonl")
-    if not os.path.exists(m):
+    _no_symlink(m)
+    try:
+        fd = os.open(m, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
         return []
-    with open(m) as f:
+    with os.fdopen(fd) as f:
         return [json.loads(line) for line in f if line.strip()]
 
 
-def snapshot(sdir: str, path: str, uid: int, chown=os.chown) -> None:
-    """Same manifest format as atomic_agent.snapshots.snapshot."""
+def _append(sdir: str, entry: dict) -> None:
+    m = os.path.join(sdir, "manifest.jsonl")
+    _no_symlink(m)
+    fd = os.open(m, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def _user_snapshot(sdir: str, path: str, data: bytes | None) -> None:
+    """Same manifest format as atomic_agent.snapshots.snapshot. Runs as the user."""
     entries = _entries(sdir)
-    if any(e.get("path") == path for e in entries):
+    if any(e.get("path") == path and "existed" in e for e in entries):
         return
     files = os.path.join(sdir, "files")
+    _no_symlink(files)
     os.makedirs(files, exist_ok=True)
-    chown(files, uid, -1)
-    if os.path.exists(path):
-        copy = f"files/{sum(1 for e in entries if 'path' in e)}"
-        shutil.copy2(path, os.path.join(sdir, copy))
-        chown(os.path.join(sdir, copy), uid, -1)
-        entry = {"path": path, "existed": True, "copy": copy}
+    if data is not None:
+        copy = f"files/{sum(1 for e in entries if 'existed' in e)}"
+        fd = os.open(os.path.join(sdir, copy), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        _append(sdir, {"path": path, "existed": True, "copy": copy})
     else:
-        entry = {"path": path, "existed": False, "copy": None}
-    manifest = os.path.join(sdir, "manifest.jsonl")
-    with open(manifest, "a") as m:
-        m.write(json.dumps(entry) + "\n")
-    chown(manifest, uid, -1)
+        _append(sdir, {"path": path, "existed": False, "copy": None})
+
+
+def snapshot(sdir: str, path: str, uid: int, gid: int) -> int:
+    data = None
+    if os.path.exists(path):
+        with open(path, "rb") as f:  # read as root: validate_etc_path checked it is world-readable
+            data = f.read()
+    return as_user(uid, gid, lambda: _user_snapshot(sdir, path, data))
+
+
+def mark_applied(sdir: str, path: str, uid: int, gid: int) -> int:
+    return as_user(uid, gid, lambda: _append(sdir, {"event": "applied", "path": path}))
 
 
 def write_file(path: str, data: bytes) -> None:
-    mode = os.stat(path).st_mode & 0o7777 if os.path.exists(path) else 0o644
+    """Replace path atomically, keeping its mode, owner and SELinux label."""
+    old = os.stat(path) if os.path.exists(path) else None
+    label = None
+    if old is not None:
+        try:
+            label = os.getxattr(path, "security.selinux")
+        except OSError:
+            label = None
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".agent-root.")
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        os.chmod(tmp, mode)
+        os.chmod(tmp, old.st_mode & 0o7777 if old else 0o644)
+        if old is not None:
+            os.chown(tmp, old.st_uid, old.st_gid)
+        if label:
+            os.setxattr(tmp, "security.selinux", label)
         os.replace(tmp, path)
     except BaseException:
         os.unlink(tmp)
         raise
 
 
-def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin, chown=os.chown) -> int:
+def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin) -> int:
     try:
         if not argv:
             raise Refused("no operation")
@@ -202,9 +261,13 @@ def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin, chown=os.cho
         if op in ("etc-snapshot", "etc-write") and len(args) == 2:
             sdir = validate_user_path(args[0], uid, want_dir=True)
             path = validate_etc_path(args[1])
-            snapshot(sdir, path, uid, chown)
+            gid = pwd.getpwuid(uid).pw_gid
+            rc = snapshot(sdir, path, uid, gid)
+            if rc != 0:
+                return rc
             if op == "etc-write":
                 write_file(path, stdin.read().encode())
+                return mark_applied(sdir, path, uid, gid)
             return 0
         if op == "etc-restore" and len(args) == 2:
             path = validate_etc_path(args[0])
