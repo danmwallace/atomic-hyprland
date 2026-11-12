@@ -207,6 +207,8 @@ check bash -c 'ghostty +version | grep -qi "^ghostty "'
 check test -x /usr/bin/hypr-terminal
 check test -x /usr/bin/eglinfo
 check test -x /usr/bin/nmtui
+# Agentic desktop: Fedora's MCP SDK for the desktop servers
+check python3 -c 'from mcp.server.fastmcp import FastMCP'
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE

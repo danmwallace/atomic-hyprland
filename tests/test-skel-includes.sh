@@ -154,6 +154,8 @@ check grep -qx libatomic build/packages.txt
 # hypr-terminal probes the GPU's GLSL version with eglinfo; waybar's network click runs nmtui
 check grep -qx egl-utils build/packages.txt
 check grep -qx NetworkManager-tui build/packages.txt
+# the agent's MCP servers use Fedora's MCP SDK (no other package source)
+check grep -qx python3-mcp build/packages.txt
 # Dan's tool list (2026-11-08): Fedora packages in the image
 check bash -c 'for p in mosh wireshark nmap arp-scan tcpdump mtr iperf3 nmap-ncat socat bind-utils tio minicom pandoc-cli flameshot azure-cli awscli2 opentofu ansible cava helix git-delta ShellCheck direnv glow age virt-viewer; do grep -qx "$p" build/packages.txt || { echo "missing $p"; exit 1; }; done'
 check bash -c '! grep -qxE "wtype|ydotool|netcat" build/packages.txt'   # declined / nmap-ncat provides nc
