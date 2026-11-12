@@ -26,9 +26,23 @@ class RuleTest(unittest.TestCase):
 
     def test_rule_edit_absolute_path(self):
         # Claude Code rules: //path is absolute; one Edit rule covers every file-editing tool.
-        self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/.config/waybar/local.css", "content": "x"}),
-                         "Edit(//home/u/.config/waybar/local.css)")
-        self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), "Edit(//home/u/a)")
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"HOME": "/home/u"}):
+            self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/app/main.py", "content": "x"}),
+                             "Edit(//home/u/Code/app/main.py)")
+            self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), "Edit(//home/u/a)")
+
+    def test_rule_edit_only_plain_files_in_home(self):
+        # Allowlist: always-allow only for non-hidden files under $HOME; dotfiles, dot-folders
+        # and anything outside home keep one-time cards.
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"HOME": "/home/u"}):
+            for p in ("/home/u/.bashrc.d/x.sh", "/home/u/.config/containers/systemd/x.container",
+                      "/home/u/.local/share/dbus-1/services/x.service", "/home/u/.pam_environment",
+                      "/home/u/.xprofile", "/home/u/Code/app/.envrc", "/tmp/x", "/opt/app/conf"):
+                self.assertIsNone(policy.always_rule("Edit", {"file_path": p}), p)
 
     def test_rule_none_for_compound_bash(self):
         for cmd in ("make && make install", "ls; id", "cat a | tee b", "echo $(id)", "echo hi > f"):
@@ -51,8 +65,8 @@ class RuleTest(unittest.TestCase):
                       ".config/mako/local", ".gitconfig", ".config/git/config", ".local/share/applications/x.desktop",
                       ".zshenv", ".config/fish/config.fish", ".config/atomic-hyprland/hooks/theme.sh"):
                 self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{home}/{p}"}), p)
-            self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/.config/btop/btop.conf"}),
-                             f"Edit(/{home}/.config/btop/btop.conf)")
+            self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/Documents/notes.md"}),
+                             f"Edit(/{home}/Documents/notes.md)")
 
     def test_rule_edit_refuses_git_and_claude_anywhere(self):
         for p in ("/srv/repo/.git/hooks/pre-commit", "/srv/repo/.claude/settings.json",
@@ -123,7 +137,10 @@ class CardTest(unittest.TestCase):
         self.assertEqual(policy.undo_note("mcp__s__x", {}, {}), "Can't be undone automatically.")
 
     def test_card_edit_has_diff(self):
-        card = policy.card_for("Edit", {"file_path": "/h/a.conf", "old_string": "gaps = 5\n", "new_string": "gaps = 10\n"}, {}, set())
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"HOME": "/h"}):
+            card = policy.card_for("Edit", {"file_path": "/h/a.conf", "old_string": "gaps = 5\n", "new_string": "gaps = 10\n"}, {}, set())
         self.assertIn("-gaps = 5", card.detail)
         self.assertIn("+gaps = 10", card.detail)
         self.assertIn("/h/a.conf", card.title)

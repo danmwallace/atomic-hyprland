@@ -8,8 +8,11 @@
   agent-root etc-write <session-dir> <path>     snapshot, then write stdin
   agent-root etc-restore <path> <copy|->        undo: restore (or remove)
 
-Paths must stay under /etc (no '..', no symlinks out); session folders and
-snapshot copies must belong to the user who ran pkexec (PKEXEC_UID).
+Allowlists, not denylists: only the units in ALLOWED_UNITS (plus one name per
+line in /etc/atomic-hyprland/agent-units, root-owned), judged by the name they
+resolve to; only the /etc files in ETC_ALLOWED, world-readable, with no '..' or
+symlinks on the way. Session folders and snapshot copies must belong to the
+user who ran pkexec (PKEXEC_UID).
 Exit 0 ok, 1 the operation failed, 2 refused. Standalone on purpose: it
 imports nothing from the user-side atomic_agent package.
 """
@@ -24,11 +27,18 @@ import tempfile
 
 ETC = "/etc"
 UNIT = re.compile(r"[A-Za-z0-9@._:\-]+\.(service|timer|socket|path)")
-# Units the whole system leans on: never started, stopped or restarted by the agent.
-DENIED_UNIT = re.compile(r"(systemd-|dbus|polkit|debug-shell|emergency|rescue|getty|serial-getty|autovt)")
-# /etc files that guard accounts, privilege and trust: never read or written here.
-PROTECTED = ("shadow", "gshadow", "passwd", "group", "sudoers", "sudoers.d", "polkit-1", "pam.d",
-             "security", "ssh", "pki", "containers", "crypttab", "machine-id", "subuid", "subgid")
+UNITS_FILE = "/etc/atomic-hyprland/agent-units"
+UNITS_FILE_OWNER = 0  # ignored unless root-owned and not group/world-writable
+# Everyday services an agent may restart while fixing something. A machine adds
+# its own (Ollama, a Quadlet) to UNITS_FILE.
+ALLOWED_UNITS = {
+    "tailscaled.service", "cups.service", "cups.socket", "bluetooth.service", "NetworkManager.service",
+    "sshd.service", "tuned.service", "avahi-daemon.service", "fwupd.service", "podman.socket",
+    "bootc-fetch-apply-updates.service", "bootc-fetch-apply-updates.timer", "ai-images-pull.service",
+}
+# The /etc files an agent may write: a file name, or a folder ending in "/".
+# Everything else is a PR to the image or a command for the user to run.
+ETC_ALLOWED = ("hosts", "atomic-hyprland/agent.conf", "NetworkManager/conf.d/", "tuned/", "fwupd/")
 
 
 class Refused(Exception):
@@ -43,11 +53,27 @@ def _under(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip("/") + "/")
 
 
-def validate_unit(unit: str) -> str:
+def allowed_units() -> set[str]:
+    extra: set[str] = set()
+    try:
+        st = os.stat(UNITS_FILE)
+        if st.st_uid == UNITS_FILE_OWNER and not st.st_mode & 0o022:
+            with open(UNITS_FILE) as f:
+                extra = {l.strip() for l in f if l.strip() and not l.lstrip().startswith("#")}
+    except OSError:
+        pass
+    return ALLOWED_UNITS | extra
+
+
+def validate_unit(unit: str, run=subprocess.run) -> str:
     if not UNIT.fullmatch(unit):
         raise Refused(f"not a service, timer, socket or path unit: {unit!r}")
-    if DENIED_UNIT.match(unit):
-        raise Refused(f"protected unit: {unit!r}")
+    resolved = run(["systemctl", "show", "-p", "Id", "--value", unit],
+                   capture_output=True, text=True).stdout.strip() or unit
+    allowed = allowed_units()
+    for name in {unit, resolved}:
+        if name not in allowed:
+            raise Refused(f"{name!r} is not on the agent's unit list ({UNITS_FILE} adds more)")
     return unit
 
 
@@ -63,9 +89,10 @@ def validate_etc_path(path: str) -> str:
     final = os.path.join(real_parent, name)
     if os.path.islink(final):
         raise Refused(f"refusing to write through a symlink: {path!r}")
-    first = os.path.relpath(final, ETC).split("/")[0]
-    if first.rstrip("-") in PROTECTED or first.split("-")[0] in ("shadow", "gshadow", "passwd", "group"):
-        raise Refused(f"protected file: {path!r}")
+    rel = os.path.relpath(final, ETC)
+    if not any(rel == a or (a.endswith("/") and rel.startswith(a) and "/" not in rel[len(a):])
+               for a in ETC_ALLOWED):
+        raise Refused(f"not on the agent's /etc list: {path!r}")
     if os.path.exists(final) and not os.stat(final).st_mode & 0o004:
         # Snapshots land in the user's folder; never copy out what the user cannot read.
         raise Refused(f"not world-readable: {path!r}")
@@ -150,7 +177,7 @@ def main(argv, env=os.environ, run=subprocess.run, stdin=sys.stdin, chown=os.cho
             raise Refused("no operation")
         op, args = argv[0], argv[1:]
         if op == "unit" and len(args) == 2 and args[0] in ("start", "stop", "restart"):
-            return run(["systemctl", args[0], validate_unit(args[1])]).returncode and 1
+            return run(["systemctl", args[0], validate_unit(args[1], run)]).returncode and 1
         if op == "bootc-upgrade" and not args:
             return run(["bootc", "upgrade"]).returncode and 1
         if op == "bootc-rollback" and not args:

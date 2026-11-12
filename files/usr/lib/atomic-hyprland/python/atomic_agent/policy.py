@@ -20,20 +20,10 @@ FILE_UNDO = "Undo restores the file."
 _COMPOUND = re.compile(r";|&|\||>|<|`|\$\(|\n")
 _SEGMENTS = re.compile(r"\s*(?:;|&&|\|\||\||&|\n)\s*")
 _GIT_OPTS_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
-# Files whose "always allow" would let the agent widen its own reach or run code
-# later without asking: shell startup files, SSH and GPG, the agent's own config,
-# Claude's config, user units, autostart and desktop entries, the session
-# environment, and desktop configs that can run commands (Hyprland's Lua, waybar
-# and mako exec, git aliases and hooks). They stay editable with one-time cards.
-_SENSITIVE = (".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".profile", ".zshrc",
-              ".zprofile", ".zshenv", ".zlogin", ".config/fish/", ".config/elvish/", ".ssh/",
-              ".gnupg/", ".config/atomic-hyprland/", ".claude/", ".claude.json", ".config/systemd/",
-              ".config/autostart/", ".config/uwsm/", ".config/environment.d/", ".local/bin/",
-              ".config/hypr/", ".config/waybar/", ".config/mako/", ".gitconfig", ".config/git/",
-              ".local/share/applications/")
-# Anywhere on disk: git hooks and config, project-level Claude/MCP config.
-_SENSITIVE_PARTS = {".git", ".claude"}
-_SENSITIVE_NAMES = {".claude.json", ".mcp.json"}
+# "Always allow" for a file is an allowlist: only non-hidden files under $HOME.
+# Dotfiles and dot-folders (shell startup, ~/.config, ~/.local, ~/.ssh, .git,
+# .claude, the agent's own config) and anything outside home can run code or
+# widen the agent's reach later, so they keep one-time cards.
 _GLOB = re.compile(r"[*?\[\]{}]")
 # Characters Claude Code's rule syntax would read as patterns or structure.
 _RULE_UNSAFE = re.compile(r"[*?\[\]{}()]")
@@ -124,18 +114,11 @@ def _edit_rule(path: str) -> str | None:
     if not path.startswith("/") or _GLOB.search(path) or "/../" in path + "/" or "/./" in path + "/":
         return None
     real = os.path.realpath(path)
-    parts = real.split("/")
-    if _SENSITIVE_PARTS & set(parts[:-1]) or parts[-1] in _SENSITIVE_NAMES | _SENSITIVE_PARTS:
-        return None
-    runtime = os.path.realpath(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
-    if real.startswith(runtime + "/"):
-        return None
     home = os.path.realpath(os.environ.get("HOME") or os.path.expanduser("~"))
-    if real.startswith(home + "/"):
-        rel = real[len(home) + 1:]
-        for s in _SENSITIVE:
-            if (s.endswith("/") and (rel + "/").startswith(s)) or rel == s:
-                return None
+    if not real.startswith(home + "/"):
+        return None
+    if any(part.startswith(".") for part in real[len(home) + 1:].split("/")):
+        return None
     # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
     return f"Edit(/{real})"
 

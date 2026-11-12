@@ -29,13 +29,21 @@ class AgentRootTest(unittest.TestCase):
         p.start(); self.addCleanup(p.stop)
         q = mock.patch.object(self.m, "home_of", lambda uid: str(self.home))
         q.start(); self.addCleanup(q.stop)
+        self.units_file = self.root / "agent-units"
+        u = mock.patch.object(self.m, "UNITS_FILE", str(self.units_file))
+        u.start(); self.addCleanup(u.stop)
+        o = mock.patch.object(self.m, "UNITS_FILE_OWNER", os.getuid())
+        o.start(); self.addCleanup(o.stop)
+        self.aliases = {}
         self.env = {"PKEXEC_UID": str(os.getuid())}
         self.calls = []
 
     def run_main(self, *argv, stdin=""):
         def run(cmd, **kw):
+            if cmd[:3] == ["systemctl", "show", "-p"]:
+                return subprocess.CompletedProcess(cmd, 0, self.aliases.get(cmd[-1], cmd[-1]) + "\n", "")
             self.calls.append(cmd)
-            return subprocess.CompletedProcess(cmd, 0)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
         with mock.patch("sys.stderr", io.StringIO()):
             return self.m.main(list(argv), self.env, run=run, stdin=io.StringIO(stdin), chown=lambda *a: None)
 
@@ -63,6 +71,7 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual(self.run_main("unit", "restart", "cups.service"), 0)
         self.assertEqual(self.calls, [["systemctl", "restart", "cups.service"]])
+        self.assertEqual(self.run_main("unit", "restart", "some-random.service"), 2)
 
     def test_upgrade_never_applies(self):
         self.assertEqual(self.run_main("bootc-upgrade"), 0)
@@ -70,7 +79,7 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(self.run_main("bootc-upgrade", "--apply"), 2)
 
     def test_etc_write_snapshots_first(self):
-        target = self.etc / "app.conf"
+        target = self.etc / "hosts"
         target.write_text("old\n")
         self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="new\n"), 0)
         self.assertEqual(target.read_text(), "new\n")
@@ -82,13 +91,14 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(len((self.sdir / "manifest.jsonl").read_text().splitlines()), 1)
 
     def test_etc_write_new_file_records_absent(self):
-        target = self.etc / "new.conf"
+        (self.etc / "NetworkManager/conf.d").mkdir(parents=True)
+        target = self.etc / "NetworkManager/conf.d/new.conf"
         self.run_main("etc-write", str(self.sdir), str(target), stdin="x")
         entry = json.loads((self.sdir / "manifest.jsonl").read_text().splitlines()[0])
         self.assertEqual(entry, {"path": str(target), "existed": False, "copy": None})
 
     def test_etc_restore(self):
-        target = self.etc / "app.conf"
+        target = self.etc / "hosts"
         target.write_text("changed")
         (self.sdir / "files").mkdir()
         (self.sdir / "files/0").write_text("orig")
@@ -103,7 +113,8 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(self.run_main("etc-restore", str(self.etc / "a"), str(outside)), 2)
 
     def test_refuses_private_files(self):
-        secret = self.etc / "shadow-like"
+        (self.etc / "tuned").mkdir()
+        secret = self.etc / "tuned/private.conf"
         secret.write_text("hash")
         secret.chmod(0o600)
         self.assertEqual(self.run_main("etc-snapshot", str(self.sdir), str(secret)), 2)
@@ -132,6 +143,32 @@ class AgentRootTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual(self.run_main("unit", "restart", "tailscaled.service"), 0)
         self.assertEqual(self.run_main("unit", "start", "bootc-fetch-apply-updates.timer"), 0)
+
+    def test_units_file_extends_allowlist(self):
+        self.assertEqual(self.run_main("unit", "restart", "ollama.service"), 2)
+        self.units_file.write_text("# extra units\nollama.service\n")
+        self.units_file.chmod(0o666)
+        self.assertEqual(self.run_main("unit", "restart", "ollama.service"), 2)  # writable by others: ignored
+        self.units_file.chmod(0o644)
+        self.assertEqual(self.run_main("unit", "restart", "ollama.service"), 0)
+
+    def test_unit_alias_resolved(self):
+        # an allowed name that is an alias of something else is judged by what it resolves to
+        self.aliases["cups.service"] = "systemd-logind.service"
+        self.assertEqual(self.run_main("unit", "stop", "cups.service"), 2)
+        self.assertEqual(self.calls, [])
+
+    def test_etc_allowlist(self):
+        for rel in ("systemd/system/x.service", "ld.so.preload", "profile.d/x.sh", "cron.d/x",
+                    "environment", "modprobe.d/x.conf", "udev/rules.d/x.rules", "atomic-hyprland/mcp.d/x.json",
+                    "containers/systemd/x.container", "xdg/autostart/x.desktop"):
+            target = self.etc / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.assertEqual(self.run_main("etc-write", str(self.sdir), str(target), stdin="x"), 2, rel)
+            self.assertFalse(target.exists(), rel)
+        (self.etc / "atomic-hyprland").mkdir(exist_ok=True)
+        for rel in ("hosts", "atomic-hyprland/agent.conf"):
+            self.assertEqual(self.run_main("etc-write", str(self.sdir), str(self.etc / rel), stdin="x\n"), 0, rel)
 
     def test_unknown_op_refused(self):
         self.assertEqual(self.run_main("bootc-switch", "quay.io/evil"), 2)
