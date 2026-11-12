@@ -170,8 +170,10 @@ playbook idempotent. First boot pulls the Ollama image with `ai-images-pull.serv
 
 Super+A asks a Claude agent about what is on screen: it attaches a screenshot
 of the focused window, the clipboard (never what a password manager copied)
-and the focused terminal's folder, shown as chips you can remove before
-sending. Ask mode is read-only. The answer card offers **Fix it**, which works
+and the focused terminal's folder, each shown as a `[x]` line you can select
+to leave out (and select again to put back) before sending. Ask mode is
+read-only. The answer card opens the full answer rendered by `glow`, and offers
+**Fix it**, which works
 in the background: every change shows an approval card first (click it, or
 Super+Y, then Allow / Deny / Always allow), file edits are saved so the done
 card's **Undo** restores them, and root changes (a listed service, a staged

@@ -65,17 +65,33 @@ class PromptTest(unittest.TestCase):
             return next(it)
         return menu, seen
 
-    def test_prompt_chip_removal_then_text(self):
-        menu, seen = self.scripted(None, "why did make fail?")
+    def test_chips_say_what_is_attached(self):
+        self.assertEqual(context.chip_lines(self.ctx())[1:], [
+            "[x] Screenshot of this window   (select to leave out)",
+            "[x] Clipboard: error: boom   (select to leave out)",
+            "[x] Folder: /h/app   (select to leave out)",
+        ])
+
+    def test_left_out_chip_stays_listed_and_is_not_sent(self):
         ctx = self.ctx()
-        chip = context.chip_lines(ctx)[1]  # the screenshot chip
-        menu, seen = self.scripted(chip, "why did make fail?")
+        menu, seen = self.scripted(context.chip_lines(ctx)[1], "why did make fail?")
         text, out = context.prompt(ctx, menu=menu)
         self.assertEqual(text, "why did make fail?")
         self.assertIsNone(out.screenshot)
         self.assertEqual(out.clipboard, "error: boom")
-        self.assertEqual(len(seen), 2)
-        self.assertFalse(any("screenshot" in l for l in seen[1]))
+        self.assertIn("[ ] Screenshot of this window   (select to include)", seen[1])
+
+    def test_left_out_chip_can_be_put_back(self):
+        ctx = self.ctx()
+        off = "[ ] Clipboard: error: boom   (select to include)"
+        menu, seen = self.scripted(context.chip_lines(ctx)[2], off, "why?")
+        _, out = context.prompt(ctx, menu=menu)
+        self.assertEqual(out.clipboard, "error: boom")
+        self.assertEqual(seen[2], seen[0])
+
+    def test_missing_context_has_no_chip(self):
+        ctx = context.Context(screenshot=None, clipboard=None, cwd=Path("/h/app"))
+        self.assertEqual(context.chip_lines(ctx)[1:], ["[x] Folder: /h/app   (select to leave out)"])
 
     def test_prompt_escape_sends_nothing(self):
         menu, _ = self.scripted(None)

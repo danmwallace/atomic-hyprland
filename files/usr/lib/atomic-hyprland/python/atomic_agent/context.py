@@ -1,6 +1,6 @@
 """What Super+A attaches: the focused window's screenshot, the clipboard, and
 the working folder of the focused terminal. The prompt shows each as a chip
-the user can remove before anything is sent.
+the user can leave out (and put back) before anything is sent.
 """
 import json
 import subprocess
@@ -91,16 +91,33 @@ def capture(shot_dir: Path, run=subprocess.run) -> Context:
     return Context(screenshot=shot, clipboard=clipboard_text(run=run), cwd=cwd)
 
 
-def chip_lines(ctx: Context) -> list[str]:
-    lines = [ASK_LINE]
-    if ctx.screenshot:
-        lines.append("󰹑  window screenshot   (select to remove)")
-    if ctx.clipboard:
-        first = " ".join(ctx.clipboard.split())[:40]
-        lines.append(f"󰅍  clipboard: {first}   (select to remove)")
-    if ctx.cwd:
-        lines.append(f"󰉋  {ctx.cwd}   (select to remove)")
-    return lines
+ON, OFF = "   (select to leave out)", "   (select to include)"
+FIELDS = ("screenshot", "clipboard", "cwd")
+
+
+def _chip_name(field: str, value) -> str:
+    if field == "screenshot":
+        return "Screenshot of this window"
+    if field == "clipboard":
+        return "Clipboard: " + " ".join(value.split())[:40]
+    return f"Folder: {value}"
+
+
+def _chips(ctx: Context, off: frozenset) -> dict[str, str]:
+    """One toggle line per attachment captured, mapped to its Context field."""
+    chips = {}
+    for field in FIELDS:
+        value = getattr(ctx, field)
+        if value:
+            left_out = field in off
+            chips[("[ ] " if left_out else "[x] ") + _chip_name(field, value) + (OFF if left_out else ON)] = field
+    return chips
+
+
+def chip_lines(ctx: Context, off: frozenset = frozenset()) -> list[str]:
+    """The Ask line, then the toggles. A chip that was left out stays listed, so the
+    user can see it and put it back."""
+    return [ASK_LINE, *_chips(ctx, off)]
 
 
 def _wofi(prompt: str, lines: list[str]) -> str | None:
@@ -111,19 +128,17 @@ def _wofi(prompt: str, lines: list[str]) -> str | None:
 
 
 def prompt(ctx: Context, menu=_wofi) -> tuple[str, Context] | None:
+    """Returns the question and the context to send: a chip left out comes back as None."""
+    off: frozenset = frozenset()
     while True:
-        lines = chip_lines(ctx)
-        pick = menu("Ask the agent", lines)
+        chips = _chips(ctx, off)
+        pick = menu("Ask the agent", [ASK_LINE, *chips])
         if pick is None:
             return None
-        if pick == ASK_LINE or not pick.strip():
-            return DEFAULT_QUESTION, ctx
-        if pick in lines[1:]:
-            if pick.startswith("󰹑"):
-                ctx = replace(ctx, screenshot=None)
-            elif pick.startswith("󰅍"):
-                ctx = replace(ctx, clipboard=None)
-            else:
-                ctx = replace(ctx, cwd=None)
+        if pick in chips:
+            off = off ^ {chips[pick]}
             continue
-        return pick.strip(), ctx
+        sent = replace(ctx, **{f: None for f in off})
+        if pick == ASK_LINE or not pick.strip():
+            return DEFAULT_QUESTION, sent
+        return pick.strip(), sent
