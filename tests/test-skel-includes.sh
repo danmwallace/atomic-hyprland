@@ -75,7 +75,7 @@ check test "$(readlink $skel/btop/themes/current.theme)" = ../../atomic-hyprland
 check grep -qx 'color_theme = "current"' $skel/btop/btop.conf
 check grep -qx 'theme_background = False' $skel/btop/btop.conf
 # ownership lists
-check bash -c 'for f in .config/wofi/local.css .config/hypr/hyprlock.local.conf .config/ghostty/local .config/alacritty/local.toml .config/hypr/hypridle.local.conf .config/waybar/local.jsonc .config/waybar/local.css .config/mako/local .config/hypr/local.lua; do grep -qx "$f" '"$share"'/skel.local || { echo "missing $f"; exit 1; }; done'
+check bash -c 'for f in .config/wofi/local.css .config/hypr/hyprlock.local.conf .config/ghostty/local .config/alacritty/local.toml .config/hypr/hypridle.local.conf .config/waybar/local.jsonc .config/waybar/local.css .config/swaync/local.css .config/hypr/local.lua; do grep -qx "$f" '"$share"'/skel.local || { echo "missing $f"; exit 1; }; done'
 check bash -c 'for f in .config/wofi/style-power.css .config/wofi/style-run.css .config/hypr/scripts/sleep.sh .config/hypr/xdg-portal-hyprland .config/nwg-drawer/ .config/nwg-dock-hyprland/ .config/waybar/config .config/waybar/mediaplayer.py .config/hypr/conf/; do grep -qxF "$f" '"$share"'/skel.retired || { echo "missing $f"; exit 1; }; done'
 # the power menu
 check test -x files/usr/bin/hypr-power

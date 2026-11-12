@@ -195,13 +195,25 @@
     "tooltip-format-deactivated": "idle inhibitor off"
   },
   "custom/notifications": {
-    "exec": "/usr/libexec/atomic-hyprland/waybar/notifications",
+    "exec": "swaync-client -swb",
     "return-type": "json",
-    "interval": 5,
-    "format": "{}",
+    "restart-interval": 5,
+    "escape": true,
+    "format": "{icon}",
+    "format-icons": {
+      "none": "󰂚",
+      "notification": "󱅫",
+      "dnd-none": "󰂛",
+      "dnd-notification": "󰂛",
+      "inhibited-none": "󰂚",
+      "inhibited-notification": "󱅫",
+      "dnd-inhibited-none": "󰂛",
+      "dnd-inhibited-notification": "󰂛"
+    },
     "tooltip": true,
-    "on-click": "makoctl mode -t do-not-disturb",
-    "on-click-right": "makoctl dismiss -a"
+    "on-click": "swaync-client -t -sw",
+    "on-click-right": "swaync-client -d -sw",
+    "on-click-middle": "swaync-client -C -sw"
   },
   "custom/power": {
     "format": "󰐥",

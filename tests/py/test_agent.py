@@ -189,7 +189,7 @@ class FixStopUndoTest(unittest.TestCase):
         with mock.patch("time.sleep"):
             agent.stop_all(run=self.fake_run)
         self.assertEqual(list(paths.pending_dir().iterdir()), [])
-        self.assertIn(["makoctl", "dismiss", "-n", "9"], self.calls)
+        self.assertIn(ui.close_argv("9"), self.calls)
 
     def test_finalize_screenshot(self):
         # I5: a removed (or cancelled) screenshot is deleted, not left where the agent can Read it.
@@ -209,9 +209,19 @@ class FixStopUndoTest(unittest.TestCase):
         answer = "**Fine.** Shows:\n```\nok\n```\n" + "more " * 200
         body, choices, views = agent.answer_card(answer)
         self.assertTrue(body.startswith("Fine. Shows:\n  ok"))
-        self.assertTrue(body.endswith("Click for: full answer · Fix it · chat"))
+        # swaync shows 5 body lines in a popup; the choices are buttons, not a "Click for" line
+        self.assertLessEqual(len(body), agent.CARD_SUMMARY + 1)
+        self.assertNotIn("Click for", body)
         self.assertEqual([k for k, _ in choices], ["read", "fix", "chat", "dismiss"])
         self.assertEqual(views, {"read": answer})
+
+    def test_done_body_names_changed_files_on_one_line(self):
+        body = agent.done_body("**Fixed** it. " + "x " * 300, ["/h/a.conf", "/h/sub/b.txt", "/h/c", "/h/d"])
+        summary, changed = body.split("\n\n")
+        self.assertTrue(summary.startswith("Fixed it."))
+        self.assertLessEqual(len(summary), agent.DONE_SUMMARY + 1)
+        self.assertEqual(changed, "Changed a.conf, b.txt, c and 1 more. Undo restores them.")
+        self.assertEqual(agent.done_body("All good.", []), "All good.")
 
     def test_finalize_screenshot_across_filesystems(self):
         # The screenshot waits in $XDG_RUNTIME_DIR (tmpfs) and is kept under ~/.local/state
@@ -259,7 +269,7 @@ class FixStopUndoTest(unittest.TestCase):
         with mock.patch("os.kill") as kill:
             agent.stop_all(run=self.fake_run)
         kill.assert_called()
-        self.assertIn(["makoctl", "dismiss", "-n", "42"], self.calls)
+        self.assertIn(ui.close_argv("42"), self.calls)
         self.assertIn(["pkill", "-TERM", "-P", "999999"], self.calls)
 
     def test_start_fix_unit_name(self):
