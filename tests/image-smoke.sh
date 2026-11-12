@@ -223,7 +223,7 @@ check python3 -c 'from mcp.server.fastmcp import FastMCP'
 check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.path
 check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.service
 check bash -c 'hypr-mcp list >/dev/null'
-check python3 /tests/mcp-smoke.py approvals prompt
+check python3 /tests/mcp-smoke.py --text-only approvals prompt
 check python3 /tests/mcp-smoke.py hyprland list_windows list_workspaces list_monitors active_window list_binds focus_window move_window_to_workspace resize_window close_window switch_workspace launch reload_config
 check python3 /tests/mcp-smoke.py screen capture
 check python3 /tests/mcp-smoke.py notify notify

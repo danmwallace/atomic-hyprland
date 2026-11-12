@@ -60,7 +60,10 @@ def main() -> None:
 
     app = FastMCP("approvals", log_level="WARNING")
 
-    @app.tool()
+    # Text only: Claude Code rejects a permission answer that comes back as structured
+    # content ("Permission prompt tool returned an invalid result"), which FastMCP adds
+    # by default for a str return.
+    @app.tool(structured_output=False)
     def prompt(tool_name: str, input: dict, tool_use_id: str | None = None) -> str:
         """Ask the user to approve a tool call; returns Claude Code's permission JSON."""
         return json.dumps(decide(tool_name, input))
