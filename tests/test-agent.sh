@@ -14,4 +14,12 @@ if python3 -m unittest discover -s tests/py -v 2>&1 | tee /dev/stderr | tail -1 
 else
     echo "FAIL  python3 -m unittest discover -s tests/py"; fail=1
 fi
+# hypr-mcp: the registry sync runs at login and whenever a registry folder changes
+units=files/usr/lib/systemd/user
+check test -x files/usr/bin/hypr-mcp
+check grep -qx 'ExecStart=/usr/bin/hypr-mcp sync' $units/hypr-mcp-sync.service
+check grep -qx 'PathChanged=/etc/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
+check grep -qx 'PathChanged=%h/.config/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
+check test -d files/etc/atomic-hyprland/mcp.d
+check grep -q 'systemctl --global enable hypr-mcp-sync.service hypr-mcp-sync.path' build/40-finalize.sh
 exit "$fail"

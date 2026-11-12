@@ -1,0 +1,5 @@
+Machine-wide MCP servers for every agent on this machine, one <name>.json per
+server (the usual MCP keys, plus readOnlyTools / toolNotes / rootTools).
+Overrides /usr/share/atomic-hyprland/mcp.d; ~/.config/atomic-hyprland/mcp.d
+overrides this folder. {"disabled": true} switches a server off. Changes are
+picked up by hypr-mcp-sync.path; run `hypr-mcp sync` to apply by hand.

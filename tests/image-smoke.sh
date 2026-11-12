@@ -209,6 +209,9 @@ check test -x /usr/bin/eglinfo
 check test -x /usr/bin/nmtui
 # Agentic desktop: Fedora's MCP SDK for the desktop servers
 check python3 -c 'from mcp.server.fastmcp import FastMCP'
+check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.path
+check test -L /etc/systemd/user/default.target.wants/hypr-mcp-sync.service
+check bash -c 'hypr-mcp list >/dev/null'
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE

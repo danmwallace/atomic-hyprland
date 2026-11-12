@@ -1,0 +1,9 @@
+#!/usr/bin/python3 -I
+"""hypr-mcp: the MCP drop-in registry (sync | run <name> | list). See atomic_agent.mcp_sync."""
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("ATOMIC_AGENT_PYLIB", "/usr/lib/atomic-hyprland/python"))
+from atomic_agent.mcp_sync import main  # noqa: E402
+
+sys.exit(main(sys.argv[1:]))

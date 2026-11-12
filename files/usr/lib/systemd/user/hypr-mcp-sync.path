@@ -1,0 +1,11 @@
+[Unit]
+Description=Re-sync the MCP registry when a registry folder changes
+
+[Path]
+PathChanged=/etc/atomic-hyprland/mcp.d
+PathChanged=%h/.config/atomic-hyprland/mcp.d
+MakeDirectory=yes
+Unit=hypr-mcp-sync.service
+
+[Install]
+WantedBy=default.target
