@@ -27,7 +27,7 @@ check python3 -m py_compile tests/mcp-smoke.py
 # root helper: a fixed set of operations behind polkit auth_admin_keep
 pol=files/usr/share/polkit-1/actions/org.atomic-hyprland.agent.policy
 check test -x files/usr/libexec/atomic-hyprland/agent-root
-check xmllint --noout $pol
+check python3 -c "import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])" $pol  # xmllint is not on every runner
 check grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/atomic-hyprland/agent-root</annotate>' $pol
 check bash -c "grep -c '>auth_admin_keep<' $pol | grep -qx 3"
 check bash -c '! grep -qE "^(from|import) atomic_agent|sys.path" files/usr/libexec/atomic-hyprland/agent-root'
