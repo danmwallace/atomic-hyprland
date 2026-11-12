@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 version="${1:?image version}"
+source_repo="${2:?image source repo}"
 
 systemctl enable sddm.service
 systemctl enable ai-images-pull.service
@@ -24,6 +25,8 @@ grep -qx /usr/bin/elvish /etc/shells || echo /usr/bin/elvish >> /etc/shells
 install -d /usr/share/atomic-hyprland
 cp -a /etc/skel /usr/share/atomic-hyprland/skel
 printf '%s\n' "${version}" > /usr/share/atomic-hyprland/stamp
+# Where the desktop agent proposes image fixes (hypr-agent pr-target).
+printf '%s\n' "${source_repo}" > /usr/share/atomic-hyprland/image-source
 
 # Files the login-time sync may overwrite: everything in skel except the
 # user's files listed in skel.local (local.lua and the per-app local includes).

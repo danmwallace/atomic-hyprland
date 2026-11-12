@@ -1,0 +1,49 @@
+#!/usr/bin/python3 -I
+"""waybar custom/agent: shows while a desktop agent works, hidden otherwise.
+
+Running: a hypr-agent-* user unit is active or an ask is in progress.
+Pending: approval cards are waiting (the count is shown). Left click stops
+every agent session (hypr-agent stop); right click answers the oldest card.
+"""
+import json
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("ATOMIC_AGENT_PYLIB", "/usr/lib/atomic-hyprland/python"))
+from atomic_agent import paths, ui  # noqa: E402
+
+GLYPH = "󱚥"
+
+
+def _ask_running() -> bool:
+    try:
+        pid = int((paths.runtime_dir() / "ask.pid").read_text())
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def status(run=subprocess.run) -> dict:
+    units = run(["systemctl", "--user", "list-units", "hypr-agent-*", "--state=active", "--no-legend", "--plain"],
+                capture_output=True, text=True).stdout
+    names = [l.split()[0].removesuffix(".service") for l in units.splitlines() if l.strip()]
+    if _ask_running():
+        names.append("asking…")
+    pending = [ui.read_pending(p) or {} for p in ui.list_pending()]
+    if not names and not pending:
+        return {"text": ""}
+    tip = ["desktop agent: click to stop everything"] + names
+    if pending:
+        tip += ["", "waiting for you (right click or Super+Y):"] + [p.get("title", "?") for p in pending]
+        return {"text": f"{GLYPH} {len(pending)}", "class": "pending", "tooltip": "\n".join(tip)}
+    return {"text": GLYPH, "class": "running", "tooltip": "\n".join(tip)}
+
+
+def main() -> None:
+    sys.stdout.write(json.dumps(status()) + "\n")
+
+
+if __name__ == "__main__":
+    main()

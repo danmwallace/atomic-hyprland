@@ -326,6 +326,18 @@ def cmd_sessions() -> int:
     return 0
 
 
+def cmd_pr_target() -> int:
+    from .prtarget import can_push, target_repo
+    repo = target_repo()
+    if repo and can_push(repo):
+        print(repo)
+        return 0
+    where = repo or "the image's repository"
+    print(f"PRs are off: your GitHub login can't push to {where}. "
+          "Fork it and set repo= in /etc/atomic-hyprland/agent.conf", file=sys.stderr)
+    return 3
+
+
 def _one(args: list[str], fn) -> int:
     if len(args) != 1:
         print("needs a session id (see: hypr-agent sessions)", file=sys.stderr)
@@ -343,6 +355,7 @@ COMMANDS = {
     "review": lambda args: cmd_review(),
     "hook": cmd_hook,
     "sessions": lambda args: cmd_sessions(),
+    "pr-target": lambda args: cmd_pr_target(),
 }
 
 

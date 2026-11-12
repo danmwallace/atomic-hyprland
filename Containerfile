@@ -11,6 +11,9 @@ FROM ${AKMODS_IMAGE} AS akmods
 FROM ${BASE_IMAGE}
 
 ARG IMAGE_VERSION=dev
+# The repo this image is built from: the OCI label and the agent's PR target.
+# A fork changes this one line.
+ARG IMAGE_SOURCE=https://github.com/danmwallace/atomic-hyprland
 ARG CLAUDE_CODE_VERSION=2.1.289
 ARG TUIOS_VERSION=0.12.1
 # sha256 of tuios_${TUIOS_VERSION}_Linux_x86_64.tar.gz. Bump it by hand with
@@ -44,9 +47,9 @@ RUN --mount=type=bind,from=akmods,src=/rpms,dst=/tmp/akmods-rpms /tmp/build/25-n
 COPY files/ /
 COPY --chmod=0644 cosign.pub /etc/pki/containers/atomic-hyprland.pub
 RUN /tmp/build/20-desktop.sh "${NERD_FONT_VERSION}" "${NERD_FONT_SHA256}" "${NERD_FONT_FIRACODE_SHA256}" "${NERD_FONT_TERMINUS_SHA256}"
-RUN /tmp/build/30-policy.sh && /tmp/build/40-finalize.sh "${IMAGE_VERSION}"
+RUN /tmp/build/30-policy.sh && /tmp/build/40-finalize.sh "${IMAGE_VERSION}" "${IMAGE_SOURCE}"
 RUN /tmp/build/90-cleanup.sh
 
 LABEL org.opencontainers.image.title="atomic-hyprland" \
-      org.opencontainers.image.source="https://github.com/danmwallace/atomic-hyprland" \
+      org.opencontainers.image.source="${IMAGE_SOURCE}" \
       org.opencontainers.image.version="${IMAGE_VERSION}"

@@ -47,7 +47,7 @@
   color: @foreground_dim;
 }
 
-#clock, #bluetooth, #network, #pulseaudio, #cpu, #memory, #custom-gpu, #custom-claude,
+#clock, #bluetooth, #network, #pulseaudio, #cpu, #memory, #custom-gpu, #custom-agent, #custom-claude,
 #battery, #idle_inhibitor, #custom-notifications, #custom-tray-toggle, #tray {
   padding: 0 9px;
   color: @foreground_dim;
@@ -57,10 +57,10 @@
 }
 
 /* Attention states: accent for good news, critical for things to look at. */
-#battery.charging, #battery.plugged, #idle_inhibitor.activated, #custom-notifications.dnd, #bluetooth.connected {
+#battery.charging, #battery.plugged, #idle_inhibitor.activated, #custom-notifications.dnd, #bluetooth.connected, #custom-agent.running {
   color: @accent;
 }
-#battery.warning:not(.charging), #custom-claude.warning {
+#battery.warning:not(.charging), #custom-claude.warning, #custom-agent.pending {
   color: @warning;
 }
 #battery.critical:not(.charging), #custom-gpu.critical, #custom-claude.critical, #pulseaudio.muted, #network.disconnected {

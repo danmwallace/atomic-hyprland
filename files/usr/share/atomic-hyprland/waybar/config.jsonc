@@ -22,6 +22,7 @@
     "cpu",
     "memory",
     "custom/gpu",
+    "custom/agent",
     "custom/claude",
     "battery",
     "idle_inhibitor",
@@ -142,6 +143,16 @@
     "interval": 5,
     "format": "{}",
     "tooltip": true
+  },
+  "custom/agent": {
+    "exec": "/usr/libexec/atomic-hyprland/waybar/agent",
+    "return-type": "json",
+    "interval": 2,
+    "signal": 10,
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "hypr-agent stop",
+    "on-click-right": "hypr-agent review"
   },
   "custom/claude": {
     "exec": "/usr/libexec/atomic-hyprland/waybar/claude",

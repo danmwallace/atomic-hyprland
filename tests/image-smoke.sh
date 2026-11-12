@@ -230,6 +230,8 @@ check python3 /tests/mcp-smoke.py notify notify
 check python3 /tests/mcp-smoke.py system journal unit_status failed_units bootc_status restart_unit start_unit stop_unit bootc_upgrade bootc_rollback write_etc_file
 check test -x /usr/libexec/atomic-hyprland/agent-root
 check pkaction --action-id org.atomic-hyprland.agent.root
+check grep -qx https://github.com/danmwallace/atomic-hyprland /usr/share/atomic-hyprland/image-source
+check bash -c 'hypr-agent sessions >/dev/null'
 check test -x /usr/bin/tuios
 check bash -c 'tuios --version 2>&1 | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
 check test -f /usr/share/licenses/tuios/LICENSE
