@@ -89,6 +89,8 @@ file
 # notifications
 # notifications: popups that time out into a panel the bar's bell opens
 SwayNotificationCenter
+# file sync between machines; the user service is off until a user (or Ansible) enables it
+syncthing
 libnotify
 # system monitor (themed through hypr-theme)
 btop
