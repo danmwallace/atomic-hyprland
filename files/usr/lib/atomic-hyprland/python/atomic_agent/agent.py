@@ -386,14 +386,13 @@ def cmd_sessions() -> int:
 
 
 def cmd_pr_target() -> int:
-    from .prtarget import can_push, target_repo
+    from .prtarget import off_message, push_status, target_repo
     repo = target_repo()
-    if repo and can_push(repo):
+    status = push_status(repo) if repo else "no-push"
+    if status == "ok":
         print(repo)
         return 0
-    where = repo or "the image's repository"
-    print(f"PRs are off: your GitHub login can't push to {where}. "
-          "Fork it and set repo= in /etc/atomic-hyprland/agent.conf", file=sys.stderr)
+    print(off_message(repo, status), file=sys.stderr)
     return 3
 
 

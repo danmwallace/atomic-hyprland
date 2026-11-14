@@ -35,3 +35,31 @@ def target_repo(source_file: Path = Path("/usr/share/atomic-hyprland/image-sourc
 def can_push(repo: str, run=subprocess.run) -> bool:
     cp = run(["gh", "api", f"repos/{repo}", "--jq", ".permissions.push"], capture_output=True, text=True)
     return cp.returncode == 0 and cp.stdout.strip() == "true"
+
+
+def push_status(repo: str, run=subprocess.run) -> str:
+    """ok, logged-out, no-push or error.
+
+    The login is checked first: a home restored onto a new install can keep
+    gh's hosts.yml while the token in the keyring is gone, and then every API
+    call fails. Calling that "can't push" sends the user off to fork the repo.
+    """
+    auth = run(["gh", "auth", "status", "--hostname", "github.com"], capture_output=True, text=True)
+    if auth.returncode != 0:
+        return "logged-out"
+    cp = run(["gh", "api", f"repos/{repo}", "--jq", ".permissions.push"], capture_output=True, text=True)
+    if cp.returncode != 0:
+        return "error"
+    return "ok" if cp.stdout.strip() == "true" else "no-push"
+
+
+def off_message(repo: str | None, status: str) -> str:
+    """What `hypr-agent pr-target` prints when PRs are off."""
+    if status == "logged-out":
+        return ("PRs are off: gh isn't logged in to GitHub (gh auth status failed). "
+                "Run gh auth login, then try again.")
+    where = repo or "the image's repository"
+    if status == "error":
+        return f"PRs are off: couldn't check push access to {where} (gh api failed). Try again later."
+    return (f"PRs are off: your GitHub login can't push to {where}. "
+            "Fork it and set repo= in /etc/atomic-hyprland/agent.conf")
