@@ -3,7 +3,10 @@
 /usr/share/atomic-hyprland/mcp.d (image), /etc/atomic-hyprland/mcp.d (machine)
 and ~/.config/atomic-hyprland/mcp.d (user). A later folder replaces a
 same-named file from an earlier one; {"disabled": true} switches a server off.
-The file stem is the server name. Besides the usual MCP keys a file may carry:
+The file stem is the server name. Secrets are never stored in a file: an env
+value (stdio) or a header value (url) may be a reference instead, {"credential":
+N} or {"keyring": {...}}, resolved by hypr-mcp run / hypr-mcp headers.
+Besides the usual MCP keys a file may carry:
   readOnlyTools  tools safe to run without asking (available in ask mode)
   toolNotes      tool -> how to undo it, shown on its approval card
   rootTools      tools that act as root; never "always allow"

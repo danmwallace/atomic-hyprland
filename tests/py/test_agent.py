@@ -97,6 +97,13 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(cfg["web"], {"type": "http", "url": "https://x.test"})
         self.assertEqual(cfg["approvals"]["args"], ["approvals"])
 
+    def test_agent_mcp_config_uses_helper(self):
+        reg = {"n8n": ServerDef(name="n8n", spec={"type": "http", "url": "https://n.test/mcp",
+                                                  "headers": {"Authorization": {"credential": "n8n-hdr-authorization"}}})}
+        entry = agent.mcp_config(reg)["mcpServers"]["n8n"]
+        self.assertEqual(entry["headersHelper"], "hypr-mcp headers n8n")
+        self.assertNotIn("headers", entry)
+
     def test_agent_env(self):
         env = agent.agent_env("s1")
         self.assertEqual(env["HYPR_AGENT_SESSION"], "s1")

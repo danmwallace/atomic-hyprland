@@ -5,10 +5,16 @@
                         CLI is present, ~/.gemini/settings.json (denyTools become
                         excludeTools)
   hypr-mcp run <name>   resolve the server's secret references, exec it
+  hypr-mcp headers <name>
+                        print a url server's headers as JSON, secrets resolved
+                        (Claude Code's headersHelper for that server)
   hypr-mcp list         show the merged registry
 
 Every stdio server is written as `hypr-mcp run <name>`, so secrets are resolved
-when the server starts and never land in an agent's config file. Names this
+when the server starts and never land in an agent's config file. A url server
+whose headers hold a secret reference is written with a headersHelper instead
+of its headers, so Claude Code fetches them at connect time; Gemini CLI has no
+equivalent and gets no entry for it. Names this
 tool wrote are remembered in ~/.local/state/atomic-hyprland/mcp-managed.json;
 a server the user added by hand under the same name is left alone.
 """
@@ -29,9 +35,17 @@ def _warn(msg: str) -> None:
     print(f"hypr-mcp: {msg}", file=sys.stderr)
 
 
+def has_secret_headers(d: ServerDef) -> bool:
+    return any(isinstance(v, dict) for v in (d.spec.get("headers") or {}).values())
+
+
 def client_entry(d: ServerDef) -> dict:
     if "command" in d.spec:
         return {"type": "stdio", "command": "hypr-mcp", "args": ["run", d.name]}
+    if has_secret_headers(d):
+        entry = {k: v for k, v in d.spec.items() if k != "headers"}
+        entry["headersHelper"] = f"hypr-mcp headers {d.name}"
+        return entry
     return dict(d.spec)
 
 
@@ -56,7 +70,10 @@ def sync_claude(defs: dict[str, ServerDef], managed: set[str], run=subprocess.ru
     return new_managed
 
 
-def gemini_entry(d: ServerDef) -> dict:
+def gemini_entry(d: ServerDef) -> dict | None:
+    """None for a url server with secret headers: Gemini CLI can't fetch them."""
+    if has_secret_headers(d):
+        return None
     if "command" in d.spec:
         entry = {"command": "hypr-mcp", "args": ["run", d.name]}
     else:
@@ -92,7 +109,13 @@ def sync_gemini(defs: dict[str, ServerDef], managed: set[str], settings: Path) -
         if name in servers and name not in managed:
             _warn(f"Gemini CLI already has a server named {name!r} that hypr-mcp did not add; leaving it")
             continue
-        servers[name] = gemini_entry(d)
+        entry = gemini_entry(d)
+        if entry is None:
+            if name in managed:
+                servers.pop(name, None)
+            _warn(f"Gemini CLI can't fetch secret headers; leaving out {name}")
+            continue
+        servers[name] = entry
         new_managed.add(name)
     _write_atomic(settings, json.dumps(data, indent=2) + "\n")
     return new_managed
@@ -162,12 +185,34 @@ def run_server(name: str, dirs: list[Path]) -> None:
     os.execvpe(cmd, [cmd, *d.spec.get("args", [])], env)
 
 
+def print_headers(name: str, dirs: list[Path]) -> int:
+    """hypr-mcp headers <name>: the headers as one JSON object on stdout. A failed
+    lookup prints nothing there (the client then gets no headers) and names only
+    the header on stderr, never a value."""
+    d = load_registry(dirs).get(name)
+    if d is None or "url" not in d.spec:
+        _warn(f"no url server named {name!r} in the registry")
+        return 2
+    try:
+        headers = resolve_env(d.spec.get("headers") or {})
+    except SecretError as exc:
+        _warn(f"{name}: {exc}")
+        return 3
+    print(json.dumps(headers))
+    return 0
+
+
 def main(argv: list[str]) -> int:
-    if not argv or argv[0] not in ("sync", "run", "list"):
+    if not argv or argv[0] not in ("sync", "run", "list", "headers"):
         print(__doc__.strip().split("\n\n")[0], file=sys.stderr)
-        print("usage: hypr-mcp sync | run <name> | list", file=sys.stderr)
+        print("usage: hypr-mcp sync | run <name> | headers <name> | list", file=sys.stderr)
         return 2
     dirs = paths.registry_dirs()
+    if argv[0] == "headers":
+        if len(argv) != 2:
+            print("usage: hypr-mcp headers <name>", file=sys.stderr)
+            return 2
+        return print_headers(argv[1], dirs)
     if argv[0] == "run":
         if len(argv) != 2:
             print("usage: hypr-mcp run <name>", file=sys.stderr)

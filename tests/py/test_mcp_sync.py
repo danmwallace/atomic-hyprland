@@ -9,6 +9,7 @@ from unittest import mock
 
 from atomic_agent import mcp_sync
 from atomic_agent.registry import ServerDef
+from atomic_agent.secrets import SecretError
 from helpers import tmpdir, write_json
 
 
@@ -178,6 +179,73 @@ class ClaudeRulesTest(unittest.TestCase):
             self.assertEqual(mcp_sync.claude_settings_path(), Path("/h/.claude/settings.json"))
         with mock.patch.dict(os.environ, {"HOME": "/h", "CLAUDE_CONFIG_DIR": "/c"}, clear=True):
             self.assertEqual(mcp_sync.claude_settings_path(), Path("/c/settings.json"))
+
+
+def secret_def(name="n8n"):
+    return ServerDef(name=name, spec={"type": "http", "url": "https://n.test/mcp",
+                                      "headers": {"Authorization": {"credential": "n8n-hdr-authorization"}, "X-A": "1"}})
+
+
+class SecretHeadersTest(unittest.TestCase):
+    def test_secret_headers_never_in_client_entry(self):
+        entry = mcp_sync.client_entry(secret_def())
+        self.assertEqual(entry, {"type": "http", "url": "https://n.test/mcp", "headersHelper": "hypr-mcp headers n8n"})
+        self.assertNotIn("credential", json.dumps(entry))
+
+    def test_plain_headers_unchanged(self):
+        spec = {"type": "http", "url": "https://x.test", "headers": {"A": "b"}}
+        self.assertEqual(mcp_sync.client_entry(ServerDef(name="w", spec=spec)), spec)
+        self.assertFalse(mcp_sync.has_secret_headers(ServerDef(name="w", spec=spec)))
+        self.assertTrue(mcp_sync.has_secret_headers(secret_def()))
+
+    def test_gemini_skips_secret_header_server(self):
+        settings = tmpdir(self) / ".gemini" / "settings.json"
+        write_json(settings, json.dumps({"mcpServers": {"n8n": {"httpUrl": "https://old"}}}))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            managed = mcp_sync.sync_gemini({"n8n": secret_def(), "hyprland": stdio("hyprland")}, {"n8n"}, settings)
+        servers = json.loads(settings.read_text())["mcpServers"]
+        self.assertNotIn("n8n", servers)
+        self.assertIn("hyprland", servers)
+        self.assertEqual(managed, {"hyprland"})
+        self.assertEqual(err.getvalue().count("n8n"), 1)
+        self.assertNotIn("credential", settings.read_text())
+
+    def registry_with_n8n(self):
+        root = tmpdir(self)
+        write_json(root / "n8n.json", json.dumps(secret_def().spec))
+        write_json(root / "local.json", '{"command": "/x"}')
+        return [root]
+
+    def test_headers_prints_resolved(self):
+        out = io.StringIO()
+        with mock.patch("atomic_agent.mcp_sync.resolve_env", return_value={"Authorization": "Bearer t0k", "X-A": "1"}) as res, \
+             contextlib.redirect_stdout(out):
+            rc = mcp_sync.print_headers("n8n", self.registry_with_n8n())
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(out.getvalue()), {"Authorization": "Bearer t0k", "X-A": "1"})
+        res.assert_called_once_with(secret_def().spec["headers"])
+
+    def test_headers_secret_error(self):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("atomic_agent.mcp_sync.resolve_env", side_effect=SecretError("Authorization: lookup failed")), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = mcp_sync.print_headers("n8n", self.registry_with_n8n())
+        self.assertEqual(rc, 3)
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("Authorization", err.getvalue())
+
+    def test_headers_unknown_or_stdio(self):
+        dirs = self.registry_with_n8n()
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(mcp_sync.print_headers("nope", dirs), 2)
+            self.assertEqual(mcp_sync.print_headers("local", dirs), 2)
+
+    def test_main_headers_verb(self):
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=["d"]), \
+             mock.patch("atomic_agent.mcp_sync.print_headers", return_value=0) as ph:
+            self.assertEqual(mcp_sync.main(["headers", "n8n"]), 0)
+        ph.assert_called_once_with("n8n", ["d"])
 
 
 class RunTest(unittest.TestCase):
