@@ -38,6 +38,15 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(hook["hooks"][0]["command"], "hypr-agent hook pre-tool-use")
         self.assertEqual(s["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "hypr-agent hook post-tool-use")
 
+    def test_build_settings_denies_registry_tools(self):
+        reg = {**registry(), "n8n": ServerDef(name="n8n", spec={"type": "http", "url": "https://n.test"},
+                                              deny_tools=["update_workflow"])}
+        for include_rules in (True, False):  # fix mode and ask mode
+            deny = agent.build_settings(BASE, self.root / "none.json", reg, include_rules=include_rules)["permissions"]["deny"]
+            self.assertIn("mcp__n8n__update_workflow", deny)
+            self.assertIn("Bash(sudo:*)", deny)  # the image's own denies stay
+            self.assertEqual(len(deny), len(set(deny)))
+
     def test_build_settings_includes_user_rules(self):
         rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
         s = agent.build_settings(BASE, rules, registry())

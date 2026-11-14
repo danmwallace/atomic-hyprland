@@ -51,6 +51,10 @@ def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef],
     if include_rules:
         allow += _user_rules(rules_path)
     perms["allow"] = list(dict.fromkeys(allow))
+    deny = perms.setdefault("deny", [])
+    for d in registry.values():
+        deny += [f"mcp__{d.name}__{t}" for t in d.deny_tools]
+    perms["deny"] = list(dict.fromkeys(deny))
     perms["defaultMode"] = "default"
     settings["hooks"] = {
         "PreToolUse": [{"matcher": EDIT_MATCHER, "hooks": [{"type": "command", "command": HOOK}]}],
