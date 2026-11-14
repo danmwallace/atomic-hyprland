@@ -66,8 +66,10 @@ def decide(tool_name: str, tool_input: dict, ask=_ask) -> dict:
     choice = ask(card, os.environ.get("HYPR_AGENT_SESSION", ""))
     if tool_name == "AskUserQuestion":
         return _question_result(tool_input, choice)
-    if choice == "always" and card.rule:
-        save_rule(card.rule)
+    if choice == "always":
+        # Exactly the forms checked when the card was built, never re-resolved here.
+        for rule in card.rules:
+            save_rule(rule)
     if choice in ("allow", "always"):
         return {"behavior": "allow", "updatedInput": tool_input}
     return dict(DENIED)

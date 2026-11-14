@@ -1,6 +1,9 @@
+import os
 import unittest
+from unittest import mock
 
 from atomic_agent import policy
+from helpers import tmpdir
 
 
 class RuleTest(unittest.TestCase):
@@ -30,8 +33,8 @@ class RuleTest(unittest.TestCase):
         from unittest import mock
         with mock.patch.dict(os.environ, {"HOME": "/home/u"}):
             self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/app/main.py", "content": "x"}),
-                             f"Edit(/{os.path.realpath('/home/u/Code/app/main.py')})")
-            self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), f"Edit(/{os.path.realpath('/home/u/a')})")
+                             "Edit(//home/u/Code/app/main.py)")
+            self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), "Edit(//home/u/a)")
 
     def test_rule_edit_only_plain_files_in_home(self):
         # Allowlist: always-allow only for non-hidden files under $HOME; dotfiles, dot-folders
@@ -51,7 +54,7 @@ class RuleTest(unittest.TestCase):
             self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/tools/git", "content": "x"}))
             self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/bin/ls", "content": "x"}))
             self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/a.py", "content": "x"}),
-                             f"Edit(/{os.path.realpath('/home/u/Code/a.py')})")
+                             "Edit(//home/u/Code/a.py)")
 
     def test_rule_none_for_compound_bash(self):
         for cmd in ("make && make install", "ls; id", "cat a | tee b", "echo $(id)", "echo hi > f"):
@@ -75,7 +78,7 @@ class RuleTest(unittest.TestCase):
                       ".zshenv", ".config/fish/config.fish", ".config/atomic-hyprland/hooks/theme.sh"):
                 self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{home}/{p}"}), p)
             self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/Documents/notes.md"}),
-                             f"Edit(/{os.path.realpath(home)}/Documents/notes.md)")
+                             f"Edit(/{home}/Documents/notes.md)")
 
     def test_rule_edit_refuses_git_and_claude_anywhere(self):
         for p in ("/srv/repo/.git/hooks/pre-commit", "/srv/repo/.claude/settings.json",
@@ -205,6 +208,49 @@ class CardTest(unittest.TestCase):
         self.assertIn("waybar · mako", card.preview)
         self.assertIsNone(card.rule)
         self.assertNotIn("{", card.detail)
+
+
+class RuleVariantsTest(unittest.TestCase):
+    """On bootc /home links to /var/home. Claude Code then allows an edit only when
+    both the path as written and its resolved target are allowed (tested with
+    Claude Code 2.1.325, 2026-11-14), so a saved rule must carry both forms,
+    worked out once when the card is checked."""
+
+    def setUp(self):
+        self.root = tmpdir(self)
+        (self.root / "var" / "home" / "u" / "Code").mkdir(parents=True)
+        (self.root / "home").mkdir()
+        (self.root / "home" / "u").symlink_to(self.root / "var" / "home" / "u")
+        self.link_home = str(self.root / "home" / "u")
+        self.real_home = str(self.root / "var" / "home" / "u")
+
+    def test_rule_keeps_the_path_as_written(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            rule = policy.always_rule("Edit", {"file_path": f"{self.link_home}/Code/a.py"})
+        self.assertEqual(rule, f"Edit(/{self.link_home}/Code/a.py)")
+
+    def test_symlinked_path_gets_both_forms_at_check_time(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            rules = policy.always_rules("Edit", {"file_path": f"{self.link_home}/Code/a.py"})
+        self.assertEqual(rules, [f"Edit(/{self.link_home}/Code/a.py)", f"Edit(/{self.real_home}/Code/a.py)"])
+
+    def test_plain_paths_and_other_tools_have_one_form(self):
+        with mock.patch.dict(os.environ, {"HOME": self.real_home, "PATH": "/usr/bin"}):
+            self.assertEqual(policy.always_rules("Edit", {"file_path": f"{self.real_home}/Code/a.py"}),
+                             [f"Edit(/{self.real_home}/Code/a.py)"])
+        self.assertEqual(policy.always_rules("Bash", {"command": "id"}), ["Bash(id)"])
+        self.assertEqual(policy.always_rules("mcp__hyprland__focus_window", {}), ["mcp__hyprland__focus_window"])
+        self.assertEqual(policy.always_rules("Bash", {"command": "a && b"}), [])
+
+    def test_card_carries_the_checked_forms(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            card = policy.card_for("Edit", {"file_path": f"{self.link_home}/Code/a.py", "old_string": "a", "new_string": "b"}, {}, set())
+        self.assertEqual(card.rule, f"Edit(/{self.link_home}/Code/a.py)")
+        self.assertEqual(card.rules, [f"Edit(/{self.link_home}/Code/a.py)", f"Edit(/{self.real_home}/Code/a.py)"])
+
+    def test_dotfiles_still_refused_through_the_link(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{self.link_home}/.bashrc"}))
 
 
 if __name__ == "__main__":
