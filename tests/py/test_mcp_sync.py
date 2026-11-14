@@ -104,6 +104,82 @@ class GeminiSyncTest(unittest.TestCase):
         self.assertEqual(managed, set())
 
 
+class GeminiDenyTest(unittest.TestCase):
+    def test_gemini_exclude_tools(self):
+        d = ServerDef(name="n8n", spec={"command": "/x/n8n"}, deny_tools=["x"])
+        self.assertEqual(mcp_sync.gemini_entry(d), {"command": "hypr-mcp", "args": ["run", "n8n"], "excludeTools": ["x"]})
+        self.assertNotIn("excludeTools", mcp_sync.gemini_entry(stdio("plain")))
+
+
+class ClaudeRulesTest(unittest.TestCase):
+    def setUp(self):
+        self.settings = tmpdir(self) / ".claude" / "settings.json"
+
+    def read(self):
+        return json.loads(self.settings.read_text())
+
+    def test_deny_rules(self):
+        defs = {"n8n": ServerDef(name="n8n", spec={"command": "x"}, deny_tools=["a", "b"]),
+                "plain": stdio("plain")}
+        self.assertEqual(mcp_sync.deny_rules(defs), {"mcp__n8n__a", "mcp__n8n__b"})
+
+    def test_rules_add_and_remove_managed(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}, "model": "x"}))
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(managed, {"mcp__n8n__a"})
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(rm:*)", "mcp__n8n__a"]}, "model": "x"})
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", set(), managed)
+        self.assertEqual(managed, set())
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(rm:*)"]}, "model": "x"})
+
+    def test_rules_keep_user_entries(self):
+        # A rule the user wrote is never taken over, duplicated or removed.
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"]}}))
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(managed, set())
+        self.assertEqual(self.read()["permissions"]["deny"], ["mcp__n8n__a"])
+        mcp_sync.sync_claude_rules(self.settings, "deny", set(), managed)
+        self.assertEqual(self.read()["permissions"]["deny"], ["mcp__n8n__a"])
+
+    def test_rules_keep_mode(self):
+        write_json(self.settings, "{}")
+        self.settings.chmod(0o600)
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(self.settings.stat().st_mode & 0o777, 0o600)
+        new = self.settings.parent / "new" / "settings.json"
+        mcp_sync.sync_claude_rules(new, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(new.stat().st_mode & 0o777, 0o600)
+
+    def test_rules_unchanged_file_not_rewritten(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"]}}))
+        before = self.settings.stat().st_ino
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, {"mcp__n8n__a"})
+        self.assertEqual(self.settings.stat().st_ino, before)
+
+    def test_rules_skip_bad_json(self):
+        write_json(self.settings, "{oops")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, {"mcp__old__b"})
+        self.assertEqual(managed, {"mcp__old__b"})
+        self.assertEqual(self.settings.read_text(), "{oops")
+        self.assertIn(str(self.settings), err.getvalue())
+
+    def test_list_shows_deny(self):
+        root = tmpdir(self)
+        write_json(root / "n8n.json", '{"command": "x", "readOnlyTools": ["r"], "denyTools": ["d"]}')
+        out = io.StringIO()
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=[root]), contextlib.redirect_stdout(out):
+            self.assertEqual(mcp_sync.main(["list"]), 0)
+        self.assertIn("read-only: r\tdeny: d", out.getvalue())
+
+    def test_claude_settings_path(self):
+        with mock.patch.dict(os.environ, {"HOME": "/h"}, clear=True):
+            self.assertEqual(mcp_sync.claude_settings_path(), Path("/h/.claude/settings.json"))
+        with mock.patch.dict(os.environ, {"HOME": "/h", "CLAUDE_CONFIG_DIR": "/c"}, clear=True):
+            self.assertEqual(mcp_sync.claude_settings_path(), Path("/c/settings.json"))
+
+
 class RunTest(unittest.TestCase):
     def test_run_execs_with_resolved_env(self):
         root = tmpdir(self)
@@ -126,9 +202,9 @@ class RunTest(unittest.TestCase):
 class ManagedStateTest(unittest.TestCase):
     def test_round_trip(self):
         f = tmpdir(self) / "state" / "m.json"
-        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set()})
-        mcp_sync.save_managed(f, {"claude": {"b", "a"}, "gemini": set()})
-        self.assertEqual(json.loads(f.read_text()), {"claude": ["a", "b"], "gemini": []})
+        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set(), "claude_deny": set()})
+        mcp_sync.save_managed(f, {"claude": {"b", "a"}, "gemini": set(), "claude_deny": {"mcp__n8n__a"}})
+        self.assertEqual(json.loads(f.read_text()), {"claude": ["a", "b"], "gemini": [], "claude_deny": ["mcp__n8n__a"]})
         self.assertEqual(mcp_sync.load_managed(f)["claude"], {"a", "b"})
 
 

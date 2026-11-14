@@ -1,7 +1,9 @@
 """hypr-mcp: put the MCP registry into each agent's own config, and start servers.
 
-  hypr-mcp sync         write the registry into Claude Code (user scope) and,
-                        when Gemini CLI is present, ~/.gemini/settings.json
+  hypr-mcp sync         write the registry into Claude Code (user scope; denyTools
+                        become deny rules in its user settings) and, when Gemini
+                        CLI is present, ~/.gemini/settings.json (denyTools become
+                        excludeTools)
   hypr-mcp run <name>   resolve the server's secret references, exec it
   hypr-mcp list         show the merged registry
 
@@ -56,10 +58,13 @@ def sync_claude(defs: dict[str, ServerDef], managed: set[str], run=subprocess.ru
 
 def gemini_entry(d: ServerDef) -> dict:
     if "command" in d.spec:
-        return {"command": "hypr-mcp", "args": ["run", d.name]}
-    entry = {"url": d.spec["url"]} if d.spec.get("type") == "sse" else {"httpUrl": d.spec["url"]}
-    if d.spec.get("headers"):
-        entry["headers"] = d.spec["headers"]
+        entry = {"command": "hypr-mcp", "args": ["run", d.name]}
+    else:
+        entry = {"url": d.spec["url"]} if d.spec.get("type") == "sse" else {"httpUrl": d.spec["url"]}
+        if d.spec.get("headers"):
+            entry["headers"] = d.spec["headers"]
+    if d.deny_tools:
+        entry["excludeTools"] = list(d.deny_tools)
     return entry
 
 
@@ -93,12 +98,50 @@ def sync_gemini(defs: dict[str, ServerDef], managed: set[str], settings: Path) -
     return new_managed
 
 
+def claude_settings_path() -> Path:
+    """Claude Code's user settings: $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json."""
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    base = Path(cfg) if cfg else Path(os.environ.get("HOME", "~")).expanduser() / ".claude"
+    return base / "settings.json"
+
+
+def deny_rules(defs: dict[str, ServerDef]) -> set[str]:
+    return {f"mcp__{d.name}__{t}" for d in defs.values() for t in d.deny_tools}
+
+
+def sync_claude_rules(settings: Path, kind: str, wanted: set[str], managed: set[str]) -> set[str]:
+    """Keep hypr-mcp's rules in permissions.<kind> of Claude Code's user settings and
+    return the rules it now manages. Only rules it added are ever removed; a rule the
+    user wrote is left alone and not taken over. Other keys are untouched (claude-config's
+    apply merges its own keys into the same file). The file's mode is kept, since it can
+    hold secrets; a new file is 0600. A file that isn't valid JSON is left as it is."""
+    try:
+        data = json.loads(settings.read_text()) if settings.exists() else {}
+    except (OSError, ValueError) as exc:
+        _warn(f"not touching {settings}: {exc}")
+        return managed
+    perms = data.get("permissions", {}) if isinstance(data, dict) else None
+    current = perms.get(kind, []) if isinstance(perms, dict) else None
+    if not isinstance(current, list):
+        _warn(f"not touching {settings}: permissions.{kind} is not a list")
+        return managed
+    add = wanted - set(current)
+    drop = managed - wanted
+    new = [r for r in current if r not in drop] + sorted(add)
+    if new != current:
+        mode = settings.stat().st_mode & 0o777 if settings.exists() else 0o600
+        data.setdefault("permissions", perms)[kind] = new
+        _write_atomic(settings, json.dumps(data, indent=2) + "\n")
+        os.chmod(settings, mode)
+    return (managed & wanted) | add
+
+
 def load_managed(path: Path) -> dict[str, set[str]]:
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
         data = {}
-    return {k: set(data.get(k, [])) for k in ("claude", "gemini")}
+    return {k: set(data.get(k, [])) for k in ("claude", "gemini", "claude_deny")}
 
 
 def save_managed(path: Path, managed: dict[str, set[str]]) -> None:
@@ -135,11 +178,13 @@ def main(argv: list[str]) -> int:
     if argv[0] == "list":
         for name, d in defs.items():
             ro = ",".join(d.read_only_tools) or "-"
-            print(f"{name}\t{d.source}\tread-only: {ro}")
+            deny = ",".join(d.deny_tools) or "-"
+            print(f"{name}\t{d.source}\tread-only: {ro}\tdeny: {deny}")
         return 0
     state = load_managed(paths.managed_file())
     if shutil.which("claude"):
         state["claude"] = sync_claude(defs, state["claude"])
+        state["claude_deny"] = sync_claude_rules(claude_settings_path(), "deny", deny_rules(defs), state["claude_deny"])
     gemini_settings = Path(os.environ.get("HOME", "~")).expanduser() / ".gemini" / "settings.json"
     state["gemini"] = sync_gemini(defs, state["gemini"], gemini_settings)
     save_managed(paths.managed_file(), state)
