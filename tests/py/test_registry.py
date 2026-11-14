@@ -59,6 +59,32 @@ class RegistryTest(unittest.TestCase):
         write_json(self.user / "n8n.json", '{"command": "y", "denyTools": ["b", "a"]}')
         self.assertEqual(load_registry(self.dirs)["n8n"].deny_tools, ["a", "b"])
 
+    def test_string_deny_tools_skips_file(self):
+        # "denyTools": "edit" must not turn into a deny of the letters e, d, i, t.
+        write_json(self.user / "n8n.json", '{"command": "x", "denyTools": "edit"}')
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertNotIn("n8n", load_registry(self.dirs))
+        self.assertIn("denyTools", err.getvalue())
+
+    def test_null_list_keys_skip_file_without_crashing(self):
+        for key in ("denyTools", "rootTools", "readOnlyTools"):
+            write_json(self.user / "n8n.json", '{"command": "x", "%s": null}' % key)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertNotIn("n8n", load_registry(self.dirs), key)
+
+    def test_non_string_tool_skips_file(self):
+        write_json(self.user / "n8n.json", '{"command": "x", "readOnlyTools": ["a", 3]}')
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertNotIn("n8n", load_registry(self.dirs))
+
+    def test_bad_user_layer_keeps_lower_layer_deny(self):
+        write_json(self.share / "n8n.json", '{"command": "x", "denyTools": ["a"]}')
+        write_json(self.user / "n8n.json", '{"command": "y", "denyTools": "b"}')
+        with contextlib.redirect_stderr(io.StringIO()):
+            d = load_registry(self.dirs)["n8n"]
+        self.assertEqual(d.deny_tools, ["a"])
+        self.assertEqual(d.spec["command"], "x")
+
     def test_denied_tool_not_read_only(self):
         write_json(self.share / "n8n.json", '{"command": "x", "readOnlyTools": ["a", "b"], "denyTools": ["b"]}')
         self.assertEqual(load_registry(self.dirs)["n8n"].read_only_tools, ["a"])

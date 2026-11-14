@@ -56,6 +56,13 @@ def _parse(path: Path) -> dict | None:
     if not isinstance(data, dict):
         _warn(f"skipping {path}: not a JSON object")
         return None
+    # A string would be read as its letters ("edit" denies e, d, i, t, not edit) and null
+    # would crash every reader; skipping the file keeps the lower layers' rules.
+    for key in ("readOnlyTools", "rootTools", "denyTools"):
+        value = data.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(t, str) for t in value):
+            _warn(f"skipping {path}: {key} must be a list of tool names")
+            return None
     return data
 
 
