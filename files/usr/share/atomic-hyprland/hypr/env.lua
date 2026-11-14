@@ -15,4 +15,4 @@ hl.env("MOZ_ENABLE_WAYLAND", "1")
 -- Electron apps as native Wayland clients: sharp at fractional scales, not upscaled XWayland.
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 hl.env("TERMINAL", "hypr-terminal")
-hl.env("BROWSER", "chromium-browser")
+hl.env("BROWSER", "hypr-browser")

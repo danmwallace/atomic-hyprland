@@ -15,4 +15,4 @@ export XCURSOR_THEME=breeze_cursors
 export XCURSOR_SIZE=24
 export HYPRCURSOR_SIZE=24
 export TERMINAL=hypr-terminal
-export BROWSER=chromium-browser
+export BROWSER=hypr-browser
