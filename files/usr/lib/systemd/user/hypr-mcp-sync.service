@@ -1,6 +1,10 @@
 [Unit]
 Description=Sync the MCP registry into Claude Code and Gemini CLI
 Documentation=file:///usr/lib/atomic-hyprland/python/atomic_agent/mcp_sync.py
+# These also read, change and rewrite ~/.claude/settings.json at login. Run after
+# them so neither write loses the other's (the sync's deny rules, their keys).
+# Ordering only: a unit that isn't installed or isn't starting is ignored.
+After=git-repo-sync@claude-config.service atomic-hyprland-claude-statusline.service
 
 [Service]
 Type=oneshot

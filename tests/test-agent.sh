@@ -18,6 +18,8 @@ fi
 units=files/usr/lib/systemd/user
 check test -x files/usr/bin/hypr-mcp
 check grep -qx 'ExecStart=/usr/bin/hypr-mcp sync' $units/hypr-mcp-sync.service
+# the other login writers of ~/.claude/settings.json finish first (no lost update)
+check grep -qx 'After=git-repo-sync@claude-config.service atomic-hyprland-claude-statusline.service' $units/hypr-mcp-sync.service
 check grep -qx 'PathChanged=/etc/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
 check grep -qx 'PathChanged=%h/.config/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
 check test -d files/etc/atomic-hyprland/mcp.d
