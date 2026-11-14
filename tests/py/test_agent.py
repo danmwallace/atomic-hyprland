@@ -47,6 +47,12 @@ class AgentTest(unittest.TestCase):
             self.assertIn("Bash(sudo:*)", deny)  # the image's own denies stay
             self.assertEqual(len(deny), len(set(deny)))
 
+    def test_build_settings_rules_use_claude_code_names(self):
+        reg = {"home.lab": ServerDef(name="home.lab", spec={"command": "x"}, read_only_tools=["ro"], deny_tools=["bad"])}
+        perms = agent.build_settings(BASE, self.root / "none.json", reg)["permissions"]
+        self.assertIn("mcp__home_lab__ro", perms["allow"])
+        self.assertIn("mcp__home_lab__bad", perms["deny"])
+
     def test_build_settings_includes_user_rules(self):
         rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
         s = agent.build_settings(BASE, rules, registry())

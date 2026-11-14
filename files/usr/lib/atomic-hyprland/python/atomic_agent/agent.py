@@ -20,7 +20,7 @@ from pathlib import Path
 from . import paths, ui
 from .context import Context, capture, prompt
 from .mcp_sync import client_entry
-from .registry import ServerDef, load_registry
+from .registry import ServerDef, load_registry, tool_rule
 
 SHARE = Path(os.environ.get("ATOMIC_AGENT_DATA", "/usr/share/atomic-hyprland/agent"))
 MCP_SERVER = "/usr/libexec/atomic-hyprland/mcp-server"
@@ -47,13 +47,13 @@ def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef],
     perms = settings.setdefault("permissions", {})
     allow = perms.setdefault("allow", [])
     for d in registry.values():
-        allow += [f"mcp__{d.name}__{t}" for t in d.read_only_tools]
+        allow += [tool_rule(d.name, t) for t in d.read_only_tools]
     if include_rules:
         allow += _user_rules(rules_path)
     perms["allow"] = list(dict.fromkeys(allow))
     deny = perms.setdefault("deny", [])
     for d in registry.values():
-        deny += [f"mcp__{d.name}__{t}" for t in d.deny_tools]
+        deny += [tool_rule(d.name, t) for t in d.deny_tools]
     perms["deny"] = list(dict.fromkeys(deny))
     perms["defaultMode"] = "default"
     settings["hooks"] = {

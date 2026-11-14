@@ -16,11 +16,20 @@ is never read-only, so a later (user-writable) file cannot quietly turn a root
 action into one that runs without asking, or bring back a denied tool.
 """
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 REGISTRY_KEYS = ("readOnlyTools", "toolNotes", "rootTools", "denyTools", "disabled")
+_NOT_NAME = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def tool_rule(server: str, tool: str) -> str:
+    """The name Claude Code gives an MCP tool, for allow/deny rules and card lookups.
+    It replaces anything outside [A-Za-z0-9_-] with "_" in both parts; a rule built from
+    the raw name ("home.lab") would never match, and a deny would silently fail open."""
+    return f"mcp__{_NOT_NAME.sub('_', server)}__{_NOT_NAME.sub('_', tool)}"
 
 
 @dataclass

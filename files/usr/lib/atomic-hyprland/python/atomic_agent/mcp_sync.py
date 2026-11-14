@@ -27,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 from . import paths
-from .registry import ServerDef, load_registry
+from .registry import ServerDef, load_registry, tool_rule
 from .secrets import SecretError, resolve_env
 
 
@@ -129,7 +129,7 @@ def claude_settings_path() -> Path:
 
 
 def deny_rules(defs: dict[str, ServerDef]) -> set[str]:
-    return {f"mcp__{d.name}__{t}" for d in defs.values() for t in d.deny_tools}
+    return {tool_rule(d.name, t) for d in defs.values() for t in d.deny_tools}
 
 
 def sync_claude_rules(settings: Path, kind: str, wanted: set[str], managed: set[str]) -> set[str]:

@@ -100,5 +100,15 @@ class DecideTest(unittest.TestCase):
         self.assertFalse((self.root / "cfg/atomic-hyprland/agent/permissions.json").exists())
 
 
+    def test_root_tool_on_dotted_server_never_always(self):
+        write_json(self.root / "etc" / "home.lab.json", '{"command": "x", "rootTools": ["reboot"], "toolNotes": {"reboot": "Boot it again."}}')
+        seen = {}
+        def ask(card, session):
+            seen["card"] = card
+            return "always"
+        approvals.decide("mcp__home_lab__reboot", {}, ask=ask)
+        self.assertIsNone(seen["card"].rule)
+        self.assertEqual(seen["card"].undo, "Boot it again.")
+
 if __name__ == "__main__":
     unittest.main()

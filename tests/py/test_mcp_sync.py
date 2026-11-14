@@ -124,6 +124,10 @@ class ClaudeRulesTest(unittest.TestCase):
                 "plain": stdio("plain")}
         self.assertEqual(mcp_sync.deny_rules(defs), {"mcp__n8n__a", "mcp__n8n__b"})
 
+    def test_deny_rules_use_claude_code_names(self):
+        defs = {"home.lab": ServerDef(name="home.lab", spec={"command": "x"}, deny_tools=["bad"])}
+        self.assertEqual(mcp_sync.deny_rules(defs), {"mcp__home_lab__bad"})
+
     def test_rules_add_and_remove_managed(self):
         write_json(self.settings, json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}, "model": "x"}))
         managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
