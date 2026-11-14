@@ -25,6 +25,7 @@ test:
     bash tests/test-claude-usage.sh
     bash tests/test-monitors.sh
     bash tests/test-workflow.sh
+    bash tests/test-browser.sh
     bash tests/test-justfile.sh
     bash tests/test-hypr-theme.sh
     bash tests/test-themes.sh

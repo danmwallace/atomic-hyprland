@@ -19,6 +19,9 @@ class Context:
     screenshot: Path | None
     clipboard: str | None
     cwd: Path | None
+    # False when hyprctl reported no focused window (right after login, an empty
+    # workspace): the prompt then says why there is no screenshot.
+    focused: bool = True
 
 
 def window_geometry(active: dict) -> str:
@@ -88,7 +91,8 @@ def capture(shot_dir: Path, run=subprocess.run) -> Context:
         if run(["grim", "-g", window_geometry(active), str(path)], capture_output=True, timeout=10).returncode == 0:
             shot = path
     cwd = terminal_cwd(int(active["pid"])) if active.get("class") in TERMINAL_CLASSES and active.get("pid") else None
-    return Context(screenshot=shot, clipboard=clipboard_text(run=run), cwd=cwd)
+    return Context(screenshot=shot, clipboard=clipboard_text(run=run), cwd=cwd,
+                   focused=bool(active.get("at") and active.get("size")))
 
 
 ON, OFF = "   (select to leave out)", "   (select to include)"

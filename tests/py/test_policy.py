@@ -30,8 +30,8 @@ class RuleTest(unittest.TestCase):
         from unittest import mock
         with mock.patch.dict(os.environ, {"HOME": "/home/u"}):
             self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/app/main.py", "content": "x"}),
-                             "Edit(//home/u/Code/app/main.py)")
-            self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), "Edit(//home/u/a)")
+                             f"Edit(/{os.path.realpath('/home/u/Code/app/main.py')})")
+            self.assertEqual(policy.always_rule("Edit", {"file_path": "/home/u/a"}), f"Edit(/{os.path.realpath('/home/u/a')})")
 
     def test_rule_edit_only_plain_files_in_home(self):
         # Allowlist: always-allow only for non-hidden files under $HOME; dotfiles, dot-folders
@@ -51,7 +51,7 @@ class RuleTest(unittest.TestCase):
             self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/tools/git", "content": "x"}))
             self.assertIsNone(policy.always_rule("Write", {"file_path": "/home/u/bin/ls", "content": "x"}))
             self.assertEqual(policy.always_rule("Write", {"file_path": "/home/u/Code/a.py", "content": "x"}),
-                             "Edit(//home/u/Code/a.py)")
+                             f"Edit(/{os.path.realpath('/home/u/Code/a.py')})")
 
     def test_rule_none_for_compound_bash(self):
         for cmd in ("make && make install", "ls; id", "cat a | tee b", "echo $(id)", "echo hi > f"):
@@ -75,7 +75,7 @@ class RuleTest(unittest.TestCase):
                       ".zshenv", ".config/fish/config.fish", ".config/atomic-hyprland/hooks/theme.sh"):
                 self.assertIsNone(policy.always_rule("Edit", {"file_path": f"{home}/{p}"}), p)
             self.assertEqual(policy.always_rule("Edit", {"file_path": f"{home}/Documents/notes.md"}),
-                             f"Edit(/{home}/Documents/notes.md)")
+                             f"Edit(/{os.path.realpath(home)}/Documents/notes.md)")
 
     def test_rule_edit_refuses_git_and_claude_anywhere(self):
         for p in ("/srv/repo/.git/hooks/pre-commit", "/srv/repo/.claude/settings.json",

@@ -1,0 +1,8 @@
+#!/usr/bin/bash
+# $BROWSER for the session: start Chromium detached and return at once, the way
+# xdg-open does for desktop apps. Run directly, chromium-browser becomes the
+# browser when none is running yet and only returns when it quits, so tools that
+# launch $BROWSER and wait (gh auth login -w polls for its token only after the
+# browser command returns) hang until Chromium is closed.
+set -euo pipefail
+setsid -f chromium-browser "$@" </dev/null >/dev/null 2>&1

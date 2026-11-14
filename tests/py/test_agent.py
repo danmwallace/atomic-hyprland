@@ -102,6 +102,15 @@ class AgentTest(unittest.TestCase):
         self.assertIn("Edit", text)
         self.assertTrue(text.rstrip().endswith("I like helix."))
 
+    def test_ask_prompt_says_when_no_window_had_focus(self):
+        prompt = agent.ask_prompt("why?", Context(None, None, None, focused=False))
+        self.assertIn("No screenshot: no window had focus", prompt)
+
+    def test_ask_prompt_silent_when_the_screenshot_was_left_out(self):
+        # The user deselected the screenshot chip: nothing to explain.
+        prompt = agent.ask_prompt("why?", Context(None, None, None))
+        self.assertNotIn("no window had focus", prompt)
+
     def test_ask_argv_read_only(self):
         ctx = Context(screenshot=Path("/s/ask.png"), clipboard="boom", cwd=Path("/h/app"))
         argv = agent.ask_argv("s1", "why?", ctx, Path("/s/settings.json"), Path("/s/mcp.json"), Path("/s/prompt.md"))

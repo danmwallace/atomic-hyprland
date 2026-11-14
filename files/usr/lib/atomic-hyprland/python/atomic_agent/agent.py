@@ -96,6 +96,9 @@ def ask_prompt(text: str, ctx: Context) -> str:
     lines = [text, "", "Context from the desktop (attached by the user):"]
     if ctx.screenshot:
         lines.append(f"- Screenshot of the focused window: {ctx.screenshot} (Read it first).")
+    elif not ctx.focused:
+        lines.append("- No screenshot: no window had focus when the hotkey was pressed. "
+                     "If you need to see the desktop, use the screen tool.")
     if ctx.clipboard:
         lines += ["- Clipboard:", "```", ctx.clipboard, "```"]
     if ctx.cwd:

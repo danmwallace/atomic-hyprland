@@ -144,7 +144,7 @@ check python3 -c "import configparser; c=configparser.ConfigParser(); c.read('fi
 # Chromium replaces Firefox; the Claude extension is force-installed by managed policy
 pol=files/etc/chromium/policies/managed/10-atomic-hyprland.json
 check jq -e '.ExtensionInstallForcelist[0] == "fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx" and .BrowserColorScheme == 2 and .BrowserThemeColor == "#0a0a0a"' $pol
-check grep -q 'hl.env("BROWSER", "chromium-browser")' $share/hypr/env.lua
+check grep -q 'hl.env("BROWSER", "hypr-browser")' $share/hypr/env.lua
 check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
 # AppImages need the FUSE 2 library (OpenRGB on the Alienware is one)
@@ -162,7 +162,7 @@ check bash -c '! grep -qxE "wtype|ydotool|netcat" build/packages.txt'   # declin
 # session env for everything uwsm starts (D-Bus services, uwsm-app launches), not just Hyprland's children
 uenv=files/etc/xdg/uwsm/env-hyprland
 check sh -n $uenv
-for v in QT_STYLE_OVERRIDE=kvantum QT_QPA_PLATFORM= XCURSOR_THEME=breeze_cursors XCURSOR_SIZE=24 TERMINAL=hypr-terminal BROWSER=chromium-browser; do
+for v in QT_STYLE_OVERRIDE=kvantum QT_QPA_PLATFORM= XCURSOR_THEME=breeze_cursors XCURSOR_SIZE=24 TERMINAL=hypr-terminal BROWSER=hypr-browser; do
     check grep -qE "^export ${v}" $uenv
 done
 # dconf system defaults: dark from the very first moment of a new home

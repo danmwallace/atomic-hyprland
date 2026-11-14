@@ -1,3 +1,4 @@
+import json
 import subprocess
 import unittest
 from pathlib import Path
@@ -104,6 +105,30 @@ class PromptTest(unittest.TestCase):
         text, _ = context.prompt(ctx, menu=menu)
         self.assertEqual(text, context.DEFAULT_QUESTION)
         self.assertTrue(seen[0][0].startswith("Ask:"))
+
+
+class CaptureTest(unittest.TestCase):
+    def fake_run(self, active: dict):
+        def run(argv, **kw):
+            if argv[:2] == ["hyprctl", "-j"]:
+                return subprocess.CompletedProcess(argv, 0, json.dumps(active), "")
+            if argv[0] == "grim":
+                return subprocess.CompletedProcess(argv, 0, b"", b"")
+            return subprocess.CompletedProcess(argv, 1, "", "")  # wl-paste: empty clipboard
+        return run
+
+    def test_capture_without_a_focused_window(self):
+        # Right after login, or on an empty workspace, hyprctl reports no window.
+        shots = tmpdir(self)
+        ctx = context.capture(shots, run=self.fake_run({}))
+        self.assertIsNone(ctx.screenshot)
+        self.assertFalse(ctx.focused)
+
+    def test_capture_with_a_focused_window(self):
+        shots = tmpdir(self)
+        ctx = context.capture(shots, run=self.fake_run({"at": [0, 0], "size": [10, 10], "class": "firefox", "pid": 1}))
+        self.assertEqual(ctx.screenshot, shots / "ask.png")
+        self.assertTrue(ctx.focused)
 
 
 if __name__ == "__main__":
