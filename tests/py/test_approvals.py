@@ -28,6 +28,18 @@ class DecideTest(unittest.TestCase):
         rules = json.loads((self.root / "cfg/atomic-hyprland/agent/permissions.json").read_text())
         self.assertEqual(len(rules["permissions"]["allow"]), 1)
 
+    def test_decide_always_saves_both_forms_for_a_linked_home(self):
+        # The bootc layout: the user's home is a link (/home/u -> /var/home/u).
+        real = self.root / "var" / "home" / "u"
+        (real / "Code").mkdir(parents=True)
+        link = self.root / "home" / "u"
+        link.parent.mkdir()
+        link.symlink_to(real)
+        with mock.patch.dict(os.environ, {"HOME": str(link), "PATH": "/usr/bin"}):
+            approvals.decide("Edit", {"file_path": f"{link}/Code/a.py"}, ask=lambda card, session: "always")
+        rules = json.loads((self.root / "cfg/atomic-hyprland/agent/permissions.json").read_text())
+        self.assertEqual(rules["permissions"]["allow"], [f"Edit(/{link}/Code/a.py)", f"Edit(/{real}/Code/a.py)"])
+
     def test_decide_deny_shape(self):
         out = approvals.decide("Bash", {"command": "id"}, ask=lambda card, session: "deny")
         self.assertEqual(out, {"behavior": "deny", "message": "Denied by the user"})

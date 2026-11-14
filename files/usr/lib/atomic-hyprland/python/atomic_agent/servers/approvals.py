@@ -8,7 +8,7 @@ import json
 import os
 
 from .. import paths, ui
-from ..policy import card_for
+from ..policy import card_for, rule_variants
 from ..registry import load_registry
 
 DENIED = {"behavior": "deny", "message": "Denied by the user"}
@@ -36,8 +36,9 @@ def save_rule(rule: str) -> None:
     except (OSError, ValueError):
         data = {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
-    if rule not in allow:
-        allow.append(rule)
+    for form in rule_variants(rule):
+        if form not in allow:
+            allow.append(form)
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n")

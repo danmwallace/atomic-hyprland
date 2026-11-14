@@ -128,7 +128,25 @@ def _edit_rule(path: str) -> str | None:
     if any(real.startswith(d + "/") for d in path_dirs):
         return None
     # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
-    return f"Edit(/{real})"
+    # The rule keeps the path as written (the one the user sees and the session uses);
+    # rule_variants() adds the resolved form when the two differ.
+    return f"Edit(/{path})"
+
+
+def rule_variants(rule: str) -> list[str]:
+    """Every form of a rule that has to be saved for it to take effect.
+
+    Where a path runs through a symlink (on bootc /home links to /var/home, and
+    ~/Notebook may link into ~/Syncthing), Claude Code allows an edit only when both
+    the path as written and its resolved target are allowed: either rule alone is
+    refused (tested with Claude Code 2.1.325, 2026-11-14).
+    """
+    if rule.startswith("Edit(//") and rule.endswith(")"):
+        path = rule[len("Edit(/"):-1]
+        real = os.path.realpath(path)
+        if real != path:
+            return [rule, f"Edit(/{real})"]
+    return [rule]
 
 
 def undo_note(tool_name: str, tool_input: dict, tool_notes: dict[str, str]) -> str:
