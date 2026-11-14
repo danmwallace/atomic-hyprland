@@ -196,8 +196,8 @@ line), and only when your `gh` login can push there.
 |---|---|
 | `hypr-agent ask \| fix \| chat \| stop \| undo \| review \| sessions` | the agent (`hypr-agent sessions` lists ids) |
 | `/usr/share/atomic-hyprland/mcp.d/` | the image's MCP servers: hyprland, system, screen, notify |
-| `/etc/atomic-hyprland/mcp.d/`, `~/.config/atomic-hyprland/mcp.d/` | your MCP servers, one `<name>.json` each; later folders override earlier ones, `{"disabled": true}` turns one off |
-| `hypr-mcp sync \| list \| run <name>` | writes the registry into Claude Code and Gemini CLI (runs at login and on change) |
+| `/etc/atomic-hyprland/mcp.d/`, `~/.config/atomic-hyprland/mcp.d/` | your MCP servers, one `<name>.json` each; later folders override earlier ones, `{"disabled": true}` turns one off. Extra keys: `readOnlyTools` (no card, usable in ask mode), `toolNotes` (undo text on the card), `rootTools`, and `denyTools` (no agent or client may call them; they add up across folders). Secrets are references, `{"credential": N}` or `{"keyring": {...}}`, in `env` or, for a url server, `headers` |
+| `hypr-mcp sync \| list \| run <name> \| headers <name>` | writes the registry into Claude Code and Gemini CLI (runs at login and on change); `denyTools` become Claude Code deny rules and Gemini `excludeTools`; a url server with secret headers gets `hypr-mcp headers <name>` as its Claude Code `headersHelper` and no Gemini entry |
 | `~/.config/atomic-hyprland/agent/permissions.json` | the "always allow" rules you chose; delete a line to revoke it |
 | `/etc/atomic-hyprland/agent-units`, `agent-etc` | root-owned lists of extra units and `/etc` files the agent may change |
 

@@ -9,7 +9,7 @@ import os
 
 from .. import paths, ui
 from ..policy import card_for
-from ..registry import load_registry
+from ..registry import load_registry, tool_rule
 
 DENIED = {"behavior": "deny", "message": "Denied by the user"}
 
@@ -18,8 +18,8 @@ def _registry_maps() -> tuple[dict[str, str], set[str]]:
     notes: dict[str, str] = {}
     roots: set[str] = set()
     for d in load_registry(paths.registry_dirs()).values():
-        notes.update({f"mcp__{d.name}__{t}": n for t, n in d.tool_notes.items()})
-        roots.update(f"mcp__{d.name}__{t}" for t in d.root_tools)
+        notes.update({tool_rule(d.name, t): n for t, n in d.tool_notes.items()})
+        roots.update(tool_rule(d.name, t) for t in d.root_tools)
     return notes, roots
 
 

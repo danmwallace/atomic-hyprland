@@ -53,6 +53,30 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(d.root_tools, ["restart_unit"])
         self.assertEqual(d.read_only_tools, ["journal"])
 
+    def test_deny_tools_accumulate(self):
+        # Like rootTools: a later (user-writable) layer cannot drop an earlier deny.
+        write_json(self.share / "n8n.json", '{"command": "x", "denyTools": ["a"]}')
+        write_json(self.user / "n8n.json", '{"command": "y", "denyTools": ["b", "a"]}')
+        self.assertEqual(load_registry(self.dirs)["n8n"].deny_tools, ["a", "b"])
+
+    def test_denied_tool_not_read_only(self):
+        write_json(self.share / "n8n.json", '{"command": "x", "readOnlyTools": ["a", "b"], "denyTools": ["b"]}')
+        self.assertEqual(load_registry(self.dirs)["n8n"].read_only_tools, ["a"])
+
+    def test_deny_tools_not_in_spec(self):
+        write_json(self.share / "n8n.json", '{"command": "x", "denyTools": ["b"]}')
+        d = load_registry(self.dirs)["n8n"]
+        self.assertNotIn("denyTools", d.spec)
+        self.assertEqual(d.deny_tools, ["b"])
+
+    def test_tool_rule_matches_claude_code_names(self):
+        # Claude Code replaces anything outside [A-Za-z0-9_-] with "_" in both parts
+        # (observed on 2.1.325: server "hypr.land v2" -> mcp__hypr_land_v2__list_workspaces).
+        from atomic_agent.registry import tool_rule
+        self.assertEqual(tool_rule("hypr.land v2", "list_workspaces"), "mcp__hypr_land_v2__list_workspaces")
+        self.assertEqual(tool_rule("n8n", "get-workflow.v2"), "mcp__n8n__get-workflow_v2")
+        self.assertEqual(tool_rule("truenas", "pool_list"), "mcp__truenas__pool_list")
+
     def test_invalid_file_skipped(self):
         write_json(self.share / "bad.json", "{not json")
         write_json(self.share / "empty.json", '{"args": ["x"]}')

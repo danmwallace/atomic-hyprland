@@ -1,5 +1,9 @@
 Machine-wide MCP servers for every agent on this machine, one <name>.json per
-server (the usual MCP keys, plus readOnlyTools / toolNotes / rootTools).
+server (the usual MCP keys, plus readOnlyTools / toolNotes / rootTools /
+denyTools; denyTools add up across the folders and no agent may call them).
 Overrides /usr/share/atomic-hyprland/mcp.d; ~/.config/atomic-hyprland/mcp.d
 overrides this folder. {"disabled": true} switches a server off. Changes are
 picked up by hypr-mcp-sync.path; run `hypr-mcp sync` to apply by hand.
+Secrets: an env value (stdio) or a headers value (url) may be {"credential": N}
+or {"keyring": {...}} instead of text; hypr-mcp resolves it when the server
+starts or connects, so no client config ever holds the secret.

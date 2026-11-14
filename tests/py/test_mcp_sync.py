@@ -9,6 +9,7 @@ from unittest import mock
 
 from atomic_agent import mcp_sync
 from atomic_agent.registry import ServerDef
+from atomic_agent.secrets import SecretError
 from helpers import tmpdir, write_json
 
 
@@ -104,6 +105,153 @@ class GeminiSyncTest(unittest.TestCase):
         self.assertEqual(managed, set())
 
 
+class GeminiDenyTest(unittest.TestCase):
+    def test_gemini_exclude_tools(self):
+        d = ServerDef(name="n8n", spec={"command": "/x/n8n"}, deny_tools=["x"])
+        self.assertEqual(mcp_sync.gemini_entry(d), {"command": "hypr-mcp", "args": ["run", "n8n"], "excludeTools": ["x"]})
+        self.assertNotIn("excludeTools", mcp_sync.gemini_entry(stdio("plain")))
+
+
+class ClaudeRulesTest(unittest.TestCase):
+    def setUp(self):
+        self.settings = tmpdir(self) / ".claude" / "settings.json"
+
+    def read(self):
+        return json.loads(self.settings.read_text())
+
+    def test_deny_rules(self):
+        defs = {"n8n": ServerDef(name="n8n", spec={"command": "x"}, deny_tools=["a", "b"]),
+                "plain": stdio("plain")}
+        self.assertEqual(mcp_sync.deny_rules(defs), {"mcp__n8n__a", "mcp__n8n__b"})
+
+    def test_deny_rules_use_claude_code_names(self):
+        defs = {"home.lab": ServerDef(name="home.lab", spec={"command": "x"}, deny_tools=["bad"])}
+        self.assertEqual(mcp_sync.deny_rules(defs), {"mcp__home_lab__bad"})
+
+    def test_rules_add_and_remove_managed(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}, "model": "x"}))
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(managed, {"mcp__n8n__a"})
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(rm:*)", "mcp__n8n__a"]}, "model": "x"})
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", set(), managed)
+        self.assertEqual(managed, set())
+        self.assertEqual(self.read(), {"permissions": {"deny": ["Bash(rm:*)"]}, "model": "x"})
+
+    def test_rules_keep_user_entries(self):
+        # A rule the user wrote is never taken over, duplicated or removed.
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"]}}))
+        managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(managed, set())
+        self.assertEqual(self.read()["permissions"]["deny"], ["mcp__n8n__a"])
+        mcp_sync.sync_claude_rules(self.settings, "deny", set(), managed)
+        self.assertEqual(self.read()["permissions"]["deny"], ["mcp__n8n__a"])
+
+    def test_rules_keep_mode(self):
+        write_json(self.settings, "{}")
+        self.settings.chmod(0o600)
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(self.settings.stat().st_mode & 0o777, 0o600)
+        new = self.settings.parent / "new" / "settings.json"
+        mcp_sync.sync_claude_rules(new, "deny", {"mcp__n8n__a"}, set())
+        self.assertEqual(new.stat().st_mode & 0o777, 0o600)
+
+    def test_rules_unchanged_file_not_rewritten(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"]}}))
+        before = self.settings.stat().st_ino
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, {"mcp__n8n__a"})
+        self.assertEqual(self.settings.stat().st_ino, before)
+
+    def test_rules_skip_bad_json(self):
+        write_json(self.settings, "{oops")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            managed = mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, {"mcp__old__b"})
+        self.assertEqual(managed, {"mcp__old__b"})
+        self.assertEqual(self.settings.read_text(), "{oops")
+        self.assertIn(str(self.settings), err.getvalue())
+
+    def test_list_shows_deny(self):
+        root = tmpdir(self)
+        write_json(root / "n8n.json", '{"command": "x", "readOnlyTools": ["r"], "denyTools": ["d"]}')
+        out = io.StringIO()
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=[root]), contextlib.redirect_stdout(out):
+            self.assertEqual(mcp_sync.main(["list"]), 0)
+        self.assertIn("read-only: r\tdeny: d", out.getvalue())
+
+    def test_claude_settings_path(self):
+        with mock.patch.dict(os.environ, {"HOME": "/h"}, clear=True):
+            self.assertEqual(mcp_sync.claude_settings_path(), Path("/h/.claude/settings.json"))
+        with mock.patch.dict(os.environ, {"HOME": "/h", "CLAUDE_CONFIG_DIR": "/c"}, clear=True):
+            self.assertEqual(mcp_sync.claude_settings_path(), Path("/c/settings.json"))
+
+
+def secret_def(name="n8n"):
+    return ServerDef(name=name, spec={"type": "http", "url": "https://n.test/mcp",
+                                      "headers": {"Authorization": {"credential": "n8n-hdr-authorization"}, "X-A": "1"}})
+
+
+class SecretHeadersTest(unittest.TestCase):
+    def test_secret_headers_never_in_client_entry(self):
+        entry = mcp_sync.client_entry(secret_def())
+        self.assertEqual(entry, {"type": "http", "url": "https://n.test/mcp", "headersHelper": "hypr-mcp headers n8n"})
+        self.assertNotIn("credential", json.dumps(entry))
+
+    def test_plain_headers_unchanged(self):
+        spec = {"type": "http", "url": "https://x.test", "headers": {"A": "b"}}
+        self.assertEqual(mcp_sync.client_entry(ServerDef(name="w", spec=spec)), spec)
+        self.assertFalse(mcp_sync.has_secret_headers(ServerDef(name="w", spec=spec)))
+        self.assertTrue(mcp_sync.has_secret_headers(secret_def()))
+
+    def test_gemini_skips_secret_header_server(self):
+        settings = tmpdir(self) / ".gemini" / "settings.json"
+        write_json(settings, json.dumps({"mcpServers": {"n8n": {"httpUrl": "https://old"}}}))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            managed = mcp_sync.sync_gemini({"n8n": secret_def(), "hyprland": stdio("hyprland")}, {"n8n"}, settings)
+        servers = json.loads(settings.read_text())["mcpServers"]
+        self.assertNotIn("n8n", servers)
+        self.assertIn("hyprland", servers)
+        self.assertEqual(managed, {"hyprland"})
+        self.assertEqual(err.getvalue().count("n8n"), 1)
+        self.assertNotIn("credential", settings.read_text())
+
+    def registry_with_n8n(self):
+        root = tmpdir(self)
+        write_json(root / "n8n.json", json.dumps(secret_def().spec))
+        write_json(root / "local.json", '{"command": "/x"}')
+        return [root]
+
+    def test_headers_prints_resolved(self):
+        out = io.StringIO()
+        with mock.patch("atomic_agent.mcp_sync.resolve_env", return_value={"Authorization": "Bearer t0k", "X-A": "1"}) as res, \
+             contextlib.redirect_stdout(out):
+            rc = mcp_sync.print_headers("n8n", self.registry_with_n8n())
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(out.getvalue()), {"Authorization": "Bearer t0k", "X-A": "1"})
+        res.assert_called_once_with(secret_def().spec["headers"])
+
+    def test_headers_secret_error(self):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("atomic_agent.mcp_sync.resolve_env", side_effect=SecretError("Authorization: lookup failed")), \
+             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = mcp_sync.print_headers("n8n", self.registry_with_n8n())
+        self.assertEqual(rc, 3)
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("Authorization", err.getvalue())
+
+    def test_headers_unknown_or_stdio(self):
+        dirs = self.registry_with_n8n()
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(mcp_sync.print_headers("nope", dirs), 2)
+            self.assertEqual(mcp_sync.print_headers("local", dirs), 2)
+
+    def test_main_headers_verb(self):
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=["d"]), \
+             mock.patch("atomic_agent.mcp_sync.print_headers", return_value=0) as ph:
+            self.assertEqual(mcp_sync.main(["headers", "n8n"]), 0)
+        ph.assert_called_once_with("n8n", ["d"])
+
+
 class RunTest(unittest.TestCase):
     def test_run_execs_with_resolved_env(self):
         root = tmpdir(self)
@@ -126,9 +274,9 @@ class RunTest(unittest.TestCase):
 class ManagedStateTest(unittest.TestCase):
     def test_round_trip(self):
         f = tmpdir(self) / "state" / "m.json"
-        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set()})
-        mcp_sync.save_managed(f, {"claude": {"b", "a"}, "gemini": set()})
-        self.assertEqual(json.loads(f.read_text()), {"claude": ["a", "b"], "gemini": []})
+        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set(), "claude_deny": set()})
+        mcp_sync.save_managed(f, {"claude": {"b", "a"}, "gemini": set(), "claude_deny": {"mcp__n8n__a"}})
+        self.assertEqual(json.loads(f.read_text()), {"claude": ["a", "b"], "gemini": [], "claude_deny": ["mcp__n8n__a"]})
         self.assertEqual(mcp_sync.load_managed(f)["claude"], {"a", "b"})
 
 
