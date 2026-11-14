@@ -37,6 +37,9 @@ class Card:
     detail: str         # the literal command, diff or arguments
     undo: str
     rule: str | None    # the "always allow" rule offered, if any
+    # Every form of that rule to save, worked out when the card was checked: saving must
+    # not resolve links again (the agent could repoint one while the card waits).
+    rules: list = field(default_factory=list)
     note: str = ""      # the model's own description, shown as its words
     summary: str = ""   # one line from the action itself: the command, path or first argument
     preview: str = ""   # the notification body: short, plain text
@@ -97,56 +100,49 @@ def never_always(tool_name: str, tool_input: dict, root_tools: set[str]) -> bool
 
 
 def always_rule(tool_name: str, tool_input: dict, root_tools: set[str] = frozenset()) -> str | None:
+    """The rule an approval card offers, as the user reads it."""
+    rules = always_rules(tool_name, tool_input, root_tools)
+    return rules[0] if rules else None
+
+
+def always_rules(tool_name: str, tool_input: dict, root_tools: set[str] = frozenset()) -> list[str]:
+    """Every form of the rule that must be saved for it to take effect; empty if none."""
     if never_always(tool_name, tool_input, set(root_tools)):
-        return None
+        return []
     if tool_name.startswith("mcp__"):
-        return tool_name
+        return [tool_name]
     if tool_name == "Bash":
         command = tool_input.get("command", "").strip()
         if not command or _COMPOUND.search(command) or _RULE_UNSAFE.search(command):
-            return None
+            return []
         # Exact match, not a prefix: Bash(cmd:*) would also allow cmd plus any
         # extra arguments (find ... -delete after approving find ...).
-        return f"Bash({command})"
+        return [f"Bash({command})"]
     if tool_name in EDIT_TOOLS:
-        return _edit_rule(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
-    return None
+        return _edit_rules(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+    return []
 
 
-def _edit_rule(path: str) -> str | None:
+def _edit_rules(path: str) -> list[str]:
     if not path.startswith("/") or _GLOB.search(path) or "/../" in path + "/" or "/./" in path + "/":
-        return None
+        return []
     real = os.path.realpath(path)
     home = os.path.realpath(os.environ.get("HOME") or os.path.expanduser("~"))
     if not real.startswith(home + "/"):
-        return None
+        return []
     if any(part.startswith(".") for part in real[len(home) + 1:].split("/")):
-        return None
+        return []
     # Folders on PATH (and ~/bin) hold programs: a file there runs as a command.
     path_dirs = {os.path.realpath(d) for d in os.environ.get("PATH", "").split(":") if d}
     path_dirs.add(os.path.join(home, "bin"))
     if any(real.startswith(d + "/") for d in path_dirs):
-        return None
+        return []
     # Claude Code: //path is absolute; an Edit rule covers every file-editing tool.
-    # The rule keeps the path as written (the one the user sees and the session uses);
-    # rule_variants() adds the resolved form when the two differ.
-    return f"Edit(/{path})"
-
-
-def rule_variants(rule: str) -> list[str]:
-    """Every form of a rule that has to be saved for it to take effect.
-
-    Where a path runs through a symlink (on bootc /home links to /var/home, and
-    ~/Notebook may link into ~/Syncthing), Claude Code allows an edit only when both
-    the path as written and its resolved target are allowed: either rule alone is
-    refused (tested with Claude Code 2.1.325, 2026-11-14).
-    """
-    if rule.startswith("Edit(//") and rule.endswith(")"):
-        path = rule[len("Edit(/"):-1]
-        real = os.path.realpath(path)
-        if real != path:
-            return [rule, f"Edit(/{real})"]
-    return [rule]
+    # Where the path runs through a link (on bootc /home links to /var/home; ~/Notebook
+    # may link into ~/Syncthing), Claude Code allows the edit only when both the path as
+    # written and its target are allowed; either alone is refused (Claude Code 2.1.325,
+    # 2026-11-14). Both come from the one realpath() the checks above used.
+    return [f"Edit(/{path})"] + ([f"Edit(/{real})"] if real != path else [])
 
 
 def undo_note(tool_name: str, tool_input: dict, tool_notes: dict[str, str]) -> str:
@@ -236,5 +232,6 @@ def card_for(tool_name: str, tool_input: dict, tool_notes: dict[str, str], root_
         detail = _kv(tool_input)
         title, summary, preview = f"The agent wants to use {tool_name}", tool_name, _clip(detail)
     undo = "" if questions else undo_note(tool_name, tool_input, tool_notes)
-    return Card(title=title, detail=detail, undo=undo, rule=None if questions else always_rule(tool_name, tool_input, root_tools),
+    rules = [] if questions else always_rules(tool_name, tool_input, root_tools)
+    return Card(title=title, detail=detail, undo=undo, rule=rules[0] if rules else None, rules=rules,
                 note=note, summary=summary, preview=preview, questions=questions)

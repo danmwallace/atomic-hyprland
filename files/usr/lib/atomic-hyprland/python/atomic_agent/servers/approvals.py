@@ -8,7 +8,7 @@ import json
 import os
 
 from .. import paths, ui
-from ..policy import card_for, rule_variants
+from ..policy import card_for
 from ..registry import load_registry
 
 DENIED = {"behavior": "deny", "message": "Denied by the user"}
@@ -36,9 +36,8 @@ def save_rule(rule: str) -> None:
     except (OSError, ValueError):
         data = {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
-    for form in rule_variants(rule):
-        if form not in allow:
-            allow.append(form)
+    if rule not in allow:
+        allow.append(rule)
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n")
@@ -67,8 +66,10 @@ def decide(tool_name: str, tool_input: dict, ask=_ask) -> dict:
     choice = ask(card, os.environ.get("HYPR_AGENT_SESSION", ""))
     if tool_name == "AskUserQuestion":
         return _question_result(tool_input, choice)
-    if choice == "always" and card.rule:
-        save_rule(card.rule)
+    if choice == "always":
+        # Exactly the forms checked when the card was built, never re-resolved here.
+        for rule in card.rules:
+            save_rule(rule)
     if choice in ("allow", "always"):
         return {"behavior": "allow", "updatedInput": tool_input}
     return dict(DENIED)

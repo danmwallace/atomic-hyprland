@@ -213,7 +213,8 @@ class CardTest(unittest.TestCase):
 class RuleVariantsTest(unittest.TestCase):
     """On bootc /home links to /var/home. Claude Code then allows an edit only when
     both the path as written and its resolved target are allowed (tested with
-    Claude Code 2.1.325, 2026-11-14), so a saved rule must carry both forms."""
+    Claude Code 2.1.325, 2026-11-14), so a saved rule must carry both forms,
+    worked out once when the card is checked."""
 
     def setUp(self):
         self.root = tmpdir(self)
@@ -228,15 +229,24 @@ class RuleVariantsTest(unittest.TestCase):
             rule = policy.always_rule("Edit", {"file_path": f"{self.link_home}/Code/a.py"})
         self.assertEqual(rule, f"Edit(/{self.link_home}/Code/a.py)")
 
-    def test_symlinked_rule_saves_both_forms(self):
-        rule = f"Edit(/{self.link_home}/Code/a.py)"
-        self.assertEqual(policy.rule_variants(rule), [rule, f"Edit(/{self.real_home}/Code/a.py)"])
+    def test_symlinked_path_gets_both_forms_at_check_time(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            rules = policy.always_rules("Edit", {"file_path": f"{self.link_home}/Code/a.py"})
+        self.assertEqual(rules, [f"Edit(/{self.link_home}/Code/a.py)", f"Edit(/{self.real_home}/Code/a.py)"])
 
-    def test_plain_rules_have_one_form(self):
-        self.assertEqual(policy.rule_variants(f"Edit(/{self.real_home}/Code/a.py)"),
-                         [f"Edit(/{self.real_home}/Code/a.py)"])
-        self.assertEqual(policy.rule_variants("Bash(id)"), ["Bash(id)"])
-        self.assertEqual(policy.rule_variants("mcp__hyprland__focus_window"), ["mcp__hyprland__focus_window"])
+    def test_plain_paths_and_other_tools_have_one_form(self):
+        with mock.patch.dict(os.environ, {"HOME": self.real_home, "PATH": "/usr/bin"}):
+            self.assertEqual(policy.always_rules("Edit", {"file_path": f"{self.real_home}/Code/a.py"}),
+                             [f"Edit(/{self.real_home}/Code/a.py)"])
+        self.assertEqual(policy.always_rules("Bash", {"command": "id"}), ["Bash(id)"])
+        self.assertEqual(policy.always_rules("mcp__hyprland__focus_window", {}), ["mcp__hyprland__focus_window"])
+        self.assertEqual(policy.always_rules("Bash", {"command": "a && b"}), [])
+
+    def test_card_carries_the_checked_forms(self):
+        with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
+            card = policy.card_for("Edit", {"file_path": f"{self.link_home}/Code/a.py", "old_string": "a", "new_string": "b"}, {}, set())
+        self.assertEqual(card.rule, f"Edit(/{self.link_home}/Code/a.py)")
+        self.assertEqual(card.rules, [f"Edit(/{self.link_home}/Code/a.py)", f"Edit(/{self.real_home}/Code/a.py)"])
 
     def test_dotfiles_still_refused_through_the_link(self):
         with mock.patch.dict(os.environ, {"HOME": self.link_home, "PATH": "/usr/bin"}):
