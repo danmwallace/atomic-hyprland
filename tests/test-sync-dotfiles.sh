@@ -148,6 +148,12 @@ echo gone > "$HOME/.config/atomic-hyprland/current/theme.name"; echo again > "${
 rc=0; out="$(HYPR_THEME_DEFAULT=t "${ensure}" 2>&1)" || rc=$?
 expect "ensure-theme falls back when the chosen theme is gone" 'test $rc = 0 && [[ "$out" == *"falling back"* ]]'
 expect "ensure-theme fallback records the default" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = t'
+# a chosen theme that still exists is kept (hypr-theme list marks it as current)
+mkdir -p "${share}/themes/u/backgrounds"; printf 'background = "#111111"\n' > "${share}/themes/u/colors.toml"
+echo u > "$HOME/.config/atomic-hyprland/current/theme.name"; echo again-u > "${share}/stamp"
+out="$(HYPR_THEME_DEFAULT=t "${ensure}" 2>&1)"
+expect "ensure-theme keeps a chosen non-default theme" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = u && [[ "$out" != *"falling back"* ]]'
+echo t > "$HOME/.config/atomic-hyprland/current/theme.name"
 echo other > "${share}/stamp"; echo 'y={{ background }}' > "${share}/themed/y.tpl"
 HYPR_THEME_DEFAULT=t "${ensure}"
 expect "ensure-theme re-renders when the image stamp changes" 'test -f "$HOME/.config/atomic-hyprland/current/theme/y"'

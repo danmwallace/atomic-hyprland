@@ -56,11 +56,11 @@ portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
 build from the default palette (Linux Chromium reads only system-wide policy).
 
 ```bash
-hypr-theme list                 # 17 shipped (below) + yours
+hypr-theme list                 # 17 shipped (below) + yours; the current one is marked " *"
 hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland and swaync, restarts bar/swaybg, pushes gsettings
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
-hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
+hypr-theme apply                # push gsettings / Flatpak override for the current theme (login does this too)
 hypr-theme oled on              # true-black backgrounds for any theme, black wallpaper first (off / no arg: status)
 ```
 

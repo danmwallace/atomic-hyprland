@@ -21,8 +21,19 @@ export HYPR_THEME_NO_APPLY=1
 export HOME="$(mktemp -d)"
 unset HYPRLAND_INSTANCE_SIGNATURE
 
+# list exits 0 with no user themes directory (the usual case): ensure-theme
+# runs it under pipefail, and a failure there reset the user's theme on every
+# image update
+check hypr-theme list
 check bash -c 'hypr-theme list | grep -qx "fixture"'
 check hypr-theme set fixture
+# list marks the current theme, and only that one
+check bash -c 'hypr-theme list | grep -qx "fixture \*"'
+check test "$(hypr-theme list | grep -c " \*$")" = 1
+# swap_in exchanges theme/ and next-theme/ in one rename when a theme is already there
+check bash -c 'bin=$(mktemp -d); printf "#!/bin/sh\necho \"\$*\" >> %s/mv.log\nexec /usr/bin/mv \"\$@\"\n" "$bin" > "$bin/mv"; chmod +x "$bin/mv"; PATH="$bin:$PATH" hypr-theme set fixture && grep -q -- "--exchange" "$bin/mv.log" && grep -qx "bg=#0a0a0a strip=39ff14 rgb=57,255,20 cur=breeze_cursors" "$HYPR_THEME_STATE/current/theme/sample.conf" && ! test -e "$HYPR_THEME_STATE/current/next-theme"'
+# ...and falls back to remove-and-rename where the filesystem cannot exchange
+check bash -c 'bin=$(mktemp -d); printf "#!/bin/sh\ncase \"\$*\" in *--exchange*) exit 1;; esac\nexec /usr/bin/mv \"\$@\"\n" > "$bin/mv"; chmod +x "$bin/mv"; echo stale > "$HYPR_THEME_STATE/current/theme/stale"; PATH="$bin:$PATH" hypr-theme set fixture && ! test -e "$HYPR_THEME_STATE/current/theme/stale" && test -f "$HYPR_THEME_STATE/current/theme/sample.conf" && ! test -e "$HYPR_THEME_STATE/current/next-theme"'
 check grep -qx 'bg=#0a0a0a strip=39ff14 rgb=57,255,20 cur=breeze_cursors' "$HYPR_THEME_STATE/current/theme/sample.conf"
 check test "$(cat "$HYPR_THEME_STATE/current/theme.name")" = fixture
 check test "$(hypr-theme current)" = fixture
@@ -40,8 +51,8 @@ check bash -c 'mkdir -p "$HYPR_THEME_STATE/themes/fixture" && printf "background
 check bash -c 'mkdir -p "$HYPR_THEME_STATE/themed" && echo "mine={{ accent }}" > "$HYPR_THEME_STATE/themed/sample.conf.tpl" && hypr-theme refresh && grep -qx "mine=#39ff14" "$HYPR_THEME_STATE/current/theme/sample.conf"'
 # refresh is idempotent: checksum unchanged, no rewrite
 check bash -c 'before=$(stat -c %Y "$HYPR_THEME_STATE/current/theme/sample.conf"); sleep 1; hypr-theme refresh; test "$(stat -c %Y "$HYPR_THEME_STATE/current/theme/sample.conf")" = "$before"'
-# unresolved placeholder is an error naming template and key, exit 2, current theme untouched
-check bash -c 'echo "x={{ nope }}" > "$HYPR_THEME_STATE/themed/bad.tpl"; hypr-theme refresh 2>&1 | grep -q "bad.tpl: unresolved placeholder {{ nope }}"; rc=${PIPESTATUS[0]}; rm "$HYPR_THEME_STATE/themed/bad.tpl"; test "$rc" = 2'
+# unresolved placeholder is an error naming theme, template and key, exit 2, current theme untouched
+check bash -c 'echo "x={{ nope }}" > "$HYPR_THEME_STATE/themed/bad.tpl"; hypr-theme refresh 2>&1 | grep -q "theme fixture: bad.tpl: unresolved placeholder {{ nope }}"; rc=("${PIPESTATUS[@]}"); rm "$HYPR_THEME_STATE/themed/bad.tpl"; test "${rc[0]}" = 2 && test "${rc[1]}" = 0'
 check grep -qx 'mine=#39ff14' "$HYPR_THEME_STATE/current/theme/sample.conf"
 check bash -c '! test -e "$HYPR_THEME_STATE/current/next-theme"'
 # bad names (Review Focus 1)
@@ -55,19 +66,19 @@ check test "$(hypr-theme render "$HYPR_THEME_SHARE/themed/sample.conf.tpl" "$HYP
 # user themes with a name of their own appear in list and can be set
 check bash -c 'mkdir -p "$HYPR_THEME_STATE/themes/mine/backgrounds"; cp "$HYPR_THEME_SHARE/themes/fixture/colors.toml" "$HYPR_THEME_STATE/themes/mine/"; hypr-theme list | grep -qx mine; hypr-theme set mine; test "$(hypr-theme current)" = mine; hypr-theme set fixture'
 # no session (Review Focus 3): unset the signature, drop NO_APPLY, stub the apply commands to a logging PATH
-check bash -c 'unset HYPR_THEME_NO_APPLY HYPRLAND_INSTANCE_SIGNATURE; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture && ! test -e "$bin/log"'
+check bash -c 'unset HYPR_THEME_NO_APPLY HYPRLAND_INSTANCE_SIGNATURE; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture && ! test -e "$bin/log"'
 # with a session the apply commands run
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture && grep -q called-hyprctl "$bin/log" && grep -q called-systemctl "$bin/log" && grep -q called-gsettings "$bin/log" && grep -q called-flatpak "$bin/log"'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture && grep -q called-hyprctl "$bin/log" && grep -q called-systemctl "$bin/log" && grep -q called-gsettings "$bin/log" && grep -q called-flatpak "$bin/log"'
 # hook dir runs on apply (signature set, stub PATH, no --no-apply) and gets the theme name
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; mkdir -p "$HYPR_THEME_STATE/hooks/theme-set.d"; printf "#!/bin/sh\necho \$1 > %s/hook.out\n" "$HYPR_THEME_STATE" > "$HYPR_THEME_STATE/hooks/theme-set.d/10-test"; chmod +x "$HYPR_THEME_STATE/hooks/theme-set.d/10-test"; PATH="$bin:$PATH" hypr-theme set fixture && test "$(cat "$HYPR_THEME_STATE/hook.out")" = fixture'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; mkdir -p "$HYPR_THEME_STATE/hooks/theme-set.d"; printf "#!/bin/sh\necho \$1 > %s/hook.out\n" "$HYPR_THEME_STATE" > "$HYPR_THEME_STATE/hooks/theme-set.d/10-test"; chmod +x "$HYPR_THEME_STATE/hooks/theme-set.d/10-test"; PATH="$bin:$PATH" hypr-theme set fixture && test "$(cat "$HYPR_THEME_STATE/hook.out")" = fixture'
 # hooks shipped in the image (share/hooks/theme-set.d) run too, before the user's
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; rm -f "$HYPR_THEME_STATE/shipped.out"; PATH="$bin:$PATH" hypr-theme set fixture && test "$(cat "$HYPR_THEME_STATE/shipped.out")" = "shipped fixture"'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; rm -f "$HYPR_THEME_STATE/shipped.out"; PATH="$bin:$PATH" hypr-theme set fixture && test "$(cat "$HYPR_THEME_STATE/shipped.out")" = "shipped fixture"'
 # a user hook of the same name replaces the shipped one; a non-executable one just disables it
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; rm -f "$HYPR_THEME_STATE/shipped.out"; : > "$HYPR_THEME_STATE/hooks/theme-set.d/50-shipped"; PATH="$bin:$PATH" hypr-theme set fixture; rc=$?; rm "$HYPR_THEME_STATE/hooks/theme-set.d/50-shipped"; test $rc = 0 && ! test -e "$HYPR_THEME_STATE/shipped.out"'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; rm -f "$HYPR_THEME_STATE/shipped.out"; : > "$HYPR_THEME_STATE/hooks/theme-set.d/50-shipped"; PATH="$bin:$PATH" hypr-theme set fixture; rc=$?; rm "$HYPR_THEME_STATE/hooks/theme-set.d/50-shipped"; test $rc = 0 && ! test -e "$HYPR_THEME_STATE/shipped.out"'
 # --no-apply wins over a live session
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\necho called >> %s\n" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture --no-apply && ! test -e "$bin/log"'
-# apply: desktop settings only (gsettings, flatpak, kvantum, hooks), no reload/restarts; needs a session
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak kvantummanager pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && grep -q called-gsettings "$bin/log" && grep -q called-flatpak "$bin/log" && ! grep -q called-hyprctl "$bin/log" && ! grep -q called-systemctl "$bin/log"'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\necho called >> %s\n" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme set fixture --no-apply && ! test -e "$bin/log"'
+# apply: desktop settings only (gsettings, flatpak, hooks), no reload/restarts; needs a session
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in hyprctl systemctl gsettings flatpak pkill swaybg; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && grep -q called-gsettings "$bin/log" && grep -q called-flatpak "$bin/log" && ! grep -q called-hyprctl "$bin/log" && ! grep -q called-systemctl "$bin/log"'
 # apply needs only the session bus (it runs before the compositor too); without one it does nothing
 check bash -c 'unset HYPR_THEME_NO_APPLY HYPRLAND_INSTANCE_SIGNATURE DBUS_SESSION_BUS_ADDRESS; export XDG_RUNTIME_DIR=$(mktemp -d); bin=$(mktemp -d); for c in gsettings flatpak; do printf "#!/bin/sh\necho called >> %s\n" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && ! test -e "$bin/log"'
 check bash -c 'unset HYPR_THEME_NO_APPLY HYPRLAND_INSTANCE_SIGNATURE; export DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent; bin=$(mktemp -d); for c in gsettings flatpak hyprctl systemctl; do printf "#!/bin/sh\necho called-%s >> %s\n" "$c" "$bin/log" > "$bin/$c"; chmod +x "$bin/$c"; done; PATH="$bin:$PATH" hypr-theme apply && grep -q called-gsettings "$bin/log" && ! grep -qE "called-(hyprctl|systemctl)" "$bin/log"'
@@ -77,7 +88,7 @@ check bash -c 'd=$(mktemp -d); printf "accent = \"#39ff14\"\n" > $d/c.toml; echo
 # a colors.toml without a trailing newline keeps its last key
 check bash -c 'd=$(mktemp -d); printf "background = \"#0a0a0a\"\naccent = \"#39ff14\"" > $d/c.toml; echo "a={{ accent }}" > $d/t.tpl; test "$(hypr-theme render $d/t.tpl $d/c.toml)" = "a=#39ff14"'
 # the Flatpak override must expose the theme directory the gtk.css symlink points into
-check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in gsettings kvantummanager; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; printf "#!/bin/sh\necho \"\$@\" > %s/fp\n" "$bin" > "$bin/flatpak"; chmod +x "$bin/flatpak"; PATH="$bin:$PATH" hypr-theme apply && grep -q -- "--filesystem=xdg-config/atomic-hyprland/current/theme:ro" "$bin/fp"'
+check bash -c 'unset HYPR_THEME_NO_APPLY; export HYPRLAND_INSTANCE_SIGNATURE=test; bin=$(mktemp -d); for c in gsettings; do printf "#!/bin/sh\n" > "$bin/$c"; chmod +x "$bin/$c"; done; printf "#!/bin/sh\necho \"\$@\" > %s/fp\n" "$bin" > "$bin/flatpak"; chmod +x "$bin/flatpak"; PATH="$bin:$PATH" hypr-theme apply && grep -q -- "--filesystem=xdg-config/atomic-hyprland/current/theme:ro" "$bin/fp"'
 # OLED mode: true black backgrounds for whatever theme is set, black wallpaper first
 # (start from the shipped fixture: drop the overlay and user template earlier tests added)
 rm -rf "$HYPR_THEME_STATE/themes/fixture" "$HYPR_THEME_STATE/themed/sample.conf.tpl"
