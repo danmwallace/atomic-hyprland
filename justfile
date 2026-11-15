@@ -15,11 +15,14 @@ build:
         --build-arg IMAGE_VERSION={{version}} \
         -t {{image}}:{{tag}} -t {{image}}:{{tag}}-{{version}} .
 
-# Host-side CI helper tests, then the in-image smoke + dotfile sync tests
-test:
+# Host tests, then the image tests
+test: test-host test-image
+
+# Host-side tests: scripts, configs, CI helpers. No image needed, so CI runs
+# these before the build.
+test-host:
     bash tests/test-ci-tags.sh
     bash tests/test-build-pins.sh
-    bash tests/test-nvidia-build.sh
     bash tests/test-ci-push.sh
     bash tests/test-openrgb-hook.sh
     bash tests/test-claude-usage.sh
@@ -35,6 +38,11 @@ test:
     bash tests/test-terminal.sh
     bash tests/test-agent.sh
     bash tests/test-iso.sh
+
+# Tests that need the built image: the NVIDIA build script inside it, then the
+# in-image smoke and dotfile sync tests
+test-image:
+    bash tests/test-nvidia-build.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
@@ -93,8 +101,10 @@ iso:
     bash tests/test-iso.sh output/bootiso/install.iso
     ls -lh output/bootiso/install.iso
 
-# Lint the workflow (actionlint) via podman; nothing installed locally
+# Lint the workflow (actionlint) via podman; nothing installed locally. Both
+# images are pinned (Renovate bumps them); Renovate's comes from ghcr, out of
+# reach of Docker Hub's pull limits.
 lint-ci:
-    podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:latest -color
+    podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:1.7.12 -color
     podman run --rm -v ./renovate.json:/usr/src/app/renovate.json:ro,Z \
-        docker.io/renovate/renovate:latest renovate-config-validator --strict
+        ghcr.io/renovatebot/renovate:44.239.1 renovate-config-validator --strict

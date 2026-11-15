@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 # hypr-theme: render a theme's templates and apply it to the running desktop.
 #
-#   hypr-theme list
+#   hypr-theme list                    every theme; the current one is marked " *"
 #   hypr-theme current
 #   hypr-theme set <name> [--keep-background] [--no-apply]
 #   hypr-theme refresh                 re-render the current theme (after an image update)
-#   hypr-theme apply                   push gsettings/Flatpak/Kvantum for the current theme (login)
+#   hypr-theme apply                   push gsettings/Flatpak for the current theme (login)
 #   hypr-theme bg next | bg set <file>
 #   hypr-theme render <tpl> <colors.toml>   render one template to stdout
 #   hypr-theme oled [on|off]           true-black backgrounds for any theme (OLED panels)
@@ -48,10 +48,20 @@ theme_exists() {
     [[ -n "$(shipped_dir "$1")" || -f "${state}/themes/$1/colors.toml" ]]
 }
 
+current_name() { [[ -f "${current}/theme.name" ]] && cat "${current}/theme.name" || echo "${default_theme}"; }
+
+# One name per line; the current theme (as `current` reports it) gets " *".
+# if, not &&: under pipefail a false [[ -d ]] (no user themes directory, the
+# usual case) would make list fail.
 list_themes() {
-    { [[ -d "${share}/themes" ]] && find "${share}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n';
-      [[ -d "${state}/themes" ]] && find "${state}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'; } \
-        | sort -u | while IFS= read -r t; do theme_exists "${t}" && echo "${t}"; done
+    local t cur
+    cur="$(current_name)"
+    { if [[ -d "${share}/themes" ]]; then find "${share}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'; fi
+      if [[ -d "${state}/themes" ]]; then find "${state}/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'; fi; } \
+        | sort -u | while IFS= read -r t; do
+            theme_exists "${t}" || continue
+            if [[ "${t}" == "${cur}" ]]; then echo "${t} *"; else echo "${t}"; fi
+        done
 }
 
 # Build the sed script that renders one colors.toml.
@@ -76,12 +86,13 @@ sed_script_for() {
     printf 's/{{ *home *}}/%s/g\n' "$(printf '%s' "${HOME}" | sed 's/[\/&]/\\&/g')"
 }
 
-# render <tpl> <colors.toml> -> stdout; exit 2 on an unresolved placeholder.
+# render <tpl> <colors.toml> [theme] -> stdout; exit 2 on an unresolved
+# placeholder. The error names the theme when there is one.
 render() {
-    local tpl="$1" colors="$2" out leftover
+    local tpl="$1" colors="$2" theme="${3:-}" out leftover
     out="$(sed -f <(sed_script_for "${colors}") "${tpl}")"
     if leftover="$(grep -oE '\{\{ *[a-z0-9_]+ *\}\}' <<< "${out}" | head -1)" && [[ -n "${leftover}" ]]; then
-        die "$(basename "${tpl}"): unresolved placeholder ${leftover}" 2
+        die "${theme:+theme ${theme}: }$(basename "${tpl}"): unresolved placeholder ${leftover}" 2
     fi
     printf '%s\n' "${out}"
 }
@@ -119,15 +130,23 @@ build_next() {
             [[ -e "${tpl}" ]] || continue
             out="${next}/$(basename "${tpl%.tpl}")"
             [[ -e "${out}" ]] && continue
-            render "${tpl}" "${colors}" > "${out}"
+            render "${tpl}" "${colors}" "${name}" > "${out}"
         done
     done
 }
 
+# Swap next-theme/ in. Where there is a theme already, one renameat2
+# exchange swaps the two directories, so theme/ never goes missing under an app
+# reading it; a filesystem that cannot exchange (NFS, for one) gets the old
+# remove-then-rename. -T: without it mv moves next-theme into theme/.
 swap_in() {
     local name="$1"
-    rm -rf "${current}/theme"
-    mv "${current}/next-theme" "${current}/theme"
+    if [[ -d "${current}/theme" ]] && mv --exchange -T "${current}/next-theme" "${current}/theme" 2>/dev/null; then
+        rm -rf "${current}/next-theme"
+    else
+        rm -rf "${current}/theme"
+        mv "${current}/next-theme" "${current}/theme"
+    fi
     printf '%s\n' "${name}" > "${current}/theme.name"
     checksum_for "${name}" > "${current}/.checksum"
 }
@@ -188,7 +207,8 @@ have() { command -v "$1" >/dev/null 2>&1; }
 restart_swaybg() { want_apply && have systemctl && systemctl --user try-restart swaybg.service >/dev/null 2>&1 || true; }
 
 # apply_settings: the desktop settings that live outside the rendered files
-# (gsettings, the Flatpak override, Kvantum) plus the user's hooks. Run by
+# (gsettings, the Flatpak override) plus the user's hooks. Qt needs nothing
+# here: skel's kvantum.kvconfig points Kvantum at the shipped KvGnomeDark. Run by
 # `set`, `refresh` and, at every login, by `hypr-theme apply` from autostart.
 apply_settings() {
     local name="$1" cursor icons
@@ -205,9 +225,6 @@ apply_settings() {
     have flatpak && flatpak override --user --env=GTK_THEME=Adwaita:dark \
         --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro \
         --filesystem=xdg-config/atomic-hyprland/current/theme:ro >/dev/null 2>&1 || true
-    if have kvantummanager && [[ -d "${HOME}/.config/Kvantum/atomic-hyprland" ]]; then
-        kvantummanager --set atomic-hyprland >/dev/null 2>&1 || true
-    fi
     run_hooks "${name}"
 }
 
@@ -312,7 +329,7 @@ cmd_bg() {
 
 case "${1:-}" in
     list) list_themes ;;
-    current) [[ -f "${current}/theme.name" ]] && cat "${current}/theme.name" || echo "${default_theme}" ;;
+    current) current_name ;;
     set) shift; cmd_set "$@" ;;
     refresh) cmd_refresh ;;
     apply) cmd_apply ;;

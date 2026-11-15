@@ -357,6 +357,9 @@ check bash -c 'nvidia-ctk --version | grep -qi "version"'
 check test "$(systemctl is-enabled nvidia-cdi-refresh.path 2>/dev/null)" = enabled
 check test "$(systemctl is-enabled nvidia-persistenced.service 2>/dev/null)" = enabled
 check bash -c '! dnf5 repolist --enabled 2>/dev/null | grep -qi nvidia'
+# ublue's installer disables fedora-cisco-openh264; 25-nvidia.sh puts it back
+# as the base shipped it, and base-main ships it enabled.
+check bash -c 'dnf5 repolist --enabled 2>/dev/null | grep -q "^fedora-cisco-openh264 "'
 check bash -c '! ls /usr/share/vulkan/icd.d/nouveau_icd.*.json 2>/dev/null | grep -q .'
 
 kargs=/usr/lib/bootc/kargs.d/00-nvidia.toml

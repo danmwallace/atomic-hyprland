@@ -51,4 +51,23 @@ check bash -c 'just --show iso | grep -q "bash tests/test-iso.sh output/bootiso/
 check bash -c 'just --show iso | grep -q -- "--net=host"'
 check bash -c '! cat build/*.toml | grep -vE "^\s*#" | grep -qiE "unattended|clearpart|zerombr|autopart"'
 
+# Host tests (no image) and image tests are separate recipes, so CI can run the
+# host ones before the build; `just test` still runs both.
+check bash -c 'just --show test-host | grep -q "bash tests/test-ci-tags.sh"'
+check bash -c '! just --show test-host | grep -q podman'
+check bash -c 'just --show test-host | grep -q "bash tests/test-hypr-theme.sh"'
+# test-nvidia-build.sh runs build/25-nvidia.sh inside the built image
+check bash -c 'just --show test-image | grep -q "bash tests/test-nvidia-build.sh"'
+check bash -c 'just --show test-image | grep -q "bash /tests/image-smoke.sh"'
+check bash -c 'just --show test | grep -Eq "^test: test-host test-image"'
+# every host test script in tests/ is in one of the two recipes
+check bash -c 'for t in tests/test-*.sh; do [ "$t" = tests/test-sync-dotfiles.sh ] && continue; { just --show test-host; just --show test-image; } 2>/dev/null | grep -q "bash $t" || { echo "missing $t"; exit 1; }; done'
+
+# lint-ci pins its images (no :latest pulls, no Docker Hub rate limits for
+# Renovate's image) and Renovate bumps them.
+check bash -c '! just --show lint-ci | grep -q ":latest"'
+check bash -c 'just --show lint-ci | grep -Eq "docker.io/rhysd/actionlint:[0-9]+\.[0-9]+\.[0-9]+ "'
+check bash -c 'just --show lint-ci | grep -Eq "ghcr.io/renovatebot/renovate:[0-9]+\.[0-9]+\.[0-9]+ "'
+check jq -e '.customManagers[] | select(.managerFilePatterns[] | test("justfile"))' renovate.json
+
 exit "$fail"

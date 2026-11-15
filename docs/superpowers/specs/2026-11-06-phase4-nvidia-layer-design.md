@@ -171,10 +171,18 @@ and "Known gaps" line are updated.
   then daemon-reload and restart `ollama.service` (a new `Restart ollama`
   handler; the playbook only has `Restart litellm` today). The label
   **(my call)** is what the installer's `nvidia-container.pp` module exists
-  for: under enforcing, plain `container_t` cannot open `/dev/nvidia*`
-  (`container_use_devices` is off in this image) and Ollama would silently
-  fall back to CPU. It renders as `--security-opt label=type:nvidia_container_t`
+  for. It renders as `--security-opt label=type:nvidia_container_t`
   (generator dry-run). Untestable until there is a GPU; the runbook checks it.
+
+  **Correction (after the Alienware run).** The reasoning behind the label
+  was wrong under CDI: this spec claimed plain `container_t` cannot open
+  `/dev/nvidia*` and Ollama would fall back to CPU. With CDI the device nodes
+  inside the container are `container_file_t`, which `container_t` can open
+  and mmap; `nvidia_container_t` can only open them, so under it
+  `nvidia-smi` works but CUDA fails and Ollama runs on the CPU. The drop-in
+  therefore must not set `SecurityLabelType`; under `container_t` the model
+  loads into VRAM. The README's NVIDIA section and runbook have the
+  measured result.
 - When false: ensure the file is absent (same handler), so turning it off
   works.
 - The Alienware gets `hypr_desktop_ollama_gpu: true` in its `host_vars` when

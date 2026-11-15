@@ -19,7 +19,8 @@ fi
 default="${HYPR_THEME_DEFAULT:-monochrome-green}"
 name="$(cat "${state}/current/theme.name" 2>/dev/null || echo "${default}")"
 export HYPR_THEME_SHARE="${share}" HYPR_THEME_STATE="${state}"
-if ! hypr-theme list | grep -qx -- "${name}"; then
+# list marks the current theme with " *"; compare the name alone
+if ! hypr-theme list | cut -d' ' -f1 | grep -qx -- "${name}"; then
     echo "atomic-hyprland theme: '${name}' no longer exists, falling back to ${default}" >&2
     name="${default}"
 fi

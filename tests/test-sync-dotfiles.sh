@@ -99,15 +99,19 @@ expect "local.jsonc never rewritten" 'grep -q custom/x "$HOME/.config/waybar/loc
 expect "local files not in managed list" '! grep -q "local.jsonc" "$share/managed-files.txt"'
 
 # 8. retired paths are removed; user files beside them survive (Review Focus 4)
+#    and the managed file that replaced the retired one (waybar/config.jsonc) is installed
 printf '# written by earlier images\n.config/waybar/config\n.config/hypr/conf/\n.config/nwg-drawer/\n' > "${share}/skel.retired"
+printf '{"layer": "top"}\n' > "${share}/skel/.config/waybar/config.jsonc"
+grep -qx '.config/waybar/config.jsonc' "${share}/managed-files.txt" || echo '.config/waybar/config.jsonc' >> "${share}/managed-files.txt"
 export HOME="$(mktemp -d)"; mkdir -p "$HOME/.config/waybar" "$HOME/.config/hypr/conf" "$HOME/.config/nwg-drawer"
 echo old > "$HOME/.config/waybar/config"; echo old > "$HOME/.config/hypr/conf/look.lua"; echo old > "$HOME/.config/nwg-drawer/drawer.css"
-echo mine > "$HOME/.config/waybar/local.jsonc"
+echo mine > "$HOME/.config/waybar/local.jsonc"; mine="$(mktemp)"; cp "$HOME/.config/waybar/local.jsonc" "${mine}"
 "${sync}"
 expect "old waybar/config removed" '! test -e "$HOME/.config/waybar/config"'
 expect "old conf dir removed" '! test -e "$HOME/.config/hypr/conf"'
 expect "old nwg-drawer removed" '! test -e "$HOME/.config/nwg-drawer"'
-expect "user local.jsonc untouched by retirement" 'test "$(cat "$HOME/.config/waybar/local.jsonc")" = mine'
+expect "user local.jsonc untouched by retirement" 'cmp -s "${mine}" "$HOME/.config/waybar/local.jsonc"'
+expect "managed config.jsonc installed beside the retired config" 'cmp -s "$share/skel/.config/waybar/config.jsonc" "$HOME/.config/waybar/config.jsonc"'
 expect "a retired file entry never removes a directory" 'printf ".config/waybar\n" > "$share/skel.retired"; mkdir -p "$HOME/.config/waybar"; echo x > "$share/stamp"; "$sync"; test -d "$HOME/.config/waybar"'
 
 # 8b. a retired directory that is a symlink: the link is removed, its target is untouched
@@ -148,6 +152,12 @@ echo gone > "$HOME/.config/atomic-hyprland/current/theme.name"; echo again > "${
 rc=0; out="$(HYPR_THEME_DEFAULT=t "${ensure}" 2>&1)" || rc=$?
 expect "ensure-theme falls back when the chosen theme is gone" 'test $rc = 0 && [[ "$out" == *"falling back"* ]]'
 expect "ensure-theme fallback records the default" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = t'
+# a chosen theme that still exists is kept (hypr-theme list marks it as current)
+mkdir -p "${share}/themes/u/backgrounds"; printf 'background = "#111111"\n' > "${share}/themes/u/colors.toml"
+echo u > "$HOME/.config/atomic-hyprland/current/theme.name"; echo again-u > "${share}/stamp"
+out="$(HYPR_THEME_DEFAULT=t "${ensure}" 2>&1)"
+expect "ensure-theme keeps a chosen non-default theme" 'test "$(cat "$HOME/.config/atomic-hyprland/current/theme.name")" = u && [[ "$out" != *"falling back"* ]]'
+echo t > "$HOME/.config/atomic-hyprland/current/theme.name"
 echo other > "${share}/stamp"; echo 'y={{ background }}' > "${share}/themed/y.tpl"
 HYPR_THEME_DEFAULT=t "${ensure}"
 expect "ensure-theme re-renders when the image stamp changes" 'test -f "$HOME/.config/atomic-hyprland/current/theme/y"'

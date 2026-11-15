@@ -8,7 +8,9 @@ A bootc-built Fedora Hyprland desktop image. See docs/superpowers/specs/ for the
 just check-kernel   # base and akmods on the same kernel
 just lint-ci        # actionlint + renovate-config-validator via podman
 just build          # rootless podman build, tags :44 and :44-<date>-<sha>
-just test           # host tests (theme engine, palettes, bar, includes, pins, CI helpers), in-image smoke + dotfile sync
+just test           # test-host, then test-image
+just test-host      # host tests only (theme engine, palettes, bar, includes, pins, CI helpers); no image needed, CI runs them before the build
+just test-image     # NVIDIA build script, in-image smoke + dotfile sync (needs the built image)
 just qcow2          # sudo; output/qcow2/disk.qcow2 for the srv01 VM
 ```
 
@@ -56,11 +58,11 @@ portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
 build from the default palette (Linux Chromium reads only system-wide policy).
 
 ```bash
-hypr-theme list                 # 17 shipped (below) + yours
+hypr-theme list                 # 17 shipped (below) + yours; the current one is marked " *"
 hypr-theme set tokyo-night      # renders, swaps, reloads Hyprland and swaync, restarts bar/swaybg, pushes gsettings
 hypr-theme bg next              # next wallpaper from the theme's backgrounds/ and ~/Pictures/Wallpapers (SUPER+SHIFT+T)
 hypr-theme refresh              # re-render after an image update changed a template (login does this for you)
-hypr-theme apply                # push gsettings / Flatpak override / Kvantum for the current theme (login does this too)
+hypr-theme apply                # push gsettings / Flatpak override for the current theme (login does this too)
 hypr-theme oled on              # true-black backgrounds for any theme, black wallpaper first (off / no arg: status)
 ```
 
@@ -215,7 +217,10 @@ the unique `44-<date>-<sha>` (or `dev-<branch>`) tag via `build/ci-push.sh`,
 sign that digest with cosign 3.1.3 in the legacy simple-signing format (the
 only one bootc, podman and skopeo verify), and only then re-point `44` and
 `latest` at the same digest. No release tag ever names an unsigned image. Runs
-on `main` are never cancelled mid-publish. The ghcr package must grant the
+on `main` are never cancelled mid-publish. A nightly publishes even when
+nothing changed: the date is in the version label and the stamp, and the
+runner has no layer cache, so every nightly is a new digest that machines
+download and stage. The ghcr package must grant the
 repository Write access under "Manage Actions access" for the job token to
 push (one-time setting).
 
@@ -276,8 +281,10 @@ without the hardware: `hypr-test` has no GPU and runs the same image.
   `/etc/containers/systemd/ollama.container.d/10-nvidia.conf`.
 - **Hyprland's NVIDIA environment is per machine** too: it goes in
   `~/.config/hypr/local.lua` (see the Alienware runbook), never in the image.
-- `podman build` on its own fails: `AKMODS_IMAGE` has no default. Use
-  `just build`, which passes the pinned pair.
+- `podman build` on its own fails with `Error: determining starting point for
+  build: no FROM statement found`: `AKMODS_IMAGE` has no default, so the
+  akmods stage has an empty `FROM`. Use `just build`, which passes the pinned
+  pair.
 
 ## VM runbook
 

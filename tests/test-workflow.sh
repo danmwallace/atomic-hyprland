@@ -59,4 +59,20 @@ check bash -c "grep -A3 'name: Install just\$' $wf | grep -q 'continue-on-error:
 check bash -c "grep -A2 'name: Install just (retry)' $wf | grep -q \"if: steps.just.outcome == 'failure'\""
 check bash -c "grep -A1 'name: Install just\$' $wf | grep -q 'id: just'"
 
+# The signing key has no passphrase; say so instead of relying on empty stdin.
+check python3 -c '
+import sys, yaml
+steps = yaml.safe_load(open(sys.argv[1]))["jobs"]["build"]["steps"]
+env = [s for s in steps if s.get("name") == "Sign"][0].get("env", {})
+sys.exit(0 if env.get("COSIGN_PASSWORD") == "" else 1)' "$wf"
+# Host tests need no image: they run before the 15-minute build, so a broken
+# script fails in a minute. After the build only the image tests run.
+check bash -c "step 'Host tests' run | grep -qx 'just test-host'"
+check test "$(idx 'Host tests')" -lt "$(idx 'Build')"
+check bash -c "step 'Test' run | grep -qx 'just test-image'"
+# ci-tags.sh failing (a dispatch on a tag) must fail the Tags step; a process
+# substitution would swallow its exit status.
+check bash -c "! step 'Tags' run | grep -q '< <(build/ci-tags.sh'"
+check bash -c "step 'Tags' run | grep -q 'build/ci-tags.sh'"
+
 exit "$fail"
