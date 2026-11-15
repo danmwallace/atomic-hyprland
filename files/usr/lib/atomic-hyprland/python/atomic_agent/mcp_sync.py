@@ -250,9 +250,16 @@ def main(argv: list[str]) -> int:
     managed_file = paths.managed_file()
     state = load_managed(managed_file)
     if shutil.which("claude"):
+        # Deny rules go in before the `claude mcp` round-trip (seconds per server), so a
+        # rule another writer dropped is back at once. Rules are pruned only after it, so a
+        # removed server's tools stay denied until its entry is gone.
+        settings = claude_settings_path()
+        wanted = deny_rules(defs)
+        state["claude_deny"] = sync_claude_rules(settings, "deny", wanted | state["claude_deny"], state["claude_deny"])
+        save_managed(managed_file, state)
         state["claude"] = sync_claude(defs, state["claude"])
         save_managed(managed_file, state)
-        state["claude_deny"] = sync_claude_rules(claude_settings_path(), "deny", deny_rules(defs), state["claude_deny"])
+        state["claude_deny"] = sync_claude_rules(settings, "deny", wanted, state["claude_deny"])
         save_managed(managed_file, state)
     gemini_settings = Path(os.environ.get("HOME", "~")).expanduser() / ".gemini" / "settings.json"
     state["gemini"] = sync_gemini(defs, state["gemini"], gemini_settings)
