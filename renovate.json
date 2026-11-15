@@ -95,6 +95,17 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "aome510/spotify-player",
       "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Lint images pinned in the justfile (actionlint, renovate-config-validator)",
+      "managerFilePatterns": [
+        "/^justfile$/"
+      ],
+      "matchStrings": [
+        "(?<depName>(?:docker|ghcr)\\.io/[a-z0-9./_-]+):(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s"
+      ],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [

@@ -58,6 +58,10 @@ jobs:
       - name: Lint CI files
         run: just lint-ci
 
+      # No image needed: a broken script fails here, not after the build.
+      - name: Host tests
+        run: just test-host
+
       - name: Version
         run: echo "IMAGE_VERSION=$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
@@ -68,15 +72,18 @@ jobs:
         run: just build
 
       - name: Test
-        run: just test
+        run: just test-image
 
       # first = the unique tag (44-<version> or dev-<branch>), rest = 44 latest
       # on main, empty elsewhere.
       - name: Tags
         id: tags
         if: github.event_name != 'pull_request'
+        # Command substitution, not < <(...), so a ci-tags.sh error (a
+        # dispatch on a tag) fails the step.
         run: |
-          mapfile -t tags < <(build/ci-tags.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$IMAGE_VERSION")
+          out="$(build/ci-tags.sh "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$IMAGE_VERSION")"
+          mapfile -t tags <<< "$out"
           echo "first=${tags[0]}" >> "$GITHUB_OUTPUT"
           echo "rest=${tags[*]:1}" >> "$GITHUB_OUTPUT"
 
@@ -111,6 +118,8 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          # the key has no passphrase
+          COSIGN_PASSWORD: ""
           FIRST: ${{ steps.tags.outputs.first }}
         run: just sign "$FIRST"
 
