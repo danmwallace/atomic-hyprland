@@ -27,11 +27,15 @@ ghostty
 # on srv01 VMs; harmless elsewhere and disabled by Ansible on bare metal)
 cloud-init
 qemu-guest-agent
-# wallpaper referenced by the rendered hyprland.conf / hyprlock.conf
+# Fedora's stock wallpapers (/usr/share/backgrounds). Nothing in the image
+# references them since the theme engine (each theme ships backgrounds/);
+# kept as extra wallpapers to pick with `hypr-theme bg set`.
 desktop-backgrounds-basic
 # used by the dotfile sync and hermes_native later
 rsync
 curl
+# file sync between machines; the user service is off until a user (or Ansible) enables it
+syncthing
 # Hermes (v0.23.0+) stages its own Node.js build, which needs libatomic.so.1
 libatomic
 
@@ -86,11 +90,8 @@ gvfs
 gvfs-mtp
 # `file` is used by the smoke test to check the rendered wallpapers
 file
-# notifications
 # notifications: popups that time out into a panel the bar's bell opens
 SwayNotificationCenter
-# file sync between machines; the user service is off until a user (or Ansible) enables it
-syncthing
 libnotify
 # system monitor (themed through hypr-theme)
 btop
