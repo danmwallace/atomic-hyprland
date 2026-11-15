@@ -322,6 +322,9 @@ check grep -q 'TimeoutStartSec=0' /usr/lib/systemd/system/ai-images-pull.service
 # Later boots must not touch the registry (offline boot must not fail the unit).
 check bash -c 'grep -c "podman image exists" /usr/lib/systemd/system/ai-images-pull.service | grep -qx 1'
 check bash -c '! grep -q litellm /usr/lib/systemd/system/ai-images-pull.service'
+# The Ollama tag is pinned once, in the Quadlet; the pull unit reads it from there.
+check bash -c '! grep -q "ollama/ollama:" /usr/lib/systemd/system/ai-images-pull.service'
+check grep -q 'ollama.container' /usr/lib/systemd/system/ai-images-pull.service
 check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/ollama.container
 # podman does not create a missing bind-mount source; tmpfiles makes /var/lib/ollama at boot.
 check grep -qE '^d /var/lib/ollama ' /usr/lib/tmpfiles.d/atomic-hyprland.conf
