@@ -22,6 +22,8 @@ check grep -qx 'ExecStart=/usr/bin/hypr-mcp sync' $units/hypr-mcp-sync.service
 check grep -qx 'After=git-repo-sync@claude-config.service atomic-hyprland-claude-statusline.service' $units/hypr-mcp-sync.service
 check grep -qx 'PathChanged=/etc/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
 check grep -qx 'PathChanged=%h/.config/atomic-hyprland/mcp.d' $units/hypr-mcp-sync.path
+# a write that dropped the sync's rules (another writer's lost update) triggers a re-sync
+check grep -qx 'PathChanged=%h/.claude/settings.json' $units/hypr-mcp-sync.path
 check test -d files/etc/atomic-hyprland/mcp.d
 check grep -q 'systemctl --global enable hypr-mcp-sync.service hypr-mcp-sync.path' build/40-finalize.sh
 check test -x files/usr/libexec/atomic-hyprland/mcp-server
