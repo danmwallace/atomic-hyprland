@@ -20,6 +20,7 @@ a server the user added by hand under the same name is left alone.
 """
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -44,7 +45,8 @@ def client_entry(d: ServerDef) -> dict:
         return {"type": "stdio", "command": "hypr-mcp", "args": ["run", d.name]}
     if has_secret_headers(d):
         entry = {k: v for k, v in d.spec.items() if k != "headers"}
-        entry["headersHelper"] = f"hypr-mcp headers {d.name}"
+        # Claude Code runs this through a shell; a hand-written registry name could hold spaces.
+        entry["headersHelper"] = f"hypr-mcp headers {shlex.quote(d.name)}"
         return entry
     return dict(d.spec)
 
@@ -85,10 +87,17 @@ def gemini_entry(d: ServerDef) -> dict | None:
     return entry
 
 
+def _dump(data) -> str:
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
 def _write_atomic(path: Path, text: str) -> None:
+    # A symlinked file (dotfiles) is updated at its target, so the link survives.
+    if path.is_symlink():
+        path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
     os.replace(tmp, path)
 
@@ -98,10 +107,13 @@ def sync_gemini(defs: dict[str, ServerDef], managed: set[str], settings: Path) -
         return set()
     try:
         data = json.loads(settings.read_text()) if settings.exists() else {}
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         _warn(f"not touching {settings}: {exc}")
         return managed
-    servers = data.setdefault("mcpServers", {})
+    servers = data.setdefault("mcpServers", {}) if isinstance(data, dict) else None
+    if not isinstance(servers, dict):
+        _warn(f"not touching {settings}: not a JSON object with an mcpServers object")
+        return managed
     for name in managed - set(defs):
         servers.pop(name, None)
     new_managed: set[str] = set()
@@ -117,7 +129,7 @@ def sync_gemini(defs: dict[str, ServerDef], managed: set[str], settings: Path) -
             continue
         servers[name] = entry
         new_managed.add(name)
-    _write_atomic(settings, json.dumps(data, indent=2) + "\n")
+    _write_atomic(settings, _dump(data))
     return new_managed
 
 
@@ -153,8 +165,14 @@ def sync_claude_rules(settings: Path, kind: str, wanted: set[str], managed: set[
     new = [r for r in current if r not in drop] + sorted(add)
     if new != current:
         mode = settings.stat().st_mode & 0o777 if settings.exists() else 0o600
-        data.setdefault("permissions", perms)[kind] = new
-        _write_atomic(settings, json.dumps(data, indent=2) + "\n")
+        perms = data.setdefault("permissions", perms)
+        if new:
+            perms[kind] = new
+        else:  # the sync removed its last rule: leave no empty list (or permissions) behind
+            perms.pop(kind, None)
+            if not perms:
+                data.pop("permissions")
+        _write_atomic(settings, _dump(data))
         os.chmod(settings, mode)
     return (managed & wanted) | add
 
@@ -194,7 +212,8 @@ def print_headers(name: str, dirs: list[Path]) -> int:
         _warn(f"no url server named {name!r} in the registry")
         return 2
     try:
-        headers = resolve_env(d.spec.get("headers") or {})
+        # A stored value may end in a newline (a vault block scalar); it isn't valid in a header.
+        headers = {k: v.rstrip("\r\n") for k, v in resolve_env(d.spec.get("headers") or {}).items()}
     except SecretError as exc:
         _warn(f"{name}: {exc}")
         return 3
@@ -226,11 +245,16 @@ def main(argv: list[str]) -> int:
             deny = ",".join(d.deny_tools) or "-"
             print(f"{name}\t{d.source}\tread-only: {ro}\tdeny: {deny}")
         return 0
-    state = load_managed(paths.managed_file())
+    # State is saved after every step: if a later step fails, what an earlier one added
+    # is still known as hypr-mcp's (and removed later), not mistaken for the user's.
+    managed_file = paths.managed_file()
+    state = load_managed(managed_file)
     if shutil.which("claude"):
         state["claude"] = sync_claude(defs, state["claude"])
+        save_managed(managed_file, state)
         state["claude_deny"] = sync_claude_rules(claude_settings_path(), "deny", deny_rules(defs), state["claude_deny"])
+        save_managed(managed_file, state)
     gemini_settings = Path(os.environ.get("HOME", "~")).expanduser() / ".gemini" / "settings.json"
     state["gemini"] = sync_gemini(defs, state["gemini"], gemini_settings)
-    save_managed(paths.managed_file(), state)
+    save_managed(managed_file, state)
     return 0

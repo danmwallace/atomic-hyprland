@@ -4,6 +4,10 @@ Description=Re-sync the MCP registry when a registry folder changes
 [Path]
 PathChanged=/etc/atomic-hyprland/mcp.d
 PathChanged=%h/.config/atomic-hyprland/mcp.d
+# Another writer's read-modify-write can drop the sync's deny rules; a re-sync puts
+# them back. The sync doesn't rewrite the file when nothing changed, so it can't loop.
+# ($CLAUDE_CONFIG_DIR isn't followed here; the sync itself honours it.)
+PathChanged=%h/.claude/settings.json
 MakeDirectory=yes
 Unit=hypr-mcp-sync.service
 

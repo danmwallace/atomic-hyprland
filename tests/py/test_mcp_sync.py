@@ -280,5 +280,74 @@ class ManagedStateTest(unittest.TestCase):
         self.assertEqual(mcp_sync.load_managed(f)["claude"], {"a", "b"})
 
 
+
+class HardeningTest(unittest.TestCase):
+    """Fixes from the piece 3 final review (deferred minors)."""
+
+    def setUp(self):
+        self.root = tmpdir(self)
+        self.settings = self.root / ".claude" / "settings.json"
+
+    def read(self):
+        return json.loads(self.settings.read_text())
+
+    def test_headers_helper_name_is_shell_quoted(self):
+        self.assertEqual(mcp_sync.client_entry(secret_def())["headersHelper"], "hypr-mcp headers n8n")
+        odd = mcp_sync.client_entry(secret_def("a b;id"))["headersHelper"]
+        self.assertEqual(odd, "hypr-mcp headers 'a b;id'")
+
+    def test_headers_strip_trailing_newlines(self):
+        out = io.StringIO()
+        with mock.patch("atomic_agent.mcp_sync.resolve_env", return_value={"Authorization": "Bearer t\n", "X-A": "1\r\n"}), \
+             contextlib.redirect_stdout(out):
+            root = tmpdir(self)
+            write_json(root / "n8n.json", json.dumps(secret_def().spec))
+            self.assertEqual(mcp_sync.print_headers("n8n", [root]), 0)
+        self.assertEqual(json.loads(out.getvalue()), {"Authorization": "Bearer t", "X-A": "1"})
+
+    def test_rules_write_through_symlink(self):
+        target = write_json(self.root / "dotfiles" / "settings.json", "{}")
+        self.settings.parent.mkdir(parents=True)
+        self.settings.symlink_to(target)
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertTrue(self.settings.is_symlink())
+        self.assertEqual(json.loads(target.read_text())["permissions"]["deny"], ["mcp__n8n__a"])
+
+    def test_rules_drop_list_they_emptied(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"]}, "model": "x"}))
+        mcp_sync.sync_claude_rules(self.settings, "deny", set(), {"mcp__n8n__a"})
+        self.assertEqual(self.read(), {"model": "x"})
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__a"], "allow": ["Read"]}}))
+        mcp_sync.sync_claude_rules(self.settings, "deny", set(), {"mcp__n8n__a"})
+        self.assertEqual(self.read(), {"permissions": {"allow": ["Read"]}})
+
+    def test_rules_keep_non_ascii(self):
+        write_json(self.settings, json.dumps({"model": "caf\u00e9"}))
+        mcp_sync.sync_claude_rules(self.settings, "deny", {"mcp__n8n__a"}, set())
+        self.assertIn("caf\u00e9", self.settings.read_text(encoding="utf-8"))
+
+    def test_gemini_non_object_settings_left_alone(self):
+        settings = write_json(self.root / ".gemini" / "settings.json", "[]")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            managed = mcp_sync.sync_gemini({"hyprland": stdio("hyprland")}, {"old"}, settings)
+        self.assertEqual(managed, {"old"})
+        self.assertEqual(settings.read_text(), "[]")
+        self.assertIn(str(settings), err.getvalue())
+
+    def test_main_saves_each_step_before_a_later_one_fails(self):
+        state = self.root / "state" / "mcp-managed.json"
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=[self.root / "none"]), \
+             mock.patch("atomic_agent.paths.managed_file", return_value=state), \
+             mock.patch("shutil.which", return_value="/usr/bin/claude"), \
+             mock.patch("atomic_agent.mcp_sync.sync_claude", return_value={"hyprland"}), \
+             mock.patch("atomic_agent.mcp_sync.sync_claude_rules", return_value={"mcp__n8n__a"}), \
+             mock.patch("atomic_agent.mcp_sync.sync_gemini", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                mcp_sync.main(["sync"])
+        saved = json.loads(state.read_text())
+        self.assertEqual(saved["claude"], ["hyprland"])
+        self.assertEqual(saved["claude_deny"], ["mcp__n8n__a"])
+
 if __name__ == "__main__":
     unittest.main()
