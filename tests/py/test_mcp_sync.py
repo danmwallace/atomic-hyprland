@@ -349,5 +349,50 @@ class HardeningTest(unittest.TestCase):
         self.assertEqual(saved["claude"], ["hyprland"])
         self.assertEqual(saved["claude_deny"], ["mcp__n8n__a"])
 
+
+class DenyFirstTest(unittest.TestCase):
+    """sync_claude runs `claude mcp` once per server (~20 s on frmwrk). A deny rule that
+    another writer dropped must be back before that, not after it."""
+
+    def setUp(self):
+        self.root = tmpdir(self)
+        self.settings = self.root / ".claude" / "settings.json"
+        self.state = self.root / "state" / "mcp-managed.json"
+        self.reg = self.root / "mcp.d"
+        write_json(self.reg / "n8n.json", json.dumps(
+            {"type": "http", "url": "https://n.test/mcp", "denyTools": ["run"]}))
+        self.seen = None
+
+    def denies(self):
+        return json.loads(self.settings.read_text()).get("permissions", {}).get("deny", [])
+
+    def run_main(self):
+        def fake_sync_claude(defs, managed, run=None):
+            self.seen = self.denies()  # what Claude Code holds during the round-trip
+            return managed
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.root / ".claude"), "HOME": str(self.root)}), \
+             mock.patch("atomic_agent.paths.registry_dirs", return_value=[self.reg]), \
+             mock.patch("atomic_agent.paths.managed_file", return_value=self.state), \
+             mock.patch("shutil.which", return_value="/usr/bin/claude"), \
+             mock.patch("atomic_agent.mcp_sync.sync_claude", side_effect=fake_sync_claude):
+            self.assertEqual(mcp_sync.main(["sync"]), 0)
+
+    def test_dropped_deny_rule_is_back_before_the_client_round_trip(self):
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}}))
+        write_json(self.state, json.dumps({"claude_deny": ["mcp__n8n__run"]}))
+        self.run_main()
+        self.assertIn("mcp__n8n__run", self.seen)
+        self.assertEqual(self.denies(), ["Bash(rm:*)", "mcp__n8n__run"])
+
+    def test_removed_server_keeps_its_rules_until_its_entry_is_gone(self):
+        (self.reg / "n8n.json").unlink()
+        write_json(self.settings, json.dumps({"permissions": {"deny": ["mcp__n8n__run"]}}))
+        write_json(self.state, json.dumps({"claude": ["n8n"], "claude_deny": ["mcp__n8n__run"]}))
+        self.run_main()
+        self.assertEqual(self.seen, ["mcp__n8n__run"])
+        self.assertNotIn("permissions", json.loads(self.settings.read_text()))
+        self.assertEqual(json.loads(self.state.read_text())["claude_deny"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
