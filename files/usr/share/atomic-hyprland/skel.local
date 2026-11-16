@@ -11,3 +11,10 @@
 .config/alacritty/local.toml
 .config/btop/btop.conf
 .config/elvish/rc.elv
+# Flatpak apps see /usr/share/fonts as /run/host/fonts, remapped to
+# /usr/share/fonts: the same fontconfig cache key as the runtime's own fonts.
+# On an ostree host both directories have mtime 0, so the runtime's cache
+# always validates and the host's fonts (the Nerd Fonts, Inter) never load.
+# This link sits in ~/.local/share/fonts (/run/host/user-fonts in the sandbox)
+# and gives the host fonts a path of their own. Dangling, so ignored, on the host.
+.local/share/fonts/host-fonts
