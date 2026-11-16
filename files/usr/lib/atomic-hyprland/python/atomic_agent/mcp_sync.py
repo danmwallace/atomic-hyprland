@@ -1,9 +1,10 @@
 """hypr-mcp: put the MCP registry into each agent's own config, and start servers.
 
   hypr-mcp sync         write the registry into Claude Code (user scope; denyTools
-                        become deny rules in its user settings) and, when Gemini
-                        CLI is present, ~/.gemini/settings.json (denyTools become
-                        excludeTools)
+                        become deny rules and rootTools/askEveryTime become ask
+                        rules in its user settings) and, when Gemini CLI is
+                        present, ~/.gemini/settings.json (denyTools, rootTools and
+                        askEveryTime become excludeTools: Gemini has no ask rule)
   hypr-mcp run <name>   resolve the server's secret references, exec it
   hypr-mcp headers <name>
                         print a url server's headers as JSON, secrets resolved
@@ -82,8 +83,9 @@ def gemini_entry(d: ServerDef) -> dict | None:
         entry = {"url": d.spec["url"]} if d.spec.get("type") == "sse" else {"httpUrl": d.spec["url"]}
         if d.spec.get("headers"):
             entry["headers"] = d.spec["headers"]
-    if d.deny_tools:
-        entry["excludeTools"] = list(d.deny_tools)
+    excluded = set(d.deny_tools) | set(d.root_tools) | set(d.ask_tools)
+    if excluded:
+        entry["excludeTools"] = sorted(excluded)
     return entry
 
 
@@ -144,6 +146,12 @@ def deny_rules(defs: dict[str, ServerDef]) -> set[str]:
     return {tool_rule(d.name, t) for d in defs.values() for t in d.deny_tools}
 
 
+def ask_rules(defs: dict[str, ServerDef]) -> set[str]:
+    """Root and ask tools: Claude Code prompts for them every time. An ask rule beats allow
+    rules, auto mode and "don't ask again" (verified 2026-11-14); headless runs refuse them."""
+    return {tool_rule(d.name, t) for d in defs.values() for t in d.root_tools + d.ask_tools}
+
+
 def sync_claude_rules(settings: Path, kind: str, wanted: set[str], managed: set[str]) -> set[str]:
     """Keep hypr-mcp's rules in permissions.<kind> of Claude Code's user settings and
     return the rules it now manages. Only rules it added are ever removed; a rule the
@@ -182,7 +190,7 @@ def load_managed(path: Path) -> dict[str, set[str]]:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
         data = {}
-    return {k: set(data.get(k, [])) for k in ("claude", "gemini", "claude_deny")}
+    return {k: set(data.get(k, [])) for k in ("claude", "gemini", "claude_deny", "claude_ask")}
 
 
 def save_managed(path: Path, managed: dict[str, set[str]]) -> None:
@@ -243,24 +251,29 @@ def main(argv: list[str]) -> int:
         for name, d in defs.items():
             ro = ",".join(d.read_only_tools) or "-"
             deny = ",".join(d.deny_tools) or "-"
-            print(f"{name}\t{d.source}\tread-only: {ro}\tdeny: {deny}")
+            ask = ",".join(d.root_tools + d.ask_tools) or "-"
+            print(f"{name}\t{d.source}\tread-only: {ro}\tdeny: {deny}\task: {ask}")
         return 0
     # State is saved after every step: if a later step fails, what an earlier one added
     # is still known as hypr-mcp's (and removed later), not mistaken for the user's.
     managed_file = paths.managed_file()
     state = load_managed(managed_file)
     if shutil.which("claude"):
-        # Deny rules go in before the `claude mcp` round-trip (seconds per server), so a
+        # Deny and ask rules go in before the `claude mcp` round-trip (seconds per server), so a
         # rule another writer dropped is back at once. Rules are pruned only after it, so a
-        # removed server's tools stay denied until its entry is gone.
+        # removed server's tools stay denied (or asked) until its entry is gone.
         settings = claude_settings_path()
-        wanted = deny_rules(defs)
-        state["claude_deny"] = sync_claude_rules(settings, "deny", wanted | state["claude_deny"], state["claude_deny"])
-        save_managed(managed_file, state)
+        wanted = {"deny": deny_rules(defs), "ask": ask_rules(defs)}
+        for kind in ("deny", "ask"):
+            key = f"claude_{kind}"
+            state[key] = sync_claude_rules(settings, kind, wanted[kind] | state[key], state[key])
+            save_managed(managed_file, state)
         state["claude"] = sync_claude(defs, state["claude"])
         save_managed(managed_file, state)
-        state["claude_deny"] = sync_claude_rules(settings, "deny", wanted, state["claude_deny"])
-        save_managed(managed_file, state)
+        for kind in ("deny", "ask"):
+            key = f"claude_{kind}"
+            state[key] = sync_claude_rules(settings, kind, wanted[kind], state[key])
+            save_managed(managed_file, state)
     gemini_settings = Path(os.environ.get("HOME", "~")).expanduser() / ".gemini" / "settings.json"
     state["gemini"] = sync_gemini(defs, state["gemini"], gemini_settings)
     save_managed(managed_file, state)

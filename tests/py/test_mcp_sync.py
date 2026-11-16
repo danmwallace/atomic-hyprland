@@ -274,7 +274,7 @@ class RunTest(unittest.TestCase):
 class ManagedStateTest(unittest.TestCase):
     def test_round_trip(self):
         f = tmpdir(self) / "state" / "m.json"
-        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set(), "claude_deny": set()})
+        self.assertEqual(mcp_sync.load_managed(f), {"claude": set(), "gemini": set(), "claude_deny": set(), "claude_ask": set()})
         mcp_sync.save_managed(f, {"claude": {"b", "a"}, "gemini": set(), "claude_deny": {"mcp__n8n__a"}})
         self.assertEqual(json.loads(f.read_text()), {"claude": ["a", "b"], "gemini": [], "claude_deny": ["mcp__n8n__a"]})
         self.assertEqual(mcp_sync.load_managed(f)["claude"], {"a", "b"})
@@ -393,6 +393,65 @@ class DenyFirstTest(unittest.TestCase):
         self.assertNotIn("permissions", json.loads(self.settings.read_text()))
         self.assertEqual(json.loads(self.state.read_text())["claude_deny"], [])
 
+
+
+class AskRulesSyncTest(unittest.TestCase):
+    """Root and ask tools become Claude Code ask rules (they beat allow rules, auto mode
+    and "don't ask again") and Gemini exclusions."""
+
+    def setUp(self):
+        self.root = tmpdir(self)
+        self.settings = self.root / ".claude" / "settings.json"
+        self.state = self.root / "state" / "mcp-managed.json"
+        self.reg = self.root / "mcp.d"
+        write_json(self.reg / "system.json", json.dumps({"command": "x", "rootTools": ["restart_unit"]}))
+        write_json(self.reg / "srv01-ops.json", json.dumps({"command": "y", "askEveryTime": ["vm_start"]}))
+
+    def asks(self):
+        return json.loads(self.settings.read_text()).get("permissions", {}).get("ask", [])
+
+    def run_main(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.root / ".claude"), "HOME": str(self.root)}), \
+             mock.patch("atomic_agent.paths.registry_dirs", return_value=[self.reg]), \
+             mock.patch("atomic_agent.paths.managed_file", return_value=self.state), \
+             mock.patch("shutil.which", return_value="/usr/bin/claude"), \
+             mock.patch("atomic_agent.mcp_sync.sync_claude", side_effect=lambda defs, managed, run=None: managed):
+            self.assertEqual(mcp_sync.main(["sync"]), 0)
+
+    def test_ask_rules(self):
+        defs = {"system": ServerDef(name="system", spec={"command": "x"}, root_tools=["restart_unit"]),
+                "srv01-ops": ServerDef(name="srv01-ops", spec={"command": "y"}, ask_tools=["vm_start"]),
+                "plain": stdio("plain")}
+        self.assertEqual(mcp_sync.ask_rules(defs), {"mcp__system__restart_unit", "mcp__srv01-ops__vm_start"})
+
+    def test_sync_writes_ask_rules_for_root_and_ask_tools(self):
+        self.run_main()
+        self.assertEqual(self.asks(), ["mcp__srv01-ops__vm_start", "mcp__system__restart_unit"])
+        self.assertEqual(json.loads(self.state.read_text())["claude_ask"],
+                         ["mcp__srv01-ops__vm_start", "mcp__system__restart_unit"])
+
+    def test_sync_keeps_user_ask_rules(self):
+        write_json(self.settings, json.dumps({"permissions": {"ask": ["mcp__x__y"]}}))
+        self.run_main()
+        self.assertIn("mcp__x__y", self.asks())
+        self.assertNotIn("mcp__x__y", json.loads(self.state.read_text())["claude_ask"])
+
+    def test_sync_prunes_ask_rule_when_tool_leaves_list(self):
+        self.run_main()
+        write_json(self.reg / "srv01-ops.json", json.dumps({"command": "y"}))
+        self.run_main()
+        self.assertEqual(self.asks(), ["mcp__system__restart_unit"])
+
+    def test_gemini_excludes_ask_and_root_tools(self):
+        d = ServerDef(name="s", spec={"command": "x"}, deny_tools=["denied"], root_tools=["restart_unit"],
+                      ask_tools=["vm_start"])
+        self.assertEqual(mcp_sync.gemini_entry(d)["excludeTools"], ["denied", "restart_unit", "vm_start"])
+
+    def test_list_shows_ask(self):
+        out = io.StringIO()
+        with mock.patch("atomic_agent.paths.registry_dirs", return_value=[self.reg]), contextlib.redirect_stdout(out):
+            self.assertEqual(mcp_sync.main(["list"]), 0)
+        self.assertIn("ask: vm_start", out.getvalue())
 
 if __name__ == "__main__":
     unittest.main()
