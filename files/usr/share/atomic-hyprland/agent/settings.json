@@ -33,7 +33,9 @@
       "Read(~/.kube/**)",
       "Read(~/.docker/config.json)",
       "Read(~/.netrc)",
-      "Read(~/.config/atomic-hyprland/credentials/**)"
+      "Read(~/.config/atomic-hyprland/credentials/**)",
+      "Read(~/.config/srv01-mcp/**)",
+      "Read(~/.config/srv01-ops-mcp/**)"
     ],
     "disableBypassPermissionsMode": "disable"
   }

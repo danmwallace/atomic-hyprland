@@ -69,6 +69,34 @@ class AgentTest(unittest.TestCase):
         self.assertIn("Bash(make)", allow)
         self.assertIn("mcp__system__journal", allow)
 
+    def test_build_settings_drops_server_wide_allow_for_ask_and_root_servers(self):
+        reg = registry()
+        reg["srv01-ops"] = ServerDef(name="srv01-ops", spec={"command": "x"}, ask_tools=["vm_start"])
+        rules = write_json(self.root / "rules.json", '{"permissions": {"allow": '
+                           '["mcp__srv01-ops", "mcp__srv01-ops__*", "mcp__system", "mcp__web", "mcp__web__*"]}}')
+        allow = agent.build_settings(BASE, rules, reg)["permissions"]["allow"]
+        for rule in ("mcp__srv01-ops", "mcp__srv01-ops__*", "mcp__system"):
+            self.assertNotIn(rule, allow)
+        # a server with no root or ask tools keeps its server-wide rules
+        self.assertIn("mcp__web", allow)
+        self.assertIn("mcp__web__*", allow)
+
+    def test_chat_settings_ask_for_root_and_ask_tools(self):
+        # Chat is interactive Claude Code with --setting-sources "": without its own ask rules
+        # it would offer "don't ask again" for these tools.
+        reg = registry()
+        reg["srv01-ops"] = ServerDef(name="srv01-ops", spec={"command": "x"}, ask_tools=["vm_start"])
+        perms = agent.build_settings(BASE, self.root / "none.json", reg, chat=True)["permissions"]
+        self.assertEqual(sorted(perms["ask"]), ["mcp__srv01-ops__vm_start", "mcp__system__restart_unit"])
+        # fix mode (claude -p with the approvals prompt tool) gets none: an ask rule there
+        # would refuse instead of reaching the card
+        self.assertNotIn("ask", agent.build_settings(BASE, self.root / "none.json", reg)["permissions"])
+
+    def test_agent_settings_deny_reading_mcp_keys(self):
+        deny = BASE["permissions"]["deny"]
+        self.assertIn("Read(~/.config/srv01-mcp/**)", deny)
+        self.assertIn("Read(~/.config/srv01-ops-mcp/**)", deny)
+
     def test_ask_settings_ignore_always_rules(self):
         # I4: ask mode stays read-only even after the user saved "always allow" rules.
         rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
@@ -203,6 +231,13 @@ class FixStopUndoTest(unittest.TestCase):
             self.assertEqual(argv[argv.index("--setting-sources") + 1], "")
             self.assertIn("--strict-mcp-config", argv)
             self.assertNotIn("bypassPermissions", argv)
+
+    def test_open_chat_session_settings_ask_for_ask_tools(self):
+        write_json(self.root / "etc" / "srv01-ops.json", '{"command": "x", "askEveryTime": ["vm_start"]}')
+        from atomic_agent import paths
+        agent.open_chat("s1", run=self.fake_run)
+        settings = json.loads((paths.session_dir("s1") / "settings.json").read_text())
+        self.assertIn("mcp__srv01-ops__vm_start", settings["permissions"]["ask"])
 
     def test_chat_is_interactive(self):
         argv = agent.chat_argv("s1", Path("/s/a"), Path("/s/b"), Path("/s/c"))

@@ -41,8 +41,12 @@ def _user_rules(rules_path: Path) -> list[str]:
     return [r for r in allow if isinstance(r, str) and r.strip()] if isinstance(allow, list) else []
 
 
-def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef], include_rules: bool = True) -> dict:
-    """include_rules=False for ask mode, which stays read-only whatever was always-allowed."""
+def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef], include_rules: bool = True,
+                   chat: bool = False) -> dict:
+    """include_rules=False for ask mode, which stays read-only whatever was always-allowed.
+    chat=True adds ask rules for root and ask tools: chat is interactive Claude Code, whose own
+    prompt would otherwise offer "don't ask again" for them. Fix mode (claude -p) gets none,
+    because there an ask rule refuses the call instead of sending it to the approvals card."""
     settings = json.loads(json.dumps(base))
     perms = settings.setdefault("permissions", {})
     allow = perms.setdefault("allow", [])
@@ -53,7 +57,14 @@ def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef],
     # A root or ask tool is never allowed up front, even by an "always" saved before it
     # became one: each call must reach its card.
     never = {tool_rule(d.name, t) for d in registry.values() for t in d.root_tools + d.ask_tools}
+    # A server-wide rule (mcp__<server> or mcp__<server>__*) would cover them too.
+    gated = {tool_rule(d.name, "") for d in registry.values() if d.root_tools or d.ask_tools}
+    never |= {g.rstrip("_") for g in gated} | {g + "*" for g in gated}
     perms["allow"] = [r for r in dict.fromkeys(allow) if r not in never]
+    if chat:
+        asks = perms.setdefault("ask", [])
+        asks += sorted(tool_rule(d.name, t) for d in registry.values() for t in d.root_tools + d.ask_tools)
+        perms["ask"] = list(dict.fromkeys(asks))
     deny = perms.setdefault("deny", [])
     for d in registry.values():
         deny += [tool_rule(d.name, t) for t in d.deny_tools]
@@ -140,13 +151,14 @@ def chat_argv(sid: str, settings_file: Path, mcp_file: Path, prompt_file: Path, 
 
 def prepare_session(sid: str, mode: str = "fix") -> tuple[Path, Path, Path]:
     """Write the session's settings, MCP config and system prompt; return their paths.
-    mode "ask" leaves out the user's "always allow" rules."""
+    mode "ask" leaves out the user's "always allow" rules; mode "chat" adds ask rules for
+    root and ask tools (see build_settings)."""
     sdir = paths.session_dir(sid)
     sdir.mkdir(parents=True, exist_ok=True)
     registry = load_registry(paths.registry_dirs())
     base = json.loads((SHARE / "settings.json").read_text())
     settings_file, mcp_file = sdir / "settings.json", sdir / "mcp.json"
-    settings = build_settings(base, paths.rules_file(), registry, include_rules=(mode != "ask"))
+    settings = build_settings(base, paths.rules_file(), registry, include_rules=(mode != "ask"), chat=(mode == "chat"))
     settings_file.write_text(json.dumps(settings, indent=2))
     mcp_file.write_text(json.dumps(mcp_config(registry), indent=2))
     return settings_file, mcp_file, system_prompt_file(sid)
@@ -302,7 +314,7 @@ def run_fix(sid: str) -> int:
 
 
 def open_chat(sid: str, run=subprocess.run) -> int:
-    settings_file, mcp_file, prompt_file = prepare_session(sid)
+    settings_file, mcp_file, prompt_file = prepare_session(sid, mode="chat")
     argv = chat_argv(sid, settings_file, mcp_file, prompt_file, load_meta(sid).get("cwd"))
     # The terminal starts in the session folder; the user's folder is an --add-dir.
     env_prefix = ["env", "-C", str(paths.session_dir(sid)), "-u", "CLAUDECODE",
