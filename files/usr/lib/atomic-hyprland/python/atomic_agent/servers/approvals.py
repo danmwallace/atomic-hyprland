@@ -19,7 +19,8 @@ def _registry_maps() -> tuple[dict[str, str], set[str]]:
     roots: set[str] = set()
     for d in load_registry(paths.registry_dirs()).values():
         notes.update({tool_rule(d.name, t): n for t, n in d.tool_notes.items()})
-        roots.update(tool_rule(d.name, t) for t in d.root_tools)
+        # Ask tools get the same treatment as root ones: a card every time, never "always".
+        roots.update(tool_rule(d.name, t) for t in d.root_tools + d.ask_tools)
     return notes, roots
 
 

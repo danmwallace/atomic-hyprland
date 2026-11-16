@@ -53,6 +53,36 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(d.root_tools, ["restart_unit"])
         self.assertEqual(d.read_only_tools, ["journal"])
 
+    def test_ask_every_time_accumulates_across_layers(self):
+        write_json(self.share / "srv01-ops.json", '{"command": "x", "askEveryTime": ["a"]}')
+        write_json(self.user / "srv01-ops.json", '{"command": "y", "askEveryTime": ["b"]}')
+        self.assertEqual(load_registry(self.dirs)["srv01-ops"].ask_tools, ["a", "b"])
+
+    def test_ask_in_machine_layer_beats_user_read_only(self):
+        # The role writes the ask list root-owned in /etc; the user-writable file can't
+        # make the tool read-only or drop it from the ask list.
+        write_json(self.etc / "srv01-ops.json", '{"askEveryTime": ["vm_start"]}')
+        write_json(self.user / "srv01-ops.json", '{"command": "y", "readOnlyTools": ["vm_start", "vms"]}')
+        d = load_registry(self.dirs)["srv01-ops"]
+        self.assertEqual(d.ask_tools, ["vm_start"])
+        self.assertEqual(d.read_only_tools, ["vms"])
+        self.assertNotIn("askEveryTime", d.spec)
+
+    def test_list_only_layer_keeps_lower_definition(self):
+        # A fragment holding only lists adds to them; it doesn't replace the definition.
+        write_json(self.share / "srv01-ops.json", '{"command": "x", "readOnlyTools": ["vms"]}')
+        write_json(self.etc / "srv01-ops.json", '{"askEveryTime": ["vm_start"]}')
+        d = load_registry(self.dirs)["srv01-ops"]
+        self.assertEqual(d.spec["command"], "x")
+        self.assertEqual(d.ask_tools, ["vm_start"])
+        self.assertEqual(d.source, self.share / "srv01-ops.json")
+
+    def test_ask_every_time_must_be_a_list(self):
+        write_json(self.share / "a.json", '{"command": "x", "askEveryTime": "vm_start"}')
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertNotIn("a", load_registry(self.dirs))
+        self.assertIn("askEveryTime must be a list", err.getvalue())
+
     def test_deny_tools_accumulate(self):
         # Like rootTools: a later (user-writable) layer cannot drop an earlier deny.
         write_json(self.share / "n8n.json", '{"command": "x", "denyTools": ["a"]}')

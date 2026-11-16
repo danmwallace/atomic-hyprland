@@ -100,6 +100,24 @@ class DecideTest(unittest.TestCase):
         self.assertFalse((self.root / "cfg/atomic-hyprland/agent/permissions.json").exists())
 
 
+    def test_registry_maps_treats_ask_as_root(self):
+        write_json(self.root / "etc" / "srv01-ops.json", '{"command": "x", "askEveryTime": ["vm_start"]}')
+        _notes, roots = approvals._registry_maps()
+        self.assertIn("mcp__srv01-ops__vm_start", roots)
+
+    def test_ask_tool_card_never_always(self):
+        write_json(self.root / "etc" / "srv01-ops.json",
+                   '{"command": "x", "askEveryTime": ["vm_start"], "toolNotes": {"vm_start": "Undo: shut it down again (vm_shutdown)"}}')
+        seen = {}
+        def ask(card, session):
+            seen["card"] = card
+            return "always"
+        out = approvals.decide("mcp__srv01-ops__vm_start", {"name": "hypr-test"}, ask=ask)
+        self.assertIsNone(seen["card"].rule)
+        self.assertEqual(seen["card"].undo, "Undo: shut it down again (vm_shutdown)")
+        self.assertEqual(out["behavior"], "allow")
+        self.assertFalse((self.root / "cfg/atomic-hyprland/agent/permissions.json").exists())
+
     def test_root_tool_on_dotted_server_never_always(self):
         write_json(self.root / "etc" / "home.lab.json", '{"command": "x", "rootTools": ["reboot"], "toolNotes": {"reboot": "Boot it again."}}')
         seen = {}
