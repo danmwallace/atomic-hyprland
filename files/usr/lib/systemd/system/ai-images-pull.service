@@ -12,7 +12,9 @@ RemainAfterExit=yes
 TimeoutStartSec=0
 # Only the first boot (or a tag change) touches the registry; an offline boot
 # with the image present must not fail this unit or delay graphical.target.
-ExecStart=/bin/sh -c 'podman image exists docker.io/ollama/ollama:0.35.1 || podman pull docker.io/ollama/ollama:0.35.1'
+# The tag lives only in ollama.container's Image= (Renovate bumps it there); read
+# it at runtime so this unit can never pre-pull a tag the service won't run.
+ExecStart=/bin/sh -c 'img=$$(sed -n "s/^Image=//p" /usr/share/containers/systemd/ollama.container); [ -n "$$img" ] && { podman image exists "$$img" || podman pull "$$img"; }'
 
 [Install]
 WantedBy=multi-user.target
