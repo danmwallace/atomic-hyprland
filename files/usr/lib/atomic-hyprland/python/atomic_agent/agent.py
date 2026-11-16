@@ -50,7 +50,10 @@ def build_settings(base: dict, rules_path: Path, registry: dict[str, ServerDef],
         allow += [tool_rule(d.name, t) for t in d.read_only_tools]
     if include_rules:
         allow += _user_rules(rules_path)
-    perms["allow"] = list(dict.fromkeys(allow))
+    # A root or ask tool is never allowed up front, even by an "always" saved before it
+    # became one: each call must reach its card.
+    never = {tool_rule(d.name, t) for d in registry.values() for t in d.root_tools + d.ask_tools}
+    perms["allow"] = [r for r in dict.fromkeys(allow) if r not in never]
     deny = perms.setdefault("deny", [])
     for d in registry.values():
         deny += [tool_rule(d.name, t) for t in d.deny_tools]

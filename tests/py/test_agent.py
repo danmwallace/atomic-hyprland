@@ -58,6 +58,17 @@ class AgentTest(unittest.TestCase):
         s = agent.build_settings(BASE, rules, registry())
         self.assertIn("Bash(make)", s["permissions"]["allow"])
 
+    def test_build_settings_drops_always_allow_for_ask_and_root(self):
+        reg = registry()
+        reg["srv01-ops"] = ServerDef(name="srv01-ops", spec={"command": "x"}, ask_tools=["vm_start"])
+        rules = write_json(self.root / "rules.json", '{"permissions": {"allow": '
+                           '["mcp__srv01-ops__vm_start", "mcp__system__restart_unit", "Bash(make)"]}}')
+        allow = agent.build_settings(BASE, rules, reg)["permissions"]["allow"]
+        self.assertNotIn("mcp__srv01-ops__vm_start", allow)
+        self.assertNotIn("mcp__system__restart_unit", allow)
+        self.assertIn("Bash(make)", allow)
+        self.assertIn("mcp__system__journal", allow)
+
     def test_ask_settings_ignore_always_rules(self):
         # I4: ask mode stays read-only even after the user saved "always allow" rules.
         rules = write_json(self.root / "rules.json", '{"permissions": {"allow": ["Bash(make)"]}}')
