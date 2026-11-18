@@ -254,6 +254,10 @@ check bash -c 'nc --version 2>&1 | grep -qi ncat'
 check bash -c 'hx --version | grep -q helix'
 check test -x /usr/bin/spotify_player
 check bash -c 'spotify_player --version | grep -Eq "[0-9]+\.[0-9]+\.[0-9]+"'
+# PowerShell from the pinned tarball, through the wrapper that turns telemetry off
+check test -x /usr/lib/powershell/pwsh
+check grep -q 'POWERSHELL_TELEMETRY_OPTOUT=1' /usr/bin/pwsh
+check bash -c 'pwsh -NoLogo -NoProfile -Command "\$PSVersionTable.PSVersion.ToString()" | grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+"'
 # restic >= 0.17: the restic_backup restore uses --exclude-xattr security.selinux
 check bash -c 'restic version | grep -Eq "^restic 0\.(1[7-9]|[2-9][0-9])\.|^restic [1-9]"'
 check test -L /etc/systemd/system/multi-user.target.wants/tailscaled.service

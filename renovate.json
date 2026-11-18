@@ -98,6 +98,19 @@
     },
     {
       "customType": "regex",
+      "description": "PowerShell/PowerShell release pinned in the Containerfile (sha256 updated by hand in the same PR)",
+      "managerFilePatterns": [
+        "/^Containerfile$/"
+      ],
+      "matchStrings": [
+        "ARG POWERSHELL_VERSION=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "PowerShell/PowerShell",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
       "description": "Lint images pinned in the justfile (actionlint, renovate-config-validator)",
       "managerFilePatterns": [
         "/^justfile$/"

@@ -4,6 +4,9 @@
 #   spotify_player (aome510, MIT)          upstream tarball, version + sha256
 #   Tailscale                              pkgs.tailscale.com repo (repo_gpgcheck),
 #                                          enabled for the build only (90-cleanup)
+#   PowerShell (PowerShell/PowerShell, MIT) upstream tarball, version + sha256
+#                                          (added 2026-11-18, for Exchange Online
+#                                          and Microsoft 365 admin)
 # Renovate proposes the version bumps; the hashes are updated by hand in the
 # same PR, so a replaced or tampered release asset fails the build.
 set -euo pipefail
@@ -11,6 +14,8 @@ orca_version="${1:?orca version}"
 orca_sha256="${2:?orca sha256}"
 spotify_player_version="${3:?spotify_player version}"
 spotify_player_sha256="${4:?spotify_player sha256}"
+powershell_version="${5:?powershell version}"
+powershell_sha256="${6:?powershell sha256}"
 
 work=/tmp/build/apps
 mkdir -p "${work}"
@@ -42,3 +47,26 @@ curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${sp_tar}" 
 ( cd "${work}" && echo "${spotify_player_sha256}  ${sp_tar}" | sha256sum -c - )
 tar -xzf "${work}/${sp_tar}" -C "${work}" spotify_player
 install -m 0755 "${work}/spotify_player" /usr/bin/spotify_player
+
+# --- PowerShell --------------------------------------------------------------
+# The tarball, not the RPM: the RPM installs under /opt (a link into /var on
+# bootc) and its scriptlets edit /etc/shells. libicu is its one runtime
+# dependency the base might not carry. /usr/bin/pwsh is a wrapper rather than a
+# link so telemetry and the update nag are off for every shell, including
+# elvish, which never reads /etc/profile.d. PowerShell finds its home from
+# the real binary, not from argv[0], so exec through the wrapper is safe.
+ps_tar="powershell-${powershell_version}-linux-x64.tar.gz"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${ps_tar}" "https://github.com/PowerShell/PowerShell/releases/download/v${powershell_version}/${ps_tar}"
+( cd "${work}" && echo "${powershell_sha256}  ${ps_tar}" | sha256sum -c - )
+dnf -y install --setopt=install_weak_deps=False libicu
+install -d -m 0755 /usr/lib/powershell
+tar -xzf "${work}/${ps_tar}" -C /usr/lib/powershell
+chmod 0755 /usr/lib/powershell/pwsh
+cat > /usr/bin/pwsh <<'WRAPPER'
+#!/usr/bin/sh
+# atomic-hyprland: PowerShell lives in /usr/lib/powershell (build/15-apps.sh).
+export POWERSHELL_TELEMETRY_OPTOUT=1
+export POWERSHELL_UPDATECHECK=Off
+exec /usr/lib/powershell/pwsh "$@"
+WRAPPER
+chmod 0755 /usr/bin/pwsh
