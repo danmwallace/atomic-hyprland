@@ -61,6 +61,9 @@ check bash -c '! grep -q "terminal.shell" '"$share"'/alacritty/core.toml'   # th
 # btop writes its own config back: it is the user's after the first copy
 check grep -qx '.config/btop/btop.conf' $share/skel.local
 check test -f $skel/alacritty/local.toml
+# Flatpak host fonts: an absolute link to the sandbox's host font mount, user-owned (skel.local)
+check test "$(readlink files/etc/skel/.local/share/fonts/host-fonts)" = /run/host/fonts
+check grep -qx '.local/share/fonts/host-fonts' $share/skel.local
 # elvish: a starter rc.elv, the user's from the first login on (skel.local)
 check test -f $skel/elvish/rc.elv
 check grep -qx '.config/elvish/rc.elv' $share/skel.local
