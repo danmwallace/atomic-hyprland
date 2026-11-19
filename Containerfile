@@ -30,6 +30,10 @@ ARG ORCA_VERSION=1.4.253
 ARG ORCA_SHA256=5282f3a6d51555fe74e6983bef1c0a8adb606cb0ffaab94efbff1dc4b7c30825
 ARG SPOTIFY_PLAYER_VERSION=0.25.2
 ARG SPOTIFY_PLAYER_SHA256=08b572e0ec4b93418ade1d99703dbd0d2bdd14061babd36ea001153d749a1f4c
+# PowerShell (PowerShell/PowerShell) linux-x64 tarball; sha256 checked against
+# the release's hashes.sha256 before pinning, bumped by hand with the version.
+ARG POWERSHELL_VERSION=7.7.0
+ARG POWERSHELL_SHA256=c89d9c682d2c403dfe726f3df948e359675235a5bd6fab535776de69729ca0cb
 ARG NERD_FONT_SHA256=04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf
 ARG NERD_FONT_FIRACODE_SHA256=68e3bd6164864b8b514605bc34e3a87ac401c8c48682fcce6478c70263340207
 ARG NERD_FONT_TERMINUS_SHA256=80c6431f5789a72dc7464ecce3ee820cdc0f0123585befada87b13876d2fda90
@@ -37,7 +41,7 @@ ARG NERD_FONT_TERMINUS_SHA256=80c6431f5789a72dc7464ecce3ee820cdc0f0123585befada8
 COPY build/ /tmp/build/
 
 RUN /tmp/build/10-packages.sh "${CLAUDE_CODE_VERSION}" "${TUIOS_VERSION}" "${TUIOS_SHA256}"
-RUN /tmp/build/15-apps.sh "${ORCA_VERSION}" "${ORCA_SHA256}" "${SPOTIFY_PLAYER_VERSION}" "${SPOTIFY_PLAYER_SHA256}"
+RUN /tmp/build/15-apps.sh "${ORCA_VERSION}" "${ORCA_SHA256}" "${SPOTIFY_PLAYER_VERSION}" "${SPOTIFY_PLAYER_SHA256}" "${POWERSHELL_VERSION}" "${POWERSHELL_SHA256}"
 # The bind mount keeps a gigabyte of driver RPMs out of the image layers.
 RUN --mount=type=bind,from=akmods,src=/rpms,dst=/tmp/akmods-rpms /tmp/build/25-nvidia.sh
 

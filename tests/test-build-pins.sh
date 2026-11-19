@@ -51,12 +51,17 @@ check grep -q 'mv /opt/Orca /usr/lib/Orca' build/15-apps.sh
 check grep -Eq '^ARG SPOTIFY_PLAYER_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' Containerfile
 check grep -Eq '^ARG SPOTIFY_PLAYER_SHA256=[0-9a-f]{64}$' Containerfile
 check grep -Fq 'echo "${spotify_player_sha256}  ${sp_tar}" | sha256sum -c -' build/15-apps.sh
+# PowerShell (PowerShell/PowerShell, MIT): upstream tarball, pinned by version and hash, in /usr/lib
+check grep -Eq '^ARG POWERSHELL_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' Containerfile
+check grep -Eq '^ARG POWERSHELL_SHA256=[0-9a-f]{64}$' Containerfile
+check grep -Fq 'echo "${powershell_sha256}  ${ps_tar}" | sha256sum -c -' build/15-apps.sh
+check grep -q 'tar -xzf "${work}/${ps_tar}" -C /usr/lib/powershell' build/15-apps.sh
 # Tailscale: upstream repo with repo_gpgcheck, enabled only for the build
 check grep -q 'pkgs.tailscale.com/stable/fedora/tailscale.repo' build/15-apps.sh
 check grep -q 'tailscale-stable.enabled=0' build/90-cleanup.sh
 # no self-referential checksums (a hash fetched from the same release)
 check bash -c '! grep -qE "\.sha256\"|latest-linux.yml|checksums.txt" build/15-apps.sh'
-for m in ORCA_VERSION SPOTIFY_PLAYER_VERSION; do
+for m in ORCA_VERSION SPOTIFY_PLAYER_VERSION POWERSHELL_VERSION; do
     check jq -e --arg m "$m" '.customManagers[] | select(.matchStrings[0] | test($m))' renovate.json
 done
 
