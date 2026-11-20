@@ -14,11 +14,11 @@ ARG IMAGE_VERSION=dev
 # The repo this image is built from: the OCI label and the agent's PR target.
 # A fork changes this one line.
 ARG IMAGE_SOURCE=https://github.com/danmwallace/atomic-hyprland
-ARG CLAUDE_CODE_VERSION=2.1.289
-ARG TUIOS_VERSION=0.12.1
+ARG CLAUDE_CODE_VERSION=2.1.329
+ARG TUIOS_VERSION=0.13.3
 # sha256 of tuios_${TUIOS_VERSION}_Linux_x86_64.tar.gz. Bump it by hand with
 # the version: take the line for that file from the release's checksums.txt.
-ARG TUIOS_SHA256=4f68bac6e05d826b8c59b671b565c61b859dacedcb5d889160ba6d8624589b50
+ARG TUIOS_SHA256=7bf679bf35c5585f4f4a21aa3f9e9a270c5143f19c6c0c15c851e4cb149e724c
 # JetBrainsMono, FiraCode and Terminus Nerd Font release tarballs (one version,
 # a sha256 each) from the release's SHA-256.txt. Bump the version and all three
 # hashes together.
@@ -26,8 +26,8 @@ ARG NERD_FONT_VERSION=3.5.1
 # Orca (stablyai/orca) RPM and spotify_player (aome510/spotify-player) tarball;
 # sha256 of the exact release asset, checked against the upstream value before
 # pinning. Bump each hash by hand with its version (Renovate opens the PR).
-ARG ORCA_VERSION=1.4.253
-ARG ORCA_SHA256=5282f3a6d51555fe74e6983bef1c0a8adb606cb0ffaab94efbff1dc4b7c30825
+ARG ORCA_VERSION=1.4.265
+ARG ORCA_SHA256=54263c6d33dfb84bdc8b1e4b8a7b025c0ed1372fe098784f6d5d562c5c591318
 ARG SPOTIFY_PLAYER_VERSION=0.25.2
 ARG SPOTIFY_PLAYER_SHA256=08b572e0ec4b93418ade1d99703dbd0d2bdd14061babd36ea001153d749a1f4c
 # PowerShell (PowerShell/PowerShell) linux-x64 tarball; sha256 checked against

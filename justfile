@@ -107,4 +107,4 @@ iso:
 lint-ci:
     podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:1.7.12 -color
     podman run --rm -v ./renovate.json:/usr/src/app/renovate.json:ro,Z \
-        ghcr.io/renovatebot/renovate:44.239.1 renovate-config-validator --strict
+        ghcr.io/renovatebot/renovate:44.255.2 renovate-config-validator --strict
