@@ -334,7 +334,9 @@ check grep -q 'ollama.container' /usr/lib/systemd/system/ai-images-pull.service
 check grep -q 'After=.*ai-images-pull.service' /usr/share/containers/systemd/ollama.container
 # podman does not create a missing bind-mount source; tmpfiles makes /var/lib/ollama at boot.
 check grep -qE '^d /var/lib/ollama ' /usr/lib/tmpfiles.d/atomic-hyprland.conf
-check bash -c 'claude --version | grep -q "^2\.1\.289"'
+# The expected version is the Containerfile's ARG, passed in by `just test-image`, so a version
+# bump (Renovate's or by hand) needs no test edit.
+check test "$(claude --version | cut -d' ' -f1)" = "${CLAUDE_CODE_VERSION:?set by just test}"
 check bash -c '! rpm -q firefox'
 check bash -c '! rpm -q libreoffice-core'
 check bash -c '! rpm -q thunderbird'

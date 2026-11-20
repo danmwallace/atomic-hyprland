@@ -44,6 +44,7 @@ test-host:
 test-image:
     bash tests/test-nvidia-build.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
+        -e CLAUDE_CODE_VERSION="$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' Containerfile)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
 
