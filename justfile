@@ -44,6 +44,7 @@ test-host:
 test-image:
     bash tests/test-nvidia-build.sh
     podman run --rm -e PUBKEY_SHA256="$(sha256sum cosign.pub | cut -d' ' -f1)" \
+        -e CLAUDE_CODE_VERSION="$(sed -n 's/^ARG CLAUDE_CODE_VERSION=//p' Containerfile)" \
         -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/image-smoke.sh
     podman run --rm -v ./tests:/tests:ro,Z {{image}}:{{tag}} bash /tests/test-sync-dotfiles.sh
 
@@ -107,4 +108,4 @@ iso:
 lint-ci:
     podman run --rm -v .:/repo:ro,Z -w /repo docker.io/rhysd/actionlint:1.7.12 -color
     podman run --rm -v ./renovate.json:/usr/src/app/renovate.json:ro,Z \
-        ghcr.io/renovatebot/renovate:44.239.1 renovate-config-validator --strict
+        ghcr.io/renovatebot/renovate:44.255.2 renovate-config-validator --strict
