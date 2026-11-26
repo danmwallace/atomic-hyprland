@@ -106,7 +106,7 @@ done
 check grep -qx btop build/packages.txt
 
 # GTK, Qt, fonts
-check grep -qx 'gtk-theme-name=Adwaita-dark' $skel/gtk-3.0/settings.ini
+check grep -qx 'gtk-theme-name=adw-gtk3-dark' $skel/gtk-3.0/settings.ini
 # GTK3 has no built-in "Adwaita-dark" (only Adwaita plus a dark variant), and Fedora 44
 # dropped gnome-themes-extra, which used to ship it: without this file every GTK3 window
 # (the keyring prompt among them) falls back to light Adwaita. It points at GTK's own dark CSS.
@@ -146,7 +146,10 @@ check grep -qx 'DefaultSession=hyprland-uwsm.desktop' files/etc/sddm.conf.d/10-a
 check python3 -c "import configparser; c=configparser.ConfigParser(); c.read('files/etc/sddm.conf.d/10-atomic-hyprland.conf'); assert c['General']['InputMethod']=='' and c['Theme']['Current']=='atomic-hyprland'"
 # Chromium replaces Firefox; the Claude extension is force-installed by managed policy
 pol=files/etc/chromium/policies/managed/10-atomic-hyprland.json
-check jq -e '.ExtensionInstallForcelist[0] == "fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx" and .BrowserColorScheme == 2 and .BrowserThemeColor == "#0a0a0a"' $pol
+check jq -e '.ExtensionInstallForcelist == ["fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx"] and .BrowserColorScheme == 2' $pol
+# no fixed frame colour: it locks Chromium's theme ("set by your organization"), so its
+# GTK mode can't follow the theme's GTK colours (app theming, Task 6)
+check jq -e 'has("BrowserThemeColor") | not' $pol
 check grep -q 'hl.env("BROWSER", "hypr-browser")' $share/hypr/env.lua
 check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
@@ -172,7 +175,7 @@ done
 dc=files/etc/dconf/db/local.d/00-atomic-hyprland
 check grep -qx '\[org/gnome/desktop/interface\]' $dc
 check grep -qx "color-scheme='prefer-dark'" $dc
-check grep -qx "gtk-theme='Adwaita-dark'" $dc
+check grep -qx "gtk-theme='adw-gtk3-dark'" $dc
 check grep -qx "icon-theme='Papirus-Dark'" $dc
 check grep -qx "cursor-theme='breeze_cursors'" $dc
 check grep -q 'dconf update' build/40-finalize.sh

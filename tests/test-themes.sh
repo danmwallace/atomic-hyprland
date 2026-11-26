@@ -20,17 +20,31 @@ themes="$(find "$share/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | 
 check test "$themes" = "$expected "
 required="background background_glow background_alt surface foreground foreground_dim accent accent_dim led warning critical selection_background selection_foreground cursor_theme $(seq -f 'color%g' 0 15 | tr '\n' ' ')"
 export HOME="$(mktemp -d)"
+# A pinned version is a commit SHA (7-40 hex) or a numeric tag (v1.2.3), never a branch.
+pin_re='@([0-9a-f]{7,40}|v?[0-9]+(\.[0-9]+)*)/'
+for good in "x@0d8c7aaea33c655bb9e4c93d352a28f3baa69a75/y" "x@v1.2.3/y" "x@1234567/y"; do check grep -qE "$pin_re" <<< "$good"; done
+for bad in "x@dev/y" "x@develop/y" "x@beta/y" "x@feature-x/y" "x@main/y" "x@latest/y" "x/y"; do check bash -c "! grep -qE '$pin_re' <<< '$bad'"; done
 
 for t in $themes; do
     f="$share/themes/$t/colors.toml"
     check test -f "$f"
     check test -s "$share/themes/$t/icons.theme"
+    # apps.toml names the theme's counterpart in Helix and Vesktop (hooks 40-helix, 41-vesktop)
+    a="$share/themes/$t/apps.toml"
+    check test -f "$a"
+    check bash -c "diff <(grep -oE '^[a-z_]+' '$a' | sort) <(printf 'helix\nvesktop\n')"
+    check grep -qE '^helix = "[A-Za-z0-9_+-]+"$' "$a"
+    check grep -qE "^vesktop = \"https://[^\"]+$pin_re[^\"]+\"\$" "$a"
+    check bash -c "! grep -qE '@(main|master)/|/refs/heads/' '$a'"
     for k in $required; do check grep -qE "^$k = \"" "$f"; done
     # every colour is 6-digit lower-case hex; cursor_theme is a plain word
     check bash -c "! grep -E '^(color[0-9]+|background.*|surface|foreground.*|accent.*|led|warning|critical|selection_.*) = ' '$f' | grep -vqE '= \"#[0-9a-f]{6}\"$'"
     # no extra keys beyond the set, so no template can depend on a key another theme lacks
     check bash -c "diff <(grep -oE '^[a-z0-9_]+' '$f' | sort) <(tr ' ' '\n' <<< '$required' | grep . | sort)"
 done
+check test "$(grep -E '^helix = ' $share/themes/tokyo-night/apps.toml)" = 'helix = "tokyonight"'
+check test "$(grep -E '^helix = ' $share/themes/catppuccin-mocha/apps.toml)" = 'helix = "catppuccin_mocha"'
+check test "$(grep -E '^helix = ' $share/themes/monochrome-red/apps.toml)" = 'helix = "base16_terminal"'
 check test "$(grep -E '^accent = ' $share/themes/monochrome-green/colors.toml)" = 'accent = "#39ff14"'
 check test "$(grep -E '^accent = ' $share/themes/monochrome-blue/colors.toml)" = 'accent = "#3d9bff"'
 check test "$(grep -E '^background = ' $share/themes/monochrome-green/colors.toml)" = 'background = "#0a0a0a"'
@@ -48,6 +62,31 @@ done
 # every shipped template renders against every theme with no unresolved placeholder (Review Focus 2)
 for t in $themes; do
     check env HYPR_THEME_SHARE="$share" HYPR_THEME_STATE="$(mktemp -d)" HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set "$t"
+done
+# gtk.css sets libadwaita's named colours from the theme; adw-gtk3 reads the same
+# names for GTK3, and Chromium in GTK mode follows GTK3 (app theming, Task 5)
+gtk_names="window_bg_color window_fg_color view_bg_color view_fg_color headerbar_bg_color headerbar_fg_color card_bg_color popover_bg_color sidebar_bg_color accent_color accent_bg_color accent_fg_color"
+for t in $themes; do
+    css="$(files/usr/bin/hypr-theme render "$share/themed/gtk.css.tpl" "$share/themes/$t/colors.toml")"
+    for n in $gtk_names; do
+        check grep -qE "^@define-color $n #[0-9a-f]{6};$" <<< "$css"
+    done
+done
+# readable everywhere: foreground on each GTK background keeps WCAG contrast >= 4.5
+for t in $themes; do
+    check python3 - "$share/themes/$t/colors.toml" <<'PY'
+import sys, re
+c = dict(re.findall(r'^([a-z0-9_]+) = "#([0-9a-f]{6})"$', open(sys.argv[1]).read(), re.M))
+def lum(h):
+    ch = [int(h[i:i+2], 16) / 255 for i in (0, 2, 4)]
+    ch = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in ch]
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+def ratio(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+bad = [(bg, round(ratio(c["foreground"], c[bg]), 2)) for bg in ("background", "background_alt", "surface") if ratio(c["foreground"], c[bg]) < 4.5]
+sys.exit(1 if bad else 0)
+PY
 done
 # OLED mode renders every theme on true black (bar background included)
 for t in $themes; do

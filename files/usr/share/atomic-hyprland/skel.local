@@ -11,6 +11,7 @@
 .config/alacritty/local.toml
 .config/btop/btop.conf
 .config/elvish/rc.elv
+.config/helix/config.toml
 # Flatpak apps see /usr/share/fonts as /run/host/fonts, remapped to
 # /usr/share/fonts: the same fontconfig cache key as the runtime's own fonts.
 # On an ostree host both directories have mtime 0, so the runtime's cache

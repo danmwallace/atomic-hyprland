@@ -1,0 +1,4 @@
+# The theme's counterpart in other apps (hooks/theme-set.d/40-helix, 41-vesktop).
+helix = "base16_terminal"
+# Midnight with the theme's accent (no self-contained port for this palette).
+vesktop = "https://cdn.jsdelivr.net/gh/refact0r/midnight-discord@e8d9b43c151450219fae8c009af3e82b8f495575/build/midnight.css"

@@ -1,0 +1,4 @@
+# Your Helix settings. Created once; never rewritten by the image.
+# "atomic-hyprland" follows the desktop theme (hypr-theme writes it on every
+# switch); set any other Helix theme name here to pin one instead.
+theme = "atomic-hyprland"

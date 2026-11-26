@@ -2,6 +2,5 @@
   "ExtensionInstallForcelist": [
     "fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx"
   ],
-  "BrowserColorScheme": 2,
-  "BrowserThemeColor": "#0a0a0a"
+  "BrowserColorScheme": 2
 }

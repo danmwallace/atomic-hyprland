@@ -162,6 +162,28 @@ login. Fonts: FiraCode Nerd Font for terminals, the bar, menus and the lock scre
 Browser: Fedora's `chromium` with the Claude extension force-installed by
 managed policy (`/etc/chromium/policies/managed/`); Firefox left with it.
 
+### Apps that follow the theme (2026-11-26)
+
+Beyond the bar, terminals, notifications and launcher, `hypr-theme set` also recolours:
+
+- **GTK apps**, GTK3 and GTK4. `gtk.css` sets libadwaita's named colours from the theme, and GTK3 uses `adw-gtk3-dark`, which reads them.
+- **Chromium**, through GTK.
+- **Helix and Vesktop:** each theme's `apps.toml` names its counterpart, applied by the hooks in `/usr/share/atomic-hyprland/hooks/theme-set.d/`:
+  - **Helix** gets the theme's built-in port (Tokyo Night, Nord, Catppuccin, …). The monochrome themes and neon-night use `base16_terminal`, the terminal's own colours.
+  - **Vesktop** gets the theme's community port, a stylesheet pinned to a commit. Themes without a self-contained port use Midnight in the theme's accent colour.
+
+Helix's themes and syntax highlighting come from `helix-themes` and `helix-parsers`.
+
+**One-time steps** on an existing setup (new homes get the Helix one from skel):
+
+| App | Step |
+|---|---|
+| Helix | Set `theme = "atomic-hyprland"` in `~/.config/helix/config.toml`. Open editors then switch live with the desktop. |
+| Chromium | Settings, then Appearance, then **Use GTK**, once per profile. |
+| Vesktop | Settings, then Themes, then enable **atomic-hyprland**, once. |
+
+To turn either hook off, create an empty, non-executable file with its name in `~/.config/atomic-hyprland/hooks/theme-set.d/`: `40-helix` or `41-vesktop`. Obsidian stays manual: its theme lives in the vault and syncs to every machine.
+
 ## AI services (Phase 2)
 
 The image ships `ollama.service` (starts on first boot, models under
