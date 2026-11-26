@@ -73,4 +73,10 @@ while IFS= read -r line; do
 done < <(grep -hE '^\s*dnf5? -y install' build/*.sh)
 check test "$(grep -chE '^\s*dnf5? -y install' build/*.sh | paste -sd+ | bc)" -ge 5
 
+# Fedora version bumps (base-main 44 -> 45) are Dan's decision, wherever the
+# tag appears: build/images.env and the Containerfile's ARG BASE_IMAGE default.
+for img in ghcr.io/ublue-os/base-main ghcr.io/ublue-os/akmods-nvidia-open; do
+    check jq -e --arg img "$img" '[.packageRules[] | select(((.matchPackageNames // []) | index($img)) and ((.matchUpdateTypes // []) | index("major")) and .enabled == false and (has("matchFileNames") | not))] | length > 0' renovate.json
+done
+
 exit "$fail"

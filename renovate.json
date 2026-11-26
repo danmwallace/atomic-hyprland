@@ -141,6 +141,17 @@
         "patch"
       ],
       "enabled": false
+    },
+    {
+      "description": "Hold Fedora major versions (base-main 44 -> 45) in every file, including the Containerfile's ARG BASE_IMAGE default: a rebase is Dan's decision (2026-11-26). Digest updates within 44 still flow.",
+      "matchPackageNames": [
+        "ghcr.io/ublue-os/base-main",
+        "ghcr.io/ublue-os/akmods-nvidia-open"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ]
 }
