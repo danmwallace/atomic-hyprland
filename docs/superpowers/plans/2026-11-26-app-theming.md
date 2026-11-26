@@ -271,4 +271,34 @@ for a in /usr/share/atomic-hyprland/themes/*/apps.toml; do n=$(sed -nE 's/^helix
 
 ## Findings (filled in by Task 1)
 
-_Empty until Task 1 runs._
+**Step 1, Helix (2026-11-26):**
+- With `helix-themes` and `helix-parsers`, `hx --health rust` shows highlight queries ✓.
+- `SIGUSR1` reloads the theme, **including a changed `inherits` target**. In a pty test, an open editor went from Tokyo Night's background to Nord's with no restart. Task 4 keeps the signal, and the README needs no `:config-reload` note.
+
+**Step 3, Chromium:** no way found to start a new profile in GTK mode (`--initial-preferences-file` and `--master-preferences-file` with `extensions.theme.system_theme = 1` had no effect). **Task 6 skips the `master_preferences` patch**; GTK mode is the one-time toggle for every profile.
+
+**Step 5, pinned Vesktop stylesheets.** These are the real stylesheets, not the ports' wrapper files, which `@import` unpinned GitHub Pages URLs. All are served 200 `text/css` by jsDelivr (2026-11-26):
+
+| Theme | `vesktop =` URL | License |
+|---|---|---|
+| catppuccin-mocha | `https://cdn.jsdelivr.net/gh/catppuccin/discord@0d8c7aaea33c655bb9e4c93d352a28f3baa69a75/dist/catppuccin-mocha.theme.css` | MIT |
+| dracula | `https://cdn.jsdelivr.net/gh/dracula/betterdiscord@77e73629086e5b77381f87b255b9f96401c61ced/base.css` | MIT |
+| rose-pine | `https://cdn.jsdelivr.net/gh/rose-pine/discord@e31f74b5a4e9c56a3e4762350f89d20881f76013/dist/rose-pine.css` | MIT |
+| nord | `https://cdn.jsdelivr.net/gh/orblazer/discord-nordic@d242359f76ef516afb6b5ab8507b2ec0d37c07d3/nordic.vencord.css` | CC BY-NC-SA 4.0 (loaded by the user's Vesktop; never bundled into the image) |
+| tokyo-night | `https://cdn.jsdelivr.net/gh/Dyzean/Tokyo-Night@1da9845627475dde1b04cc8a469f9b4149fd4db9/src/main.css` | MIT |
+| gruvbox-dark, everforest, kanagawa, monochrome-*, neon-night | `https://cdn.jsdelivr.net/gh/refact0r/midnight-discord@e8d9b43c151450219fae8c009af3e82b8f495575/build/midnight.css` | MIT |
+
+- **Midnight's accent variables:** `--accent-1` … `--accent-5`. The hook sets all five to `colors.toml`'s `accent` for the themes on the Midnight row.
+- **No self-contained official ports** were found for Gruvbox, Everforest or Kanagawa, so they use Midnight plus their accent, the same as the monochrome themes.
+
+**Step 2, GTK (Dan, 2026-11-26):**
+- With `adw-gtk3-dark` and the named colors from Task 5's mapping, Nautilus (GTK4) and `nm-connection-editor` (GTK3) both took Tokyo Night's colors, and stayed readable.
+- **Live:** rewriting the rendered `gtk.css` in place while both apps were open switched them to Nord's colors with **no nudge**, measured by sampling pixels with `grim`.
+- A real `hypr-theme set` swaps the whole theme folder behind the `gtk.css` link rather than editing it, so **Task 5 keeps the nudge** and re-measures a real switch after it's built.
+- **Chromium couldn't be checked:** the managed policy's `BrowserThemeColor` blocks "Use GTK" ("Theme is set by your Organization"). Task 6's removal of that key is the fix. Dan chose to check Chromium after the image change lands.
+
+**Step 4, Vesktop (Dan):**
+- The local theme `atomic-hyprland.css`, containing `@import url(<pinned jsDelivr URL>)`, loads; remote imports are allowed.
+- Rewriting the file while Vesktop ran switched it to Nord **live**.
+- **So no fallback (bundling) mode is needed, and the hook sends no signal.**
+- Dan's local theme stays enabled, which means the one-time step is done on frmwrk. The file was set back to Tokyo Night.
