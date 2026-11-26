@@ -59,6 +59,31 @@ done
 for t in $themes; do
     check env HYPR_THEME_SHARE="$share" HYPR_THEME_STATE="$(mktemp -d)" HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set "$t"
 done
+# gtk.css sets libadwaita's named colours from the theme; adw-gtk3 reads the same
+# names for GTK3, and Chromium in GTK mode follows GTK3 (app theming, Task 5)
+gtk_names="window_bg_color window_fg_color view_bg_color view_fg_color headerbar_bg_color headerbar_fg_color card_bg_color popover_bg_color sidebar_bg_color accent_color accent_bg_color accent_fg_color"
+for t in $themes; do
+    css="$(files/usr/bin/hypr-theme render "$share/themed/gtk.css.tpl" "$share/themes/$t/colors.toml")"
+    for n in $gtk_names; do
+        check grep -qE "^@define-color $n #[0-9a-f]{6};$" <<< "$css"
+    done
+done
+# readable everywhere: foreground on each GTK background keeps WCAG contrast >= 4.5
+for t in $themes; do
+    check python3 - "$share/themes/$t/colors.toml" <<'PY'
+import sys, re
+c = dict(re.findall(r'^([a-z0-9_]+) = "#([0-9a-f]{6})"$', open(sys.argv[1]).read(), re.M))
+def lum(h):
+    ch = [int(h[i:i+2], 16) / 255 for i in (0, 2, 4)]
+    ch = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in ch]
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+def ratio(a, b):
+    la, lb = sorted((lum(a), lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+bad = [(bg, round(ratio(c["foreground"], c[bg]), 2)) for bg in ("background", "background_alt", "surface") if ratio(c["foreground"], c[bg]) < 4.5]
+sys.exit(1 if bad else 0)
+PY
+done
 # OLED mode renders every theme on true black (bar background included)
 for t in $themes; do
     check bash -c "st=\$(mktemp -d); : > \$st/oled; HYPR_THEME_SHARE='$share' HYPR_THEME_STATE=\$st HYPR_THEME_NO_APPLY=1 files/usr/bin/hypr-theme set '$t' && grep -q '@define-color background #000000;' \$st/current/theme/waybar.css"
