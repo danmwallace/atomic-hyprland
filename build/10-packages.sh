@@ -11,7 +11,10 @@ dnf -y copr enable lionheartp/Hyprland
 dnf -y copr enable scottames/ghostty
 
 mapfile -t packages < <(grep -vE '^\s*(#|$)' /tmp/build/packages.txt)
-dnf -y install --setopt=install_weak_deps=False "${packages[@]}"
+# skip_if_unavailable=False: an unreachable repo fails the build with the repo's own
+# error. dnf's default skips it, and a COPR outage then reads as
+# "No match for argument: hyprland ..." (2026-11-26).
+dnf -y install --setopt=install_weak_deps=False --setopt=skip_if_unavailable=False "${packages[@]}"
 
 # Claude Code for every user (Dan and the hermes agent). On this image
 # /usr/local and /root point into /var, which does not exist at build time, so

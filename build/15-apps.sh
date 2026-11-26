@@ -22,7 +22,7 @@ mkdir -p "${work}"
 
 # --- Tailscale -------------------------------------------------------------
 curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /etc/yum.repos.d/tailscale.repo https://pkgs.tailscale.com/stable/fedora/tailscale.repo
-dnf -y install --setopt=install_weak_deps=False tailscale
+dnf -y install --setopt=install_weak_deps=False --setopt=skip_if_unavailable=False tailscale
 
 # --- Orca ------------------------------------------------------------------
 # electron-builder RPMs install under /opt/<Product>. On bootc /opt is a link
@@ -34,7 +34,7 @@ orca_rpm="orca-ide-${orca_version}.x86_64.rpm"
 curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${orca_rpm}" "https://github.com/stablyai/orca/releases/download/v${orca_version}/orca-ide-${orca_version}.x86_64.rpm"
 ( cd "${work}" && echo "${orca_sha256}  ${orca_rpm}" | sha256sum -c - )
 rm /opt && mkdir /opt
-dnf -y install --setopt=install_weak_deps=False "${work}/${orca_rpm}"
+dnf -y install --setopt=install_weak_deps=False --setopt=skip_if_unavailable=False "${work}/${orca_rpm}"
 mv /opt/Orca /usr/lib/Orca
 rmdir /opt && ln -s var/opt /opt
 chmod 4755 /usr/lib/Orca/chrome-sandbox
@@ -58,7 +58,7 @@ install -m 0755 "${work}/spotify_player" /usr/bin/spotify_player
 ps_tar="powershell-${powershell_version}-linux-x64.tar.gz"
 curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${work}/${ps_tar}" "https://github.com/PowerShell/PowerShell/releases/download/v${powershell_version}/${ps_tar}"
 ( cd "${work}" && echo "${powershell_sha256}  ${ps_tar}" | sha256sum -c - )
-dnf -y install --setopt=install_weak_deps=False libicu
+dnf -y install --setopt=install_weak_deps=False --setopt=skip_if_unavailable=False libicu
 install -d -m 0755 /usr/lib/powershell
 tar -xzf "${work}/${ps_tar}" -C /usr/lib/powershell
 chmod 0755 /usr/lib/powershell/pwsh
