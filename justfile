@@ -25,6 +25,7 @@ test-host:
     bash tests/test-build-pins.sh
     bash tests/test-ci-push.sh
     bash tests/test-openrgb-hook.sh
+    bash tests/test-helix-hook.sh
     bash tests/test-claude-usage.sh
     bash tests/test-monitors.sh
     bash tests/test-workflow.sh

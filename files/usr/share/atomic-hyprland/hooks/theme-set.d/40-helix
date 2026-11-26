@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+# hypr-theme hook: point Helix at the theme's counterpart, on every theme switch
+# and at login. $1 is the theme name.
+#
+# The theme's apps.toml names a Helix theme (helix = "tokyonight"); a theme
+# without one (a user theme) gets base16_terminal, which uses the terminal's
+# colours and so matches any theme. The hook writes only its own file,
+# ~/.config/helix/themes/atomic-hyprland.toml (inherits = "<name>"): Helix uses
+# it when the user's config says theme = "atomic-hyprland" (skel's default; an
+# existing config needs that one line). Running editors reload on SIGUSR1.
+# Turn it off with an empty, non-executable
+# ~/.config/atomic-hyprland/hooks/theme-set.d/40-helix.
+set -euo pipefail
+
+command -v hx >/dev/null 2>&1 || exit 0
+
+state="${HYPR_THEME_STATE:-${HOME:?HOME is not set}/.config/atomic-hyprland}"
+apps="${state}/current/theme/apps.toml"
+dir="${HOME:?HOME is not set}/.config/helix/themes"
+
+name=""
+[[ -f "${apps}" ]] && name="$(sed -nE 's/^helix *= *"([^"]*)" *$/\1/p' "${apps}" | head -1)"
+# A theme name is a file name in Helix's themes folder: nothing that could leave it.
+[[ "${name}" =~ ^[a-z0-9_]+$ ]] || name="base16_terminal"
+
+mkdir -p "${dir}"
+tmp="$(mktemp "${dir}/.atomic-hyprland.XXXXXX")"
+printf 'inherits = "%s"\n' "${name}" > "${tmp}"
+mv -f "${tmp}" "${dir}/atomic-hyprland.toml"
+
+# No running editor is fine.
+pkill -USR1 -u "$(id -u)" -x hx || true
