@@ -1,0 +1,3 @@
+# The theme's counterpart in other apps (hooks/theme-set.d/40-helix, 41-vesktop).
+helix = "tokyonight"
+vesktop = "https://cdn.jsdelivr.net/gh/Dyzean/Tokyo-Night@1da9845627475dde1b04cc8a469f9b4149fd4db9/src/main.css"

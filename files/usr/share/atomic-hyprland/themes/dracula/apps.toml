@@ -1,0 +1,3 @@
+# The theme's counterpart in other apps (hooks/theme-set.d/40-helix, 41-vesktop).
+helix = "dracula"
+vesktop = "https://cdn.jsdelivr.net/gh/dracula/betterdiscord@77e73629086e5b77381f87b255b9f96401c61ced/base.css"

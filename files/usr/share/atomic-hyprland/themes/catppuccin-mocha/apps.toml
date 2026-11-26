@@ -1,0 +1,3 @@
+# The theme's counterpart in other apps (hooks/theme-set.d/40-helix, 41-vesktop).
+helix = "catppuccin_mocha"
+vesktop = "https://cdn.jsdelivr.net/gh/catppuccin/discord@0d8c7aaea33c655bb9e4c93d352a28f3baa69a75/dist/catppuccin-mocha.theme.css"

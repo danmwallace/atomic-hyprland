@@ -1,0 +1,3 @@
+# The theme's counterpart in other apps (hooks/theme-set.d/40-helix, 41-vesktop).
+helix = "nord"
+vesktop = "https://cdn.jsdelivr.net/gh/orblazer/discord-nordic@d242359f76ef516afb6b5ab8507b2ec0d37c07d3/nordic.vencord.css"

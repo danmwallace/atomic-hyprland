@@ -25,12 +25,22 @@ for t in $themes; do
     f="$share/themes/$t/colors.toml"
     check test -f "$f"
     check test -s "$share/themes/$t/icons.theme"
+    # apps.toml names the theme's counterpart in Helix and Vesktop (hooks 40-helix, 41-vesktop)
+    a="$share/themes/$t/apps.toml"
+    check test -f "$a"
+    check bash -c "diff <(grep -oE '^[a-z_]+' '$a' | sort) <(printf 'helix\nvesktop\n')"
+    check grep -qE '^helix = "[a-z0-9_]+"$' "$a"
+    check grep -qE '^vesktop = "https://[^"]+@[0-9a-f.v][^"/]*/[^"]+"$' "$a"
+    check bash -c "! grep -qE '@(main|master)/|/refs/heads/' '$a'"
     for k in $required; do check grep -qE "^$k = \"" "$f"; done
     # every colour is 6-digit lower-case hex; cursor_theme is a plain word
     check bash -c "! grep -E '^(color[0-9]+|background.*|surface|foreground.*|accent.*|led|warning|critical|selection_.*) = ' '$f' | grep -vqE '= \"#[0-9a-f]{6}\"$'"
     # no extra keys beyond the set, so no template can depend on a key another theme lacks
     check bash -c "diff <(grep -oE '^[a-z0-9_]+' '$f' | sort) <(tr ' ' '\n' <<< '$required' | grep . | sort)"
 done
+check test "$(grep -E '^helix = ' $share/themes/tokyo-night/apps.toml)" = 'helix = "tokyonight"'
+check test "$(grep -E '^helix = ' $share/themes/catppuccin-mocha/apps.toml)" = 'helix = "catppuccin_mocha"'
+check test "$(grep -E '^helix = ' $share/themes/monochrome-red/apps.toml)" = 'helix = "base16_terminal"'
 check test "$(grep -E '^accent = ' $share/themes/monochrome-green/colors.toml)" = 'accent = "#39ff14"'
 check test "$(grep -E '^accent = ' $share/themes/monochrome-blue/colors.toml)" = 'accent = "#3d9bff"'
 check test "$(grep -E '^background = ' $share/themes/monochrome-green/colors.toml)" = 'background = "#0a0a0a"'
