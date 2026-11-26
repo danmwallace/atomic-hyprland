@@ -146,7 +146,10 @@ check grep -qx 'DefaultSession=hyprland-uwsm.desktop' files/etc/sddm.conf.d/10-a
 check python3 -c "import configparser; c=configparser.ConfigParser(); c.read('files/etc/sddm.conf.d/10-atomic-hyprland.conf'); assert c['General']['InputMethod']=='' and c['Theme']['Current']=='atomic-hyprland'"
 # Chromium replaces Firefox; the Claude extension is force-installed by managed policy
 pol=files/etc/chromium/policies/managed/10-atomic-hyprland.json
-check jq -e '.ExtensionInstallForcelist[0] == "fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx" and .BrowserColorScheme == 2 and .BrowserThemeColor == "#0a0a0a"' $pol
+check jq -e '.ExtensionInstallForcelist == ["fcoeoabgfenejglbffodgkkbkcdhcgfn;https://clients2.google.com/service/update2/crx"] and .BrowserColorScheme == 2' $pol
+# no fixed frame colour: it locks Chromium's theme ("set by your organization"), so its
+# GTK mode can't follow the theme's GTK colours (app theming, Task 6)
+check jq -e 'has("BrowserThemeColor") | not' $pol
 check grep -q 'hl.env("BROWSER", "hypr-browser")' $share/hypr/env.lua
 check grep -q 'browser *= *"chromium-browser"' $share/hypr/binds.lua
 check grep -qx chromium build/packages.txt
