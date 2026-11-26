@@ -22,9 +22,10 @@ out="${vesktop}/themes/atomic-hyprland.css"
 
 url=""
 [[ -f "${apps}" ]] && url="$(sed -nE 's/^vesktop *= *"([^"]*)" *$/\1/p' "${apps}" | head -1)"
-# Only a pinned https URL, with nothing that could close url("...") or start a new rule.
-if [[ ! "${url}" =~ ^https://[^\"\'\;\)\(\ [:space:]]+$ ]] \
-    || [[ "${url}" =~ @(main|master)/ ]] || [[ "${url}" == */refs/heads/* ]]; then
+# Only an https URL pinned to a commit (7-40 hex) or a numeric tag (@v1.2.3/), never
+# a branch or "latest", with nothing that could close url("...") or start a new rule.
+pin='@([0-9a-f]{7,40}|v?[0-9]+(\.[0-9]+)*)/'
+if [[ ! "${url}" =~ ^https://[^\"\'\;\)\(\ [:space:]]+$ ]] || [[ ! "${url}" =~ ${pin} ]]; then
     rm -f "${out}"
     exit 0
 fi

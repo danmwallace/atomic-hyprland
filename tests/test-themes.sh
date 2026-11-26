@@ -20,6 +20,10 @@ themes="$(find "$share/themes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | 
 check test "$themes" = "$expected "
 required="background background_glow background_alt surface foreground foreground_dim accent accent_dim led warning critical selection_background selection_foreground cursor_theme $(seq -f 'color%g' 0 15 | tr '\n' ' ')"
 export HOME="$(mktemp -d)"
+# A pinned version is a commit SHA (7-40 hex) or a numeric tag (v1.2.3), never a branch.
+pin_re='@([0-9a-f]{7,40}|v?[0-9]+(\.[0-9]+)*)/'
+for good in "x@0d8c7aaea33c655bb9e4c93d352a28f3baa69a75/y" "x@v1.2.3/y" "x@1234567/y"; do check grep -qE "$pin_re" <<< "$good"; done
+for bad in "x@dev/y" "x@develop/y" "x@beta/y" "x@feature-x/y" "x@main/y" "x@latest/y" "x/y"; do check bash -c "! grep -qE '$pin_re' <<< '$bad'"; done
 
 for t in $themes; do
     f="$share/themes/$t/colors.toml"
@@ -29,8 +33,8 @@ for t in $themes; do
     a="$share/themes/$t/apps.toml"
     check test -f "$a"
     check bash -c "diff <(grep -oE '^[a-z_]+' '$a' | sort) <(printf 'helix\nvesktop\n')"
-    check grep -qE '^helix = "[a-z0-9_]+"$' "$a"
-    check grep -qE '^vesktop = "https://[^"]+@[0-9a-f.v][^"/]*/[^"]+"$' "$a"
+    check grep -qE '^helix = "[A-Za-z0-9_+-]+"$' "$a"
+    check grep -qE "^vesktop = \"https://[^\"]+$pin_re[^\"]+\"\$" "$a"
     check bash -c "! grep -qE '@(main|master)/|/refs/heads/' '$a'"
     for k in $required; do check grep -qE "^$k = \"" "$f"; done
     # every colour is 6-digit lower-case hex; cursor_theme is a plain word

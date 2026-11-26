@@ -41,6 +41,13 @@ check test "$(cat "$theme_file")" = 'inherits = "tokyonight"'
 check grep -q -- '-USR1' "$work/log"
 check grep -q -- '-x hx' "$work/log"
 
+# real Helix names with '-' or '+' (nord-night, penumbra+) are kept, not refused
+for ok in nord-night penumbra+ kanagawa-dragon; do
+    fresh "helix = \"$ok\""
+    check run
+    check test "$(cat "$theme_file")" = "inherits = \"$ok\""
+done
+
 # no apps.toml (a user theme): fall back to the terminal palette
 fresh
 check run

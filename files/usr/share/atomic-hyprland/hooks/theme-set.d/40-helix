@@ -20,8 +20,9 @@ dir="${HOME:?HOME is not set}/.config/helix/themes"
 
 name=""
 [[ -f "${apps}" ]] && name="$(sed -nE 's/^helix *= *"([^"]*)" *$/\1/p' "${apps}" | head -1)"
-# A theme name is a file name in Helix's themes folder: nothing that could leave it.
-[[ "${name}" =~ ^[a-z0-9_]+$ ]] || name="base16_terminal"
+# A theme name is a file name in Helix's themes folder (nord-night, penumbra+):
+# letters, digits, _ + - only, so nothing can leave the folder or the quotes.
+[[ "${name}" =~ ^[A-Za-z0-9_+-]+$ ]] || name="base16_terminal"
 
 mkdir -p "${dir}"
 tmp="$(mktemp "${dir}/.atomic-hyprland.XXXXXX")"

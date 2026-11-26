@@ -20,6 +20,7 @@ trap 'rm -rf "$work"' EXIT
 vdir="$work/home/.var/app/dev.vencord.Vesktop/config/vesktop"
 css="$vdir/themes/atomic-hyprland.css"
 url='https://cdn.jsdelivr.net/gh/catppuccin/discord@0d8c7aaea33c655bb9e4c93d352a28f3baa69a75/dist/catppuccin-mocha.theme.css'
+tagged='https://cdn.jsdelivr.net/gh/rose-pine/discord@v0.0.1/dist/rose-pine.css'
 midnight='https://cdn.jsdelivr.net/gh/refact0r/midnight-discord@e8d9b43c151450219fae8c009af3e82b8f495575/build/midnight.css'
 
 # fresh [apps.toml contents]: a new HOME (Vesktop configured) and state with a rendered theme.
@@ -40,6 +41,11 @@ check bash -n "$hook"
 fresh "vesktop = \"$url\""
 check run
 check test "$(cat "$css")" = "@import url(\"$url\");"
+
+# a numeric tag counts as pinned
+fresh "vesktop = \"$tagged\""
+check run
+check test "$(cat "$css")" = "@import url(\"$tagged\");"
 
 # Midnight: the import plus the theme's accent in all five accent variables
 fresh "vesktop = \"$midnight\""
@@ -68,7 +74,12 @@ for bad in 'http://cdn.jsdelivr.net/gh/a/b@1234567/x.css' \
            'https://raw.githubusercontent.com/a/b/refs/heads/main/x.css' \
            'https://x.example/a@1/x.css");@import url("https://evil.example/y.css' \
            'https://x.example/a@1/x.css;' \
-           'https://x.example/a@1/x .css'; do
+           'https://x.example/a@1/x .css' \
+           'https://cdn.jsdelivr.net/gh/a/b/x.css' \
+           'https://cdn.jsdelivr.net/gh/a/b@latest/x.css' \
+           'https://cdn.jsdelivr.net/gh/a/b@dev/x.css' \
+           'https://raw.githubusercontent.com/a/b/main/x.css' \
+           'https://catppuccin.github.io/discord/dist/x.css'; do
     fresh "vesktop = \"$bad\""
     check run
     check test ! -e "$css"
