@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+# hypr-theme hook: point Vesktop (Discord) at the theme's counterpart, on every
+# theme switch and at login. $1 is the theme name.
+#
+# The theme's apps.toml names a stylesheet pinned to a commit (vesktop = "https://
+# cdn.jsdelivr.net/gh/<owner>/<repo>@<sha>/<file>"). The hook owns one local theme,
+# themes/atomic-hyprland.css, which @imports it; for Midnight it also sets the
+# theme's accent. Vencord reloads a changed local theme live. It never edits
+# Vesktop's settings or the user's Quick CSS: enabling "atomic-hyprland" under
+# Settings > Themes is a one-time step. A theme with no (valid) mapping removes the
+# file. Turn the hook off with an empty, non-executable
+# ~/.config/atomic-hyprland/hooks/theme-set.d/41-vesktop.
+set -euo pipefail
+
+vesktop="${HOME:?HOME is not set}/.var/app/dev.vencord.Vesktop/config/vesktop"
+[[ -d "${vesktop}" ]] || exit 0   # Vesktop isn't installed, or has never run
+
+state="${HYPR_THEME_STATE:-${HOME}/.config/atomic-hyprland}"
+apps="${state}/current/theme/apps.toml"
+colors="${state}/current/theme/colors.toml"
+out="${vesktop}/themes/atomic-hyprland.css"
+
+url=""
+[[ -f "${apps}" ]] && url="$(sed -nE 's/^vesktop *= *"([^"]*)" *$/\1/p' "${apps}" | head -1)"
+# Only a pinned https URL, with nothing that could close url("...") or start a new rule.
+if [[ ! "${url}" =~ ^https://[^\"\'\;\)\(\ [:space:]]+$ ]] \
+    || [[ "${url}" =~ @(main|master)/ ]] || [[ "${url}" == */refs/heads/* ]]; then
+    rm -f "${out}"
+    exit 0
+fi
+
+mkdir -p "${vesktop}/themes"
+tmp="$(mktemp "${vesktop}/themes/.atomic-hyprland.XXXXXX")"
+printf '@import url("%s");\n' "${url}" > "${tmp}"
+# Midnight colours itself from five accent variables; give it the theme's accent.
+if [[ "${url}" == *"/refact0r/midnight-discord@"* ]]; then
+    accent="$(sed -nE 's/^accent *= *"(#[0-9a-fA-F]{6})" *$/\1/p' "${colors}" 2>/dev/null | head -1)"
+    if [[ -n "${accent}" ]]; then
+        {
+            printf ':root {\n'
+            for i in 1 2 3 4 5; do printf '    --accent-%s: %s;\n' "${i}" "${accent}"; done
+            printf '}\n'
+        } >> "${tmp}"
+    fi
+fi
+mv -f "${tmp}" "${out}"

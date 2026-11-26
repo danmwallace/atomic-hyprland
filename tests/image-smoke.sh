@@ -55,6 +55,7 @@ for a in /usr/share/atomic-hyprland/themes/*/apps.toml; do
     check test -f "/usr/lib64/helix/runtime/themes/$n.toml"
 done
 check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/40-helix
+check test -x /usr/share/atomic-hyprland/hooks/theme-set.d/41-vesktop
 check grep -qx 'theme = "atomic-hyprland"' /etc/skel/.config/helix/config.toml
 # GTK3 dark: the shipped Adwaita-dark theme imports a stylesheet that must exist in libgtk-3
 check test -f /usr/share/themes/Adwaita-dark/gtk-3.0/gtk.css
