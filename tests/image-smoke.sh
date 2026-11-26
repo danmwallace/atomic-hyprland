@@ -43,6 +43,12 @@ for t in $(ls /usr/share/atomic-hyprland/themes); do
     check bash -c "file /usr/share/atomic-hyprland/themes/$t/backgrounds/00-plain.png | grep -q '3840 x 2160'"
 done
 check test -x /usr/bin/hypr-theme
+# Helix's themes and syntax highlighting ship as separate Fedora packages, and
+# adw-gtk3 is the GTK3 theme that reads the theme's named colours (app theming).
+check rpm -q helix-themes helix-parsers adw-gtk3-theme
+check test -f /usr/lib64/helix/runtime/themes/base16_terminal.toml
+check test -f /usr/lib64/helix/runtime/queries/rust/highlights.scm
+check test -f /usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css
 # GTK3 dark: the shipped Adwaita-dark theme imports a stylesheet that must exist in libgtk-3
 check test -f /usr/share/themes/Adwaita-dark/gtk-3.0/gtk.css
 check python3 -c 'import gi; gi.require_version("Gtk", "3.0"); from gi.repository import Gtk, Gio; Gio.resources_lookup_data("/org/gtk/libgtk/theme/Adwaita/gtk-contained-dark.css", 0)'

@@ -97,6 +97,8 @@ libnotify
 btop
 
 # Look: icons, cursor, GTK/Qt theming plumbing, fonts, Flatpak overrides
+# GTK3 port of libadwaita's look; it reads the theme's named colours from gtk.css
+adw-gtk3-theme
 papirus-icon-theme
 papirus-icon-theme-dark
 breeze-cursor-theme
@@ -139,6 +141,9 @@ ansible
 virt-viewer
 # editor and everyday CLI
 helix
+# Helix's themes and tree-sitter highlighting ship separately in Fedora
+helix-themes
+helix-parsers
 git-delta
 ShellCheck
 direnv
