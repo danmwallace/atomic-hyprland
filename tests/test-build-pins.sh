@@ -65,4 +65,12 @@ for m in ORCA_VERSION SPOTIFY_PLAYER_VERSION POWERSHELL_VERSION; do
     check jq -e --arg m "$m" '.customManagers[] | select(.matchStrings[0] | test($m))' renovate.json
 done
 
+# Every dnf install in the build fails when a repo can't be reached. dnf's
+# default skips an unreachable repo and carries on, so a COPR outage showed up
+# only as "No match for argument: hyprland ..." (nightly build, 2026-11-26).
+while IFS= read -r line; do
+    check bash -c "grep -q -- '--setopt=skip_if_unavailable=False' <<< \"\$1\"" _ "$line"
+done < <(grep -hE '^\s*dnf5? -y install' build/*.sh)
+check test "$(grep -chE '^\s*dnf5? -y install' build/*.sh | paste -sd+ | bc)" -ge 5
+
 exit "$fail"

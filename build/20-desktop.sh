@@ -9,7 +9,7 @@ nerd_firacode_sha256="${3:?FiraCode nerd font sha256}"
 nerd_terminus_sha256="${4:?Terminus nerd font sha256}"
 
 # Build-time only; removed in 90-cleanup.sh.
-dnf -y install --setopt=install_weak_deps=False librsvg2-tools
+dnf -y install --setopt=install_weak_deps=False --setopt=skip_if_unavailable=False librsvg2-tools
 
 # Nerd Fonts: not packaged for Fedora; upstream's release tarballs, pinned by
 # version and sha256 in the Containerfile so a replaced asset fails the build.
