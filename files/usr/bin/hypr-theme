@@ -218,9 +218,8 @@ apply_settings() {
     if have gsettings; then
         gsettings set org.gnome.desktop.interface color-scheme prefer-dark >/dev/null 2>&1 || true
         # adw-gtk3-dark reads gtk.css's named colours for GTK3 (and Chromium's GTK mode).
-        # A switch swaps the folder behind gtk.css's link, which a file monitor may not
-        # notice, so pass through Adwaita-dark first: GTK reloads on a theme change.
-        gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark >/dev/null 2>&1 || true
+        # Open GTK apps and Chromium read gtk.css when they start and don't reload it on
+        # a switch (measured 2026-11-27): they take a new theme when restarted.
         gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark >/dev/null 2>&1 || true
         gsettings set org.gnome.desktop.interface icon-theme "${icons}" >/dev/null 2>&1 || true
         [[ -n "${cursor}" ]] && gsettings set org.gnome.desktop.interface cursor-theme "${cursor}" >/dev/null 2>&1 || true
