@@ -52,10 +52,10 @@ it to `~/.config/swaync/config.json` to change them, and put style changes in
 `/usr/share/atomic-hyprland/themed/*.tpl` into
 `~/.config/atomic-hyprland/current/theme/`; each app's config carries one
 include line pointing there (Hyprland, waybar, swaync, wofi, hyprlock, Ghostty,
-Alacritty, btop, GTK's `gtk.css`). GTK gets Adwaita-dark + Papirus-Dark through
-`gsettings`, Qt goes through Kvantum, Flatpaks follow through the settings
-portal plus a per-user `flatpak override`, Chromium's frame colour is fixed at
-build from the default palette (Linux Chromium reads only system-wide policy).
+Alacritty, btop, GTK's `gtk.css`). GTK gets adw-gtk3-dark + Papirus-Dark through
+`gsettings` and the theme's colours through `gtk.css`, Qt goes through Kvantum,
+Flatpaks follow through the settings portal plus a per-user `flatpak override`,
+and Chromium follows GTK once set to "Use GTK" (see "Apps that follow the theme").
 
 ```bash
 hypr-theme list                 # 17 shipped (below) + yours; the current one is marked " *"
@@ -164,13 +164,18 @@ managed policy (`/etc/chromium/policies/managed/`); Firefox left with it.
 
 ### Apps that follow the theme (2026-11-26)
 
-Beyond the bar, terminals, notifications and launcher, `hypr-theme set` also recolours:
+Beyond the bar, terminals, notifications and launcher, `hypr-theme set` also
+recolours these apps:
 
-- **GTK apps**, GTK3 and GTK4. `gtk.css` sets libadwaita's named colours from the theme, and GTK3 uses `adw-gtk3-dark`, which reads them.
-- **Chromium**, through GTK.
-- **Helix and Vesktop:** each theme's `apps.toml` names its counterpart, applied by the hooks in `/usr/share/atomic-hyprland/hooks/theme-set.d/`:
-  - **Helix** gets the theme's built-in port (Tokyo Night, Nord, Catppuccin, …). The monochrome themes and neon-night use `base16_terminal`, the terminal's own colours.
-  - **Vesktop** gets the theme's community port, a stylesheet pinned to a commit. Themes without a self-contained port use Midnight in the theme's accent colour.
+- **Live, as soon as you switch:**
+  - **Helix:** the theme's built-in port (Tokyo Night, Nord, Catppuccin, …). The monochrome themes and neon-night use `base16_terminal`, the terminal's own colours.
+  - **Vesktop:** the theme's community port, a stylesheet pinned to a commit. Themes without a self-contained port use Midnight in the theme's accent colour.
+
+  Each theme's `apps.toml` names these, and the hooks in `/usr/share/atomic-hyprland/hooks/theme-set.d/` apply them.
+- **When the app next starts: GTK apps (GTK3 and GTK4) and Chromium.**
+  - `gtk.css` sets libadwaita's named colours from the theme, and GTK3 uses `adw-gtk3-dark`, which reads them. Chromium in GTK mode follows GTK3.
+  - These apps read `gtk.css` only at startup, so windows that are already open keep the old colours until you restart the app (measured 2026-11-27).
+  - Nautilus keeps running in the background after its window closes, so restart it with `nautilus -q`.
 
 Helix's themes and syntax highlighting come from `helix-themes` and `helix-parsers`.
 
